@@ -46,7 +46,7 @@ struct ProductRow {
 struct CategoryRow {
     id: String,
     name_en: String,
-    name_zh: String,
+    name_zh: Option<String>,
     icon: String,
     color: String,
 }
@@ -55,7 +55,7 @@ struct CategoryRow {
 struct CategoryWithCountRow {
     id: String,
     name_en: String,
-    name_zh: String,
+    name_zh: Option<String>,
     icon: String,
     color: String,
     product_count: i64,
@@ -225,20 +225,24 @@ fn map_product_row(row: ProductRow) -> Product {
  * 将 CategoryRow 转换为对外 API 使用的 Category 结构。
  */
 fn map_category_row(row: CategoryRow) -> Category {
+    let name_en = row.name_en;
+    let name_zh = row.name_zh.unwrap_or_else(|| name_en.clone());
     Category {
         id: row.id,
-        name_en: row.name_en,
-        name_zh: row.name_zh,
+        name_en,
+        name_zh,
         icon: row.icon,
         color: row.color,
     }
 }
 
 fn map_category_with_count_row(row: CategoryWithCountRow) -> crate::models::CategoryWithCount {
+    let name_en = row.name_en;
+    let name_zh = row.name_zh.unwrap_or_else(|| name_en.clone());
     crate::models::CategoryWithCount {
         id: row.id,
-        name_en: row.name_en,
-        name_zh: row.name_zh,
+        name_en,
+        name_zh,
         icon: row.icon,
         color: row.color,
         product_count: row.product_count,
