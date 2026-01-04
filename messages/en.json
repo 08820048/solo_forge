@@ -1,0 +1,250 @@
+{
+  "common": {
+    "appName": "SoloForge",
+    "slogan": "The Forge for Solo Makers' Products",
+    "language": "Language",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "viewMore": "View More",
+    "learnMore": "Learn More"
+  },
+  "nav": {
+    "home": "Home",
+    "products": "Products",
+    "leaderboard": "Leaderboard",
+    "submit": "Submit Product",
+    "about": "About",
+    "login": "Login",
+    "signup": "Sign Up",
+    "profile": "Profile",
+    "developerCenter": "Developer Center",
+    "logout": "Logout"
+  },
+  "auth": {
+    "title": "Log in to SoloForge",
+    "subtitle": "Continue with email or a provider",
+    "email": "Email",
+    "password": "Password",
+    "emailPlaceholder": "you@example.com",
+    "passwordPlaceholder": "Enter your password",
+    "loading": "Processing...",
+    "or": "or",
+    "continueWith": "Continue with {provider}",
+    "continue": "Continue",
+    "redirecting": "Finishing sign-in...",
+    "notConfigured": "Supabase Auth is not configured (set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in frontend/.env.local).",
+    "verifyEmailSent": "We sent a verification email to {email}. Please verify your account before logging in.",
+    "emailNotVerified": "This email is not verified yet: {email}. Please verify it in your inbox.",
+    "wrongCredentials": "Incorrect email or password. Please try again.",
+    "unknownError": "Something went wrong. Please try again."
+  },
+  "home": {
+    "hero": {
+      "title": "Discover Amazing Products Built by Solo Makers",
+      "subtitle": "A curated collection of innovative products crafted by independent developers from around the world",
+      "cta": "Explore Products",
+      "submitCta": "Submit Your Product"
+    },
+    "quickActions": {
+      "products": "Browse all products",
+      "leaderboard": "View leaderboard",
+      "submit": "Submit product"
+    },
+    "featured": {
+      "title": "Featured Products",
+      "subtitle": "Hand-picked products that stand out"
+    },
+    "recent": {
+      "title": "Recently Added",
+      "subtitle": "Fresh products from our community"
+    },
+    "categories": {
+      "title": "Browse by Category",
+      "subtitle": "Find products in your area of interest"
+    }
+  },
+  "leaderboard": {
+    "title": "Leaderboard",
+    "subtitle": "A simple ranking based on recent submissions and maker activity.",
+    "loading": "Loading...",
+    "empty": "No data yet.",
+    "topProducts": "Top products",
+    "topMakers": "Top makers",
+    "makerCount": "{count} products",
+    "windowLabel": "Window: {window}",
+    "windows": {
+      "day": "24h",
+      "week": "7d",
+      "month": "30d",
+      "all": "All time"
+    }
+  },
+  "products": {
+    "title": "All Products",
+    "subtitle": "Browse our collection of {count} products",
+    "noProducts": "No products found",
+    "filters": {
+      "all": "All",
+      "category": "Category",
+      "tags": "Tags",
+      "sortBy": "Sort By",
+      "newest": "Newest First",
+      "oldest": "Oldest First",
+      "popular": "Most Popular"
+    }
+  },
+  "productDetail": {
+    "maker": "Maker",
+    "website": "Visit Website",
+    "category": "Category",
+    "tags": "Tags",
+    "createdAt": "Added on",
+    "description": "Description",
+    "features": "Features",
+    "relatedProducts": "Related Products"
+  },
+  "submit": {
+    "title": "Submit Your Product",
+    "subtitle": "Share your creation with the world",
+    "form": {
+      "productName": "Product Name",
+      "productNamePlaceholder": "Enter your product name",
+      "slogan": "Slogan",
+      "sloganPlaceholder": "A catchy one-liner about your product",
+      "description": "Description",
+      "descriptionPlaceholder": "Describe your product in detail",
+      "website": "Website URL",
+      "websitePlaceholder": "https://yourproduct.com",
+      "category": "Category",
+      "categoryPlaceholder": "Select a category",
+      "tags": "Tags",
+      "tagsPlaceholder": "Add tags (comma separated)",
+      "makerName": "Your Name",
+      "makerNamePlaceholder": "Your name or handle",
+      "makerEmail": "Email",
+      "makerEmailPlaceholder": "your@email.com",
+      "makerWebsite": "Your Website/Social",
+      "makerWebsitePlaceholder": "https://twitter.com/yourhandle",
+      "logo": "Product Logo",
+      "screenshots": "Screenshots",
+      "language": "Primary Language",
+      "bilingual": "Provide bilingual content (optional)",
+      "submitButton": "Submit Product",
+      "submitting": "Submitting..."
+    },
+    "success": {
+      "title": "Product Submitted!",
+      "message": "Thank you for submitting your product. We'll review it and publish it soon.",
+      "backToHome": "Back to Home"
+    }
+  },
+  "developer": {
+    "title": "Developer Center",
+    "subtitle": "Manage submissions, track stats, and view your favorites.",
+    "loading": "Loading...",
+    "loginRequired": "Please log in to access the developer center.",
+    "networkError": "Network error. Please try again later.",
+    "productsLoadFailed": "Failed to load products.",
+    "actions": {
+      "submit": "Submit",
+      "manage": "Manage",
+      "viewWebsite": "Visit website",
+      "viewDetail": "View details"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "submit": "Submit",
+      "products": "My products",
+      "favorites": "Favorites",
+      "stats": "Stats"
+    },
+    "profile": {
+      "title": "Profile",
+      "unnamed": "Unnamed"
+    },
+    "stats": {
+      "title": "My stats",
+      "total": "Total",
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "overview": {
+      "recentTitle": "Recent submissions",
+      "favoritesTitle": "Recent favorites",
+      "noProducts": "No submissions yet."
+    },
+    "products": {
+      "title": "My submissions",
+      "subtitle": "Track review status and visit your product pages.",
+      "empty": "No submissions yet.",
+      "createdAt": "Added on {date}"
+    },
+    "favorites": {
+      "title": "My favorites",
+      "subtitle": "Products you've saved.",
+      "empty": "No favorites yet.",
+      "by": "by {maker}"
+    },
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "statsBreakdown": {
+      "title": "Top categories",
+      "empty": "No data yet.",
+      "count": "{count} products"
+    },
+    "tips": {
+      "title": "Tips",
+      "item1": "Make sure your website and slogan are clear and up to date.",
+      "item2": "Use relevant tags to help users discover your product.",
+      "item3": "Check your submission status here after publishing."
+    }
+  },
+  "categories": {
+    "ai": "AI Tools",
+    "productivity": "Productivity",
+    "developer": "Developer Tools",
+    "design": "Design",
+    "marketing": "Marketing",
+    "finance": "Finance",
+    "education": "Education",
+    "health": "Health & Fitness",
+    "entertainment": "Entertainment",
+    "other": "Other"
+  },
+  "footer": {
+    "description": "A platform for independent developers to showcase their products",
+    "links": {
+      "about": "About",
+      "contact": "Contact",
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy"
+    },
+    "social": {
+      "title": "Follow Us",
+      "twitter": "Twitter",
+      "github": "GitHub"
+    },
+    "copyright": "© {year} SoloForge. All rights reserved."
+  },
+  "errors": {
+    "notFound": "Page not found",
+    "serverError": "Something went wrong",
+    "networkError": "Network error. Please check your connection.",
+    "validationError": "Please check your input",
+    "unauthorized": "Please login to continue",
+    "forbidden": "You don't have permission to access this resource"
+  }
+}

@@ -1,0 +1,250 @@
+{
+  "common": {
+    "appName": "SoloForge",
+    "slogan": "单人开发者锻造的产品宝库",
+    "language": "语言",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功",
+    "submit": "提交",
+    "cancel": "取消",
+    "save": "保存",
+    "delete": "删除",
+    "edit": "编辑",
+    "search": "搜索",
+    "filter": "筛选",
+    "sort": "排序",
+    "viewMore": "查看更多",
+    "learnMore": "了解更多"
+  },
+  "nav": {
+    "home": "首页",
+    "products": "产品",
+    "leaderboard": "排行榜",
+    "submit": "提交产品",
+    "about": "关于",
+    "login": "登录",
+    "signup": "注册",
+    "profile": "个人中心",
+    "developerCenter": "开发者面板",
+    "logout": "退出"
+  },
+  "auth": {
+    "title": "登录 SoloForge",
+    "subtitle": "使用邮箱或第三方账号继续",
+    "email": "邮箱",
+    "password": "密码",
+    "emailPlaceholder": "you@example.com",
+    "passwordPlaceholder": "请输入密码",
+    "loading": "处理中...",
+    "or": "或",
+    "continueWith": "使用 {provider} 继续",
+    "continue": "继续",
+    "redirecting": "正在完成登录...",
+    "notConfigured": "未配置 Supabase 登录（请先在 frontend/.env.local 配置 NEXT_PUBLIC_SUPABASE_URL 与 NEXT_PUBLIC_SUPABASE_ANON_KEY）。",
+    "verifyEmailSent": "已向 {email} 发送验证邮件，请前往邮箱完成验证后再登录。",
+    "emailNotVerified": "该邮箱尚未完成验证：{email}。请先前往邮箱完成验证。",
+    "wrongCredentials": "邮箱或密码不正确，请重试。",
+    "unknownError": "发生未知错误，请稍后重试。"
+  },
+  "home": {
+    "hero": {
+      "title": "发现独立开发者打造的优秀产品",
+      "subtitle": "精选来自全球独立开发者的创新产品",
+      "cta": "探索产品",
+      "submitCta": "提交你的产品"
+    },
+    "quickActions": {
+      "products": "浏览全部产品",
+      "leaderboard": "查看排行榜",
+      "submit": "提交产品"
+    },
+    "featured": {
+      "title": "精选产品",
+      "subtitle": "精心挑选的优质产品"
+    },
+    "recent": {
+      "title": "最新收录",
+      "subtitle": "来自社区的新鲜产品"
+    },
+    "categories": {
+      "title": "按分类浏览",
+      "subtitle": "在你感兴趣的领域寻找产品"
+    }
+  },
+  "leaderboard": {
+    "title": "排行榜",
+    "subtitle": "基于最近提交与开发者活跃度的简易排行。",
+    "loading": "加载中...",
+    "empty": "暂无数据。",
+    "topProducts": "产品榜",
+    "topMakers": "开发者榜",
+    "makerCount": "{count} 个产品",
+    "windowLabel": "时间范围：{window}",
+    "windows": {
+      "day": "24 小时",
+      "week": "7 天",
+      "month": "30 天",
+      "all": "全部"
+    }
+  },
+  "products": {
+    "title": "所有产品",
+    "subtitle": "浏览我们收录的 {count} 个产品",
+    "noProducts": "未找到产品",
+    "filters": {
+      "all": "全部",
+      "category": "分类",
+      "tags": "标签",
+      "sortBy": "排序方式",
+      "newest": "最新优先",
+      "oldest": "最早优先",
+      "popular": "最受欢迎"
+    }
+  },
+  "productDetail": {
+    "maker": "开发者",
+    "website": "访问网站",
+    "category": "分类",
+    "tags": "标签",
+    "createdAt": "收录于",
+    "description": "产品描述",
+    "features": "功能特性",
+    "relatedProducts": "相关产品"
+  },
+  "submit": {
+    "title": "提交你的产品",
+    "subtitle": "与世界分享你的创作",
+    "form": {
+      "productName": "产品名称",
+      "productNamePlaceholder": "输入产品名称",
+      "slogan": "产品口号",
+      "sloganPlaceholder": "一句话介绍你的产品",
+      "description": "产品描述",
+      "descriptionPlaceholder": "详细描述你的产品",
+      "website": "网站地址",
+      "websitePlaceholder": "https://yourproduct.com",
+      "category": "分类",
+      "categoryPlaceholder": "选择一个分类",
+      "tags": "标签",
+      "tagsPlaceholder": "添加标签（逗号分隔）",
+      "makerName": "你的名字",
+      "makerNamePlaceholder": "你的名字或昵称",
+      "makerEmail": "邮箱",
+      "makerEmailPlaceholder": "your@email.com",
+      "makerWebsite": "你的网站/社交媒体",
+      "makerWebsitePlaceholder": "https://twitter.com/yourhandle",
+      "logo": "产品 Logo",
+      "screenshots": "产品截图",
+      "language": "主要语言",
+      "bilingual": "提供双语内容（可选）",
+      "submitButton": "提交产品",
+      "submitting": "提交中..."
+    },
+    "success": {
+      "title": "产品已提交！",
+      "message": "感谢提交你的产品。我们会尽快审核并发布。",
+      "backToHome": "返回首页"
+    }
+  },
+  "developer": {
+    "title": "开发者中心",
+    "subtitle": "提交与管理作品，查看统计与收藏。",
+    "loading": "加载中...",
+    "loginRequired": "请先登录后再进入开发者中心。",
+    "networkError": "网络错误，请稍后重试。",
+    "productsLoadFailed": "加载作品失败。",
+    "actions": {
+      "submit": "提交作品",
+      "manage": "管理作品",
+      "viewWebsite": "访问网站",
+      "viewDetail": "查看详情"
+    },
+    "tabs": {
+      "overview": "总览",
+      "submit": "提交",
+      "products": "我的作品",
+      "favorites": "我的收藏",
+      "stats": "作品统计"
+    },
+    "profile": {
+      "title": "开发者信息",
+      "unnamed": "未命名用户"
+    },
+    "stats": {
+      "title": "数据概览",
+      "total": "总数",
+      "pending": "审核中",
+      "approved": "已通过",
+      "rejected": "未通过"
+    },
+    "overview": {
+      "recentTitle": "最近提交",
+      "favoritesTitle": "最近收藏",
+      "noProducts": "你还没有提交作品。"
+    },
+    "products": {
+      "title": "作品管理",
+      "subtitle": "查看审核状态，并快速访问作品页面。",
+      "empty": "暂无作品。",
+      "createdAt": "收录于 {date}"
+    },
+    "favorites": {
+      "title": "我的收藏",
+      "subtitle": "你收藏过的作品。",
+      "empty": "暂无收藏。",
+      "by": "作者：{maker}"
+    },
+    "status": {
+      "pending": "审核中",
+      "approved": "已通过",
+      "rejected": "未通过"
+    },
+    "statsBreakdown": {
+      "title": "分类分布",
+      "empty": "暂无统计数据。",
+      "count": "{count} 个作品"
+    },
+    "tips": {
+      "title": "小提示",
+      "item1": "保持网站、标语与截图信息清晰，审核更顺畅。",
+      "item2": "合理填写分类与标签，提升曝光与搜索命中率。",
+      "item3": "提交后可在「我的作品」里查看审核状态。"
+    }
+  },
+  "categories": {
+    "ai": "AI 工具",
+    "productivity": "效率工具",
+    "developer": "开发者工具",
+    "design": "设计",
+    "marketing": "营销",
+    "finance": "金融",
+    "education": "教育",
+    "health": "健康健身",
+    "entertainment": "娱乐",
+    "other": "其他"
+  },
+  "footer": {
+    "description": "独立开发者展示产品的平台",
+    "links": {
+      "about": "关于",
+      "contact": "联系我们",
+      "terms": "服务条款",
+      "privacy": "隐私政策"
+    },
+    "social": {
+      "title": "关注我们",
+      "twitter": "Twitter",
+      "github": "GitHub"
+    },
+    "copyright": "© {year} SoloForge. 保留所有权利。"
+  },
+  "errors": {
+    "notFound": "页面未找到",
+    "serverError": "出错了",
+    "networkError": "网络错误，请检查你的连接。",
+    "validationError": "请检查你的输入",
+    "unauthorized": "请登录后继续",
+    "forbidden": "你没有权限访问此资源"
+  }
+}

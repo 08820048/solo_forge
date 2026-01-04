@@ -1,0 +1,351 @@
+{
+  "nav": {
+    "home": "Home",
+    "products": "Products",
+    "leaderboard": "Leaderboard",
+    "submit": "Submit",
+    "login": "Log in",
+    "developerCenter": "Developer Center",
+    "logout": "Log out",
+    "about": "About"
+  },
+  "auth": {
+    "title": "Log in to SoloForge",
+    "subtitle": "Continue with email or a provider",
+    "signIn": "Log in",
+    "signUp": "Sign up",
+    "email": "Email",
+    "password": "Password",
+    "emailPlaceholder": "you@example.com",
+    "passwordPlaceholder": "Enter your password",
+    "loading": "Processing...",
+    "or": "or",
+    "continueWith": "Continue with {provider}",
+    "continue": "Continue",
+    "redirecting": "Finishing sign-in...",
+    "notConfigured": "Supabase Auth is not configured (set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in frontend/.env.local).",
+    "verifyEmailSent": "We sent a verification email to {email}. Please verify your account before logging in.",
+    "emailNotVerified": "This email is not verified yet: {email}. Please verify it in your inbox.",
+    "wrongCredentials": "Incorrect email or password. Please try again.",
+    "unknownError": "Something went wrong. Please try again."
+  },
+  "footer": {
+    "description": "SoloForge showcases products crafted by independent developers worldwide, bridging makers and early adopters through a curated platform.",
+    "links": {
+      "about": "About",
+      "contact": "Contact",
+      "terms": "Terms of Service",
+      "privacy": "Privacy Policy"
+    },
+    "social": {
+      "title": "Social",
+      "twitter": "Twitter",
+      "github": "GitHub"
+    },
+    "copyright": "© {year} SoloForge. All rights reserved."
+  },
+  "submit": {
+    "title": "Submit Your Product",
+    "subtitle": "Share your creation with the world",
+    "form": {
+      "productName": "Product Name",
+      "productNamePlaceholder": "e.g., AI Writing Assistant",
+      "slogan": "Slogan",
+      "sloganPlaceholder": "Short, catchy tagline",
+      "description": "Description",
+      "descriptionPlaceholder": "Describe your product, features, and target users",
+      "website": "Website",
+      "websitePlaceholder": "https://your-product.com",
+      "category": "Category",
+      "categoryPlaceholder": "Select a category",
+      "tags": "Tags",
+      "tagsPlaceholder": "Comma-separated, e.g., ai, writing, productivity",
+      "makerName": "Maker Name",
+      "makerNamePlaceholder": "Your name",
+      "makerEmail": "Maker Email",
+      "makerEmailPlaceholder": "you@example.com",
+      "makerWebsite": "Maker Website",
+      "makerWebsitePlaceholder": "https://your-site.com",
+      "submitting": "Submitting...",
+      "submitButton": "Submit Product"
+    },
+    "success": {
+      "title": "Submission Successful",
+      "message": "Your product has been submitted and is pending review.",
+      "backToHome": "Back to Home"
+    },
+    "error": {
+      "tryAgain": "Try Again"
+    }
+  },
+  "developer": {
+    "title": "Developer Center",
+    "subtitle": "Manage submissions, track stats, and view your favorites.",
+    "loading": "Loading...",
+    "loginRequired": "Please log in to access the developer center.",
+    "networkError": "Network error. Please try again later.",
+    "productsLoadFailed": "Failed to load products.",
+    "actions": {
+      "submit": "Submit",
+      "manage": "Manage",
+      "viewWebsite": "Visit website",
+      "viewDetail": "View details"
+    },
+    "tabs": {
+      "overview": "Overview",
+      "submit": "Submit",
+      "products": "My products",
+      "favorites": "Favorites",
+      "stats": "Stats"
+    },
+    "profile": {
+      "title": "Profile",
+      "unnamed": "Unnamed"
+    },
+    "stats": {
+      "title": "My stats",
+      "total": "Total",
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "overview": {
+      "recentTitle": "Recent submissions",
+      "favoritesTitle": "Recent favorites",
+      "noProducts": "No submissions yet."
+    },
+    "products": {
+      "title": "My submissions",
+      "subtitle": "Track review status and visit your product pages.",
+      "empty": "No submissions yet.",
+      "createdAt": "Added on {date}"
+    },
+    "favorites": {
+      "title": "My favorites",
+      "subtitle": "Products you've saved.",
+      "empty": "No favorites yet.",
+      "by": "by {maker}"
+    },
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "statsBreakdown": {
+      "title": "Top categories",
+      "empty": "No data yet.",
+      "count": "{count} products"
+    },
+    "tips": {
+      "title": "Tips",
+      "item1": "Make sure your website and slogan are clear and up to date.",
+      "item2": "Use relevant tags to help users discover your product.",
+      "item3": "Check your submission status here after publishing."
+    }
+  },
+  "categories": {
+    "ai": "AI Tools",
+    "productivity": "Productivity",
+    "developer": "Developer Tools",
+    "design": "Design",
+    "writing": "Writing",
+    "marketing": "Marketing",
+    "finance": "Finance",
+    "education": "Education",
+    "games": "Games",
+    "lifestyle": "Lifestyle",
+    "health": "Health",
+    "entertainment": "Entertainment",
+    "other": "Other"
+  },
+  "products": {
+    "title": "Explore Products",
+    "subtitle": "{count} items found",
+    "filters": {
+      "searchPlaceholder": "Search products, makers, slogans...",
+      "allCategories": "All Categories",
+      "clear": "Clear Filters"
+    },
+    "loading": "Loading...",
+    "noProducts": {
+      "title": "No products found",
+      "message": "Try adjusting filters or search terms."
+    }
+  },
+  "productDetail": {
+    "maker": "Maker",
+    "website": "Visit website",
+    "category": "Category",
+    "tags": "Tags",
+    "createdAt": "Added on",
+    "description": "Description"
+  },
+  "common": {
+    "appName": "SoloForge",
+    "slogan": "The Forge for Solo Makers' Products",
+    "viewMore": "View more",
+    "search": {
+      "title": "Search",
+      "placeholder": "Search products, developers...",
+      "products": "Products",
+      "developers": "Developers",
+      "noResults": "No results found"
+    }
+  },
+  "home": {
+    "hero": {
+      "badge": "MVP • i18n Ready",
+      "title": "SoloForge",
+      "subtitle": "Discover indie products fast. Submit yours in minutes.",
+      "cta": "Browse products",
+      "submitCta": "Submit a product",
+      "title1": "SoloForge",
+      "title2": "The Forge for Solo Makers'",
+      "title3": "Products.",
+      "ctaExplore": "Explore Focus Areas",
+      "ctaStory": "Our Story"
+    },
+    "sponsored": {
+      "title": "Sponsored",
+      "badge": "Sponsor",
+      "subtitle": "Homepage sponsor placement (payments will be added later).",
+      "cta": "Apply for sponsor",
+      "itemBadge": "Sponsored",
+      "visit": "Visit website",
+      "loading": "Loading...",
+      "empty": "No sponsored product yet.",
+      "previewTip": "Tip: if embedding is blocked, use “Visit website” to open in a new tab.",
+      "invalidUrl": "Invalid website URL."
+    },
+    "developerLeaderboard": {
+      "title": "Top Makers Last Month",
+      "badge": "Last month",
+      "subtitle": "Ranked by likes + favorites received last month.",
+      "loading": "Loading...",
+      "empty": "No ranking data yet.",
+      "favorites": "{count} favorites",
+      "likes": "{count} likes",
+      "score": "Score {score}",
+      "visit": "Profile"
+    },
+    "quickActions": {
+      "products": "Browse all products",
+      "leaderboard": "View leaderboard",
+      "submit": "Submit a product"
+    },
+    "topDevelopers": {
+      "title": "Most Followed Makers",
+      "subtitle": "Top followed makers right now",
+      "loading": "Loading...",
+      "empty": "No data yet.",
+      "followers": "{count} followers",
+      "follow": "Follow",
+      "unfollow": "Following"
+    },
+    "risingStars": {
+      "title": "Rising Stars",
+      "subtitle": "Newest makers on SoloForge",
+      "loading": "Loading...",
+      "empty": "No data yet.",
+      "followers": "{count} followers",
+      "follow": "Follow",
+      "unfollow": "Following"
+    },
+    "categoryRanking": {
+      "title": "Top Categories",
+      "subtitle": "Ranked by approved product count",
+      "loading": "Loading...",
+      "empty": "No ranking data yet.",
+      "count": "{count} products"
+    },
+    "featured": {
+      "title": "Featured",
+      "subtitle": "A quick scan of products worth your attention."
+    },
+    "recent": {
+      "title": "Latest",
+      "subtitle": "Newly submitted products.",
+      "empty": "No recent products yet."
+    },
+    "categories": {
+      "title": "Browse by category",
+      "subtitle": "Jump straight into what you care about."
+    },
+    "about": {
+      "titleItalic": "Global reach,",
+      "titleMain": "Solo makers first.",
+      "desc": "A bilingual platform that curates and showcases products from independent developers around the world.",
+      "stats": {
+        "languages": "Supported Languages",
+        "categories": "Categories Covered",
+        "ideas": "Ideas & Innovations",
+        "communityTitle": "Community",
+        "communitySubtitle": "Makers, users, early adopters"
+      }
+    },
+    "focus": {
+      "title": "Focus Areas",
+      "subtitle": "Discover standout products across key categories.",
+      "cards": [
+        {
+          "title": "AI Tools",
+          "desc": "Intelligent assistants, copilots, and automation powering creators."
+        },
+        {
+          "title": "Productivity",
+          "desc": "Time-saving apps and workflows for makers to move faster."
+        },
+        {
+          "title": "Developer Tools",
+          "desc": "Tooling, SDKs, and infra that help developers build better."
+        },
+        {
+          "title": "Design",
+          "desc": "UI kits, icons, and creative tools that refine user experiences."
+        }
+      ]
+    },
+    "services": {
+      "items": [
+        { "title": "Submission & Review", "desc": "Clean intake, moderation, and fair curation." },
+        { "title": "Discovery & Search", "desc": "Find products by category, tags, and full-text." },
+        { "title": "Analytics & Insights", "desc": "Basic metrics and trend signals for makers." },
+        { "title": "Internationalization", "desc": "en/zh bilingual support with locale-aware routes." },
+        { "title": "Community & Feedback", "desc": "Engage early adopters with comments and ideas." },
+        { "title": "SEO & Sharing", "desc": "hreflang, sitemaps, and social media friendly." }
+      ]
+    },
+    "leadership": {
+      "title": "Team"
+    },
+    "contact": {
+      "title": "Partner with SoloForge.",
+      "subtitle": "Submit your product or reach out for collaboration.",
+      "email": "Email Address",
+      "message": "Message",
+      "send": "Send"
+    }
+  },
+  "leaderboard": {
+    "title": "Leaderboard",
+    "subtitle": "A simple ranking based on recent submissions and maker activity.",
+    "loading": "Loading...",
+    "empty": "No data available.",
+    "topProducts": "Top products",
+    "topMakers": "Top makers",
+    "makerCount": "{count} products",
+    "windowLabel": "Window: {window}",
+    "windows": {
+      "day": "24h",
+      "week": "7d",
+      "month": "30d",
+      "all": "All time"
+    }
+  },
+  "homeNav": {
+    "about": "About",
+    "focus": "Focus Areas",
+    "services": "Services",
+    "leadership": "Leadership"
+  }
+}

@@ -1,0 +1,351 @@
+{
+  "nav": {
+    "home": "首页",
+    "products": "产品",
+    "leaderboard": "排行榜",
+    "submit": "提交",
+    "login": "登录",
+    "developerCenter": "开发者面板",
+    "logout": "退出登录",
+    "about": "关于"
+  },
+  "auth": {
+    "title": "登录 SoloForge",
+    "subtitle": "使用邮箱或第三方账号继续",
+    "signIn": "登录",
+    "signUp": "注册",
+    "email": "邮箱",
+    "password": "密码",
+    "emailPlaceholder": "you@example.com",
+    "passwordPlaceholder": "请输入密码",
+    "loading": "处理中...",
+    "or": "或",
+    "continueWith": "使用 {provider} 继续",
+    "continue": "继续",
+    "redirecting": "正在完成登录...",
+    "notConfigured": "未配置 Supabase 登录（请先在 frontend/.env.local 配置 NEXT_PUBLIC_SUPABASE_URL 与 NEXT_PUBLIC_SUPABASE_ANON_KEY 或 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY）。",
+    "verifyEmailSent": "已向 {email} 发送验证邮件，请前往邮箱完成验证后再登录。",
+    "emailNotVerified": "该邮箱尚未完成验证：{email}。请先前往邮箱完成验证。",
+    "wrongCredentials": "邮箱或密码不正确，请重试。",
+    "unknownError": "发生未知错误，请稍后重试。"
+  },
+  "footer": {
+    "description": "SoloForge 致力于展示全球独立开发者打造的优秀产品，连接创作者与早期用户，形成精选的发现平台。",
+    "links": {
+      "about": "关于我们",
+      "contact": "联系我们",
+      "terms": "服务条款",
+      "privacy": "隐私政策"
+    },
+    "social": {
+      "title": "社交",
+      "twitter": "Twitter",
+      "github": "GitHub"
+    },
+    "copyright": "© {year} SoloForge. 保留所有权利。"
+  },
+  "submit": {
+    "title": "提交你的产品",
+    "subtitle": "把你的作品分享给世界",
+    "form": {
+      "productName": "产品名称",
+      "productNamePlaceholder": "如：AI 写作助手",
+      "slogan": "标语",
+      "sloganPlaceholder": "简短有力的宣传语",
+      "description": "产品描述",
+      "descriptionPlaceholder": "介绍你的产品、功能与目标用户",
+      "website": "网站",
+      "websitePlaceholder": "https://your-product.com",
+      "category": "分类",
+      "categoryPlaceholder": "选择一个分类",
+      "tags": "标签",
+      "tagsPlaceholder": "逗号分隔，如：ai, 写作, 效率",
+      "makerName": "开发者姓名",
+      "makerNamePlaceholder": "你的名字",
+      "makerEmail": "开发者邮箱",
+      "makerEmailPlaceholder": "you@example.com",
+      "makerWebsite": "开发者网站",
+      "makerWebsitePlaceholder": "https://your-site.com",
+      "submitting": "提交中...",
+      "submitButton": "提交产品"
+    },
+    "success": {
+      "title": "提交成功",
+      "message": "你的产品已提交，等待审核。",
+      "backToHome": "返回首页"
+    },
+    "error": {
+      "tryAgain": "重试"
+    }
+  },
+  "developer": {
+    "title": "开发者中心",
+    "subtitle": "提交与管理作品，查看统计与收藏。",
+    "loading": "加载中...",
+    "loginRequired": "请先登录后再进入开发者中心。",
+    "networkError": "网络错误，请稍后重试。",
+    "productsLoadFailed": "加载作品失败。",
+    "actions": {
+      "submit": "提交作品",
+      "manage": "管理作品",
+      "viewWebsite": "访问网站",
+      "viewDetail": "查看详情"
+    },
+    "tabs": {
+      "overview": "总览",
+      "submit": "提交",
+      "products": "我的作品",
+      "favorites": "我的收藏",
+      "stats": "作品统计"
+    },
+    "profile": {
+      "title": "开发者信息",
+      "unnamed": "未命名用户"
+    },
+    "stats": {
+      "title": "数据概览",
+      "total": "总数",
+      "pending": "审核中",
+      "approved": "已通过",
+      "rejected": "未通过"
+    },
+    "overview": {
+      "recentTitle": "最近提交",
+      "favoritesTitle": "最近收藏",
+      "noProducts": "你还没有提交作品。"
+    },
+    "products": {
+      "title": "作品管理",
+      "subtitle": "查看审核状态，并快速访问作品页面。",
+      "empty": "暂无作品。",
+      "createdAt": "收录于 {date}"
+    },
+    "favorites": {
+      "title": "我的收藏",
+      "subtitle": "你收藏过的作品。",
+      "empty": "暂无收藏。",
+      "by": "作者：{maker}"
+    },
+    "status": {
+      "pending": "审核中",
+      "approved": "已通过",
+      "rejected": "未通过"
+    },
+    "statsBreakdown": {
+      "title": "分类分布",
+      "empty": "暂无统计数据。",
+      "count": "{count} 个作品"
+    },
+    "tips": {
+      "title": "小提示",
+      "item1": "保持网站、标语与截图信息清晰，审核更顺畅。",
+      "item2": "合理填写分类与标签，提升曝光与搜索命中率。",
+      "item3": "提交后可在「我的作品」里查看审核状态。"
+    }
+  },
+  "categories": {
+    "ai": "AI 工具",
+    "productivity": "效率工具",
+    "developer": "开发者工具",
+    "design": "设计",
+    "writing": "写作",
+    "marketing": "营销",
+    "finance": "金融",
+    "education": "教育",
+    "games": "游戏",
+    "lifestyle": "生活方式",
+    "health": "健康",
+    "entertainment": "娱乐",
+    "other": "其他"
+  },
+  "products": {
+    "title": "探索产品",
+    "subtitle": "共找到 {count} 个项目",
+    "filters": {
+      "searchPlaceholder": "搜索产品、作者或标语...",
+      "allCategories": "全部分类",
+      "clear": "清除筛选"
+    },
+    "loading": "加载中...",
+    "noProducts": {
+      "title": "暂无匹配的产品",
+      "message": "试试调整筛选条件或关键字。"
+    }
+  },
+  "productDetail": {
+    "maker": "开发者",
+    "website": "访问网站",
+    "category": "分类",
+    "tags": "标签",
+    "createdAt": "收录于",
+    "description": "产品描述"
+  },
+  "common": {
+    "appName": "SoloForge",
+    "slogan": "单人开发者锻造的产品宝库",
+    "viewMore": "查看更多",
+    "search": {
+      "title": "全站搜索",
+      "placeholder": "搜索产品、开发者...",
+      "products": "产品",
+      "developers": "开发者",
+      "noResults": "未找到匹配结果"
+    }
+  },
+  "home": {
+    "hero": {
+      "badge": "MVP • i18n 就绪",
+      "title": "SoloForge",
+      "subtitle": "最快发现独立开发者产品，几分钟完成提交。",
+      "cta": "浏览产品",
+      "submitCta": "提交产品",
+      "title1": "SoloForge",
+      "title2": "单人开发者锻造的",
+      "title3": "产品宝库。",
+      "ctaExplore": "探索焦点领域",
+      "ctaStory": "我们的故事"
+    },
+    "sponsored": {
+      "title": "赞助推广",
+      "badge": "赞助位",
+      "subtitle": "这里展示首页赞助位产品（赞助支付功能后续规划）。",
+      "cta": "申请赞助位",
+      "itemBadge": "赞助",
+      "visit": "访问官网",
+      "loading": "加载中...",
+      "empty": "暂无赞助位产品。",
+      "previewTip": "提示：若官网禁止嵌入预览，请点击「访问官网」在新标签打开。",
+      "invalidUrl": "官网链接无效，无法预览。"
+    },
+    "developerLeaderboard": {
+      "title": "上月最受欢迎开发者",
+      "badge": "上月",
+      "subtitle": "按其产品收到的收藏与点赞数量综合排序。",
+      "loading": "加载中...",
+      "empty": "暂无排行数据。",
+      "favorites": "{count} 收藏",
+      "likes": "{count} 点赞",
+      "score": "热度 {score}",
+      "visit": "主页"
+    },
+    "quickActions": {
+      "products": "浏览全部产品",
+      "leaderboard": "查看排行榜",
+      "submit": "提交产品"
+    },
+    "topDevelopers": {
+      "title": "热门开发者",
+      "subtitle": "当前关注量最高的开发者",
+      "loading": "加载中...",
+      "empty": "暂无数据。",
+      "followers": "{count} 关注",
+      "follow": "关注",
+      "unfollow": "已关注"
+    },
+    "risingStars": {
+      "title": "潜力新星",
+      "subtitle": "最近加入 SoloForge 的开发者",
+      "loading": "加载中...",
+      "empty": "暂无数据。",
+      "followers": "{count} 关注",
+      "follow": "关注",
+      "unfollow": "已关注"
+    },
+    "categoryRanking": {
+      "title": "热门分类排行榜",
+      "subtitle": "按已上架产品数量排序",
+      "loading": "加载中...",
+      "empty": "暂无排行数据。",
+      "count": "{count} 个产品"
+    },
+    "featured": {
+      "title": "精选产品",
+      "subtitle": "快速浏览值得关注的作品。"
+    },
+    "recent": {
+      "title": "最新上架",
+      "subtitle": "刚刚提交的最新产品。",
+      "empty": "暂无最新上架产品。"
+    },
+    "categories": {
+      "title": "按分类浏览",
+      "subtitle": "直达你关心的领域。"
+    },
+    "about": {
+      "titleItalic": "全球覆盖，",
+      "titleMain": "优先服务独立开发者。",
+      "desc": "一个支持中英文双语的精选平台，汇聚全球独立开发者打造的优秀产品。",
+      "stats": {
+        "languages": "支持语言",
+        "categories": "覆盖类别",
+        "ideas": "创意与创新",
+        "communityTitle": "社区",
+        "communitySubtitle": "创作者、用户与早期采用者"
+      }
+    },
+    "focus": {
+      "title": "焦点领域",
+      "subtitle": "在关键类别中发现亮眼产品。",
+      "cards": [
+        {
+          "title": "AI 工具",
+          "desc": "智能助理、Copilot 与自动化，赋能创作者。"
+        },
+        {
+          "title": "效率工具",
+          "desc": "节省时间的应用与工作流，让开发更高效。"
+        },
+        {
+          "title": "开发者工具",
+          "desc": "工具链、SDK 与基础设施，帮助开发更好地构建。"
+        },
+        {
+          "title": "设计",
+          "desc": "UI 套件、图标与创意工具，提升用户体验。"
+        }
+      ]
+    },
+    "services": {
+      "items": [
+        { "title": "提交与审核", "desc": "规范的收录流程、公正的审核与精选。" },
+        { "title": "发现与搜索", "desc": "按分类、标签与全文搜索快速定位产品。" },
+        { "title": "分析与洞察", "desc": "基础数据与趋势信号，帮助创作者成长。" },
+        { "title": "国际化支持", "desc": "en/zh 双语支持，locale 感知的路由结构。" },
+        { "title": "社区与反馈", "desc": "与早期用户互动、收集改进建议。" },
+        { "title": "SEO 与分享", "desc": "hreflang、站点地图与友好的社媒分享。" }
+      ]
+    },
+    "leadership": {
+      "title": "团队"
+    },
+    "contact": {
+      "title": "与 SoloForge 合作。",
+      "subtitle": "提交你的产品或联系我们合作。",
+      "email": "邮箱地址",
+      "message": "留言",
+      "send": "发送"
+    }
+  },
+  "leaderboard": {
+    "title": "排行榜",
+    "subtitle": "基于最近提交与开发者活跃度的简易排行。",
+    "loading": "加载中...",
+    "empty": "暂无数据。",
+    "topProducts": "产品榜",
+    "topMakers": "开发者榜",
+    "makerCount": "{count} 个产品",
+    "windowLabel": "时间范围：{window}",
+    "windows": {
+      "day": "24 小时",
+      "week": "7 天",
+      "month": "30 天",
+      "all": "全部"
+    }
+  },
+  "homeNav": {
+    "about": "关于",
+    "focus": "焦点领域",
+    "services": "服务",
+    "leadership": "团队"
+  }
+}
