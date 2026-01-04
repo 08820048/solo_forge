@@ -76,6 +76,10 @@ type DeveloperWithFollowers = {
 
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
+/**
+ * renderRank
+ * 渲染名次徽章：前三名显示 medal 图标与配色，其他显示灰色 #N。
+ */
 function renderRank(rank: number) {
   if (rank === 1) {
     return (
@@ -291,40 +295,42 @@ export default function DeveloperPopularitySidebar() {
                 {topList.map((d, idx) => (
                   <div
                     key={d.email}
-                    className="flex items-start gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
                   >
-                    <div className="w-12 shrink-0 flex items-center pt-0.5">{renderRank(idx + 1)}</div>
-                    <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
-                      {(d.name || d.email).trim().charAt(0).toUpperCase()}
-                    </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center">{renderRank(idx + 1)}</div>
+                      <div className="mt-2 flex items-center gap-2 min-w-0">
+                        {d.website ? (
+                          <a
+                            href={d.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground hover:opacity-90 transition-opacity"
+                          >
+                            {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                          </a>
+                        ) : (
+                          <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
+                            {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
-                          <div className="mt-1 text-[11px] text-muted-foreground">{tTop('followers', { count: d.followers })}</div>
+                          <div className="mt-1 text-[11px] text-muted-foreground whitespace-nowrap">
+                            {tTop('followers', { count: d.followers })}
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void toggleFollowDeveloper(d.email)}
-                          className="shrink-0 rounded-md border border-border bg-background/70 px-2.5 py-1.5 text-xs text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                        >
-                          {followedDevelopers.map((v) => v.toLowerCase()).includes(d.email.toLowerCase()) ? tTop('unfollow') : tTop('follow')}
-                        </button>
                       </div>
-
-                    {d.website ? (
-                      <a
-                        href={d.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {t('visit')}
-                      </a>
-                    ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void toggleFollowDeveloper(d.email)}
+                      className="shrink-0 rounded-md border border-border bg-background/70 px-2.5 py-1.5 text-xs text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                    >
+                      {followedDevelopers.map((v) => v.toLowerCase()).includes(d.email.toLowerCase()) ? tTop('unfollow') : tTop('follow')}
+                    </button>
                   </div>
-                </div>
-              ))}
+                ))}
               </div>
             )}
           </div>
@@ -351,38 +357,38 @@ export default function DeveloperPopularitySidebar() {
                 {list.map((d, idx) => (
                   <div
                     key={d.email}
-                    className="flex items-start gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
                   >
-                    <div className="w-12 shrink-0 flex items-center pt-0.5">{renderRank(idx + 1)}</div>
-                    <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
-                      {(d.name || d.email).trim().charAt(0).toUpperCase()}
-                    </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center">{renderRank(idx + 1)}</div>
+                      <div className="mt-2 flex items-center gap-2 min-w-0">
+                        {d.website ? (
+                          <a
+                            href={d.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground hover:opacity-90 transition-opacity"
+                          >
+                            {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                          </a>
+                        ) : (
+                          <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
+                            {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                          </div>
+                        )}
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
-                          <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground whitespace-nowrap">
                             <span>{t('favorites', { count: d.favorites })}</span>
                             <span>·</span>
                             <span>{t('likes', { count: d.likes })}</span>
                           </div>
                         </div>
-                        <Badge variant="outline" className="shrink-0">
-                          {t('score', { score: d.score })}
-                        </Badge>
                       </div>
-
-                      {d.website ? (
-                        <a
-                          href={d.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-2 inline-flex text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          {t('visit')}
-                        </a>
-                      ) : null}
                     </div>
+                    <Badge variant="outline" className="shrink-0">
+                      {t('score', { score: d.score })}
+                    </Badge>
                   </div>
                 ))}
               </div>
