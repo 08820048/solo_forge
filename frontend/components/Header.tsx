@@ -392,11 +392,11 @@ export default function Header() {
 
       document.documentElement.animate(
         { clipPath: shrink },
-        { duration: 450, easing: 'ease-in-out', pseudoElement: '::view-transition-old(root)' }
+        { duration: 1300, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', pseudoElement: '::view-transition-old(root)' }
       );
       document.documentElement.animate(
         { clipPath: expand },
-        { duration: 450, easing: 'ease-in-out', pseudoElement: '::view-transition-new(root)' }
+        { duration: 1300, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', pseudoElement: '::view-transition-new(root)' }
       );
     });
   };
@@ -407,7 +407,7 @@ export default function Header() {
         <div className="w-full max-w-6xl shrink-0 rounded-full border border-border bg-background/70 backdrop-blur-xl shadow-lg shadow-black/5 px-4 md:px-5 h-14 flex items-center justify-between gap-4 md:gap-12 transition-all duration-300">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <Globe className="text-foreground" size={20} strokeWidth={1.5} />
+          <i className="ri-hammer-line text-foreground text-lg" aria-hidden="true" />
           <span className="text-sm font-medium tracking-tight text-foreground">
             SoloForge
           </span>
@@ -805,20 +805,20 @@ function AuthDialog({
             <div className="flex justify-center mb-10">
               <div className="relative w-[220px] h-[220px]">
                 <div
-                  className="absolute inset-0 m-auto rounded-full border border-blue-500/20 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
+                  className="absolute inset-0 m-auto rounded-full border border-primary/20 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
                   style={{ width: 220, height: 220, animationDelay: '0.8s' }}
                 />
                 <div
-                  className="absolute inset-0 m-auto rounded-full border border-blue-500/20 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
+                  className="absolute inset-0 m-auto rounded-full border border-primary/20 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
                   style={{ width: 160, height: 160, animationDelay: '0.9s' }}
                 />
                 <div
-                  className="absolute inset-0 m-auto rounded-full border border-blue-500/20 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
+                  className="absolute inset-0 m-auto rounded-full border border-primary/20 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
                   style={{ width: 100, height: 100, animationDelay: '1s' }}
                 />
 
                 <div
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70px] h-[70px] rounded-full bg-blue-600 text-white shadow-lg shadow-blue-500/30 flex items-center justify-center z-10 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards] animate-[sf-pulse_2s_infinite]"
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70px] h-[70px] rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center z-10 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards] animate-[sf-pulse_2s_infinite]"
                   style={{ animationDelay: '1.1s' }}
                 >
                   <Globe size={28} strokeWidth={1.5} />
@@ -840,7 +840,7 @@ function AuthDialog({
                     className="absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-background shadow flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"
                     aria-label={tAuth('continueWith', { provider: 'GitHub' })}
                   >
-                    <i className="ri-github-fill text-[18px] text-blue-600" aria-hidden="true" />
+                    <i className="ri-github-fill text-[18px] text-primary" aria-hidden="true" />
                   </button>
                 </div>
 
@@ -860,7 +860,7 @@ function AuthDialog({
                     className="absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-background shadow flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"
                     aria-label={tAuth('continueWith', { provider: 'Google' })}
                   >
-                    <i className="ri-google-fill text-[18px] text-blue-600" aria-hidden="true" />
+                    <i className="ri-google-fill text-[18px] text-primary" aria-hidden="true" />
                   </button>
                 </div>
 

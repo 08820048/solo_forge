@@ -2,8 +2,9 @@
   "nav": {
     "home": "首页",
     "products": "产品",
-    "leaderboard": "排行榜",
+    "leaderboard": "排行",
     "submit": "提交",
+    "feedback": "反馈",
     "login": "登录",
     "developerCenter": "开发者面板",
     "logout": "退出登录",
@@ -38,7 +39,7 @@
       "privacy": "隐私政策"
     },
     "social": {
-      "title": "社交",
+      "title": "社区",
       "twitter": "Twitter",
       "github": "GitHub"
     },
@@ -76,6 +77,83 @@
     },
     "error": {
       "tryAgain": "重试"
+    }
+  },
+  "feedback": {
+    "title": "反馈",
+    "subtitle": "提交问题与建议，我们会在 GitHub Issues 中跟踪处理进度。",
+    "types": {
+      "all": "全部类型",
+      "bug": "Bug",
+      "feature": "功能建议",
+      "ui": "界面/体验",
+      "performance": "性能",
+      "data": "数据/内容",
+      "other": "其他"
+    },
+    "status": {
+      "all": "全部状态",
+      "open": "进行中",
+      "closed": "已关闭",
+      "triage": "待分流",
+      "inProgress": "处理中",
+      "planned": "已计划",
+      "resolved": "已解决",
+      "wontFix": "不修复"
+    },
+    "form": {
+      "title": "提交反馈",
+      "edit": "编辑",
+      "preview": "预览",
+      "backToEdit": "返回编辑",
+      "markdownHint": "支持 Markdown 语法（例如：**加粗**、`代码`、[链接](https://example.com)、列表）。",
+      "type": "问题类型",
+      "typePlaceholder": "选择类型",
+      "issueTitle": "标题",
+      "issueTitlePlaceholder": "一句话描述问题/建议",
+      "description": "描述",
+      "descriptionPlaceholder": "请尽量提供背景、影响范围与期望。",
+      "showMore": "补充更多信息",
+      "hideMore": "收起更多信息",
+      "steps": "复现步骤（可选）",
+      "stepsPlaceholder": "1. ...\n2. ...\n3. ...",
+      "expected": "期望结果（可选）",
+      "expectedPlaceholder": "你希望看到什么结果？",
+      "actual": "实际结果（可选）",
+      "actualPlaceholder": "现在发生了什么？",
+      "contact": "联系方式（可选）",
+      "contactPlaceholder": "邮箱 / Telegram / 微信等",
+      "pageUrl": "页面链接（可选）",
+      "submit": "提交",
+      "submitting": "提交中...",
+      "missingRequired": "请填写标题与描述。",
+      "submitFailed": "提交失败，请稍后重试。",
+      "submitted": "已提交。",
+      "viewOnGitHub": "在 GitHub 查看 Issue #{number}",
+      "tokenMissing": "当前未配置服务端 GitHub Token，需要你在 GitHub 登录后创建 Issue。",
+      "openIssuePage": "打开 GitHub 创建页面",
+      "dismiss": "知道了"
+    },
+    "list": {
+      "title": "反馈记录",
+      "sortedByUpdated": "按最近更新排序",
+      "searchPlaceholder": "搜索标题 / 描述",
+      "statusPlaceholder": "状态",
+      "typePlaceholder": "类型",
+      "loading": "加载中...",
+      "loadFailed": "加载失败，请稍后重试。",
+      "missingRepo": "未配置反馈仓库：请在 frontend/.env.local 设置 NEXT_PUBLIC_GITHUB_FEEDBACK_REPO=owner/repo。",
+      "empty": "暂无反馈记录。",
+      "comments": "{count} 条评论",
+      "noComments": "暂无评论",
+      "updatedAt": "更新于 {time}",
+      "createdAt": "创建于 {time}",
+      "author": "提交者：{author}",
+      "openOnGitHub": "在 GitHub 打开",
+      "noBody": "（无内容）",
+      "prev": "上一页",
+      "next": "下一页",
+      "page": "第 {page} 页"
     }
   },
   "developer": {
@@ -230,7 +308,7 @@
     },
     "quickActions": {
       "products": "浏览全部产品",
-      "leaderboard": "查看排行榜",
+      "leaderboard": "查看排行",
       "submit": "提交产品"
     },
     "topDevelopers": {
@@ -252,7 +330,7 @@
       "unfollow": "已关注"
     },
     "categoryRanking": {
-      "title": "热门分类排行榜",
+      "title": "热门分类排行",
       "subtitle": "按已上架产品数量排序",
       "loading": "加载中...",
       "empty": "暂无排行数据。",
@@ -327,7 +405,7 @@
     }
   },
   "leaderboard": {
-    "title": "排行榜",
+    "title": "排行",
     "subtitle": "基于最近提交与开发者活跃度的简易排行。",
     "loading": "加载中...",
     "empty": "暂无数据。",

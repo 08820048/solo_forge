@@ -32,6 +32,34 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+function renderRankBadge(rank: number) {
+  if (rank === 1) {
+    return (
+      <span className="flex items-center gap-1 text-yellow-500">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-sm font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  if (rank === 2) {
+    return (
+      <span className="flex items-center gap-1 text-slate-300">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-sm font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  if (rank === 3) {
+    return (
+      <span className="flex items-center gap-1 text-amber-700">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-sm font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  return <span className="text-sm font-semibold text-muted-foreground">#{rank}</span>;
+}
+
 /**
  * LeaderboardPage
  * 排行榜页：按时间窗口展示产品榜与开发者榜，便于用户快速发现热点作品。
@@ -143,7 +171,7 @@ export default function LeaderboardPage() {
                     <div className="divide-y divide-border">
                       {data.top_products.map((p, idx) => (
                         <div key={p.id} className="px-5 py-4 flex items-start gap-4">
-                          <div className="w-8 shrink-0 text-sm font-semibold text-muted-foreground">#{idx + 1}</div>
+                          <div className="w-12 shrink-0 flex items-center pt-0.5">{renderRankBadge(idx + 1)}</div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
                               <Link
@@ -171,7 +199,7 @@ export default function LeaderboardPage() {
                     <div className="divide-y divide-border">
                       {data.top_makers.map((m, idx) => (
                         <div key={`${m.maker_name}-${idx}`} className="px-5 py-4 flex items-center gap-3">
-                          <div className="w-8 shrink-0 text-sm font-semibold text-muted-foreground">#{idx + 1}</div>
+                          <div className="w-12 shrink-0 flex items-center">{renderRankBadge(idx + 1)}</div>
                           <div className="min-w-0 flex-1">
                             <div className="text-foreground font-medium truncate">{m.maker_name}</div>
                             <div className="text-xs text-muted-foreground">{t('makerCount', { count: m.product_count })}</div>

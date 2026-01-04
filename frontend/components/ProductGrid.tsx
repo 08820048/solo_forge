@@ -78,6 +78,34 @@ type DeveloperWithFollowers = {
 
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
+function renderRank(rank: number) {
+  if (rank === 1) {
+    return (
+      <span className="flex items-center gap-1 text-yellow-500">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-sm font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  if (rank === 2) {
+    return (
+      <span className="flex items-center gap-1 text-slate-300">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-sm font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  if (rank === 3) {
+    return (
+      <span className="flex items-center gap-1 text-amber-700">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-sm font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  return <span className="text-sm font-semibold text-muted-foreground">#{rank}</span>;
+}
+
 interface ProductGridProps {
   section: 'featured' | 'recent';
 }
@@ -281,7 +309,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
             <div className="divide-y divide-border">
               {products.map((p, idx) => (
                 <div key={p.id} className="px-5 py-4 flex items-start gap-4">
-                  <div className="w-8 shrink-0 text-sm font-semibold text-muted-foreground">#{idx + 1}</div>
+                  <div className="w-12 shrink-0 flex items-center pt-0.5">{renderRank(idx + 1)}</div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <Link

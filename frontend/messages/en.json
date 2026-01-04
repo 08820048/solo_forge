@@ -4,6 +4,7 @@
     "products": "Products",
     "leaderboard": "Leaderboard",
     "submit": "Submit",
+    "feedback": "Feedback",
     "login": "Log in",
     "developerCenter": "Developer Center",
     "logout": "Log out",
@@ -38,7 +39,7 @@
       "privacy": "Privacy Policy"
     },
     "social": {
-      "title": "Social",
+      "title": "Community",
       "twitter": "Twitter",
       "github": "GitHub"
     },
@@ -76,6 +77,83 @@
     },
     "error": {
       "tryAgain": "Try Again"
+    }
+  },
+  "feedback": {
+    "title": "Feedback",
+    "subtitle": "Report issues and suggestions. We track progress via GitHub Issues.",
+    "types": {
+      "all": "All types",
+      "bug": "Bug",
+      "feature": "Feature request",
+      "ui": "UI/UX",
+      "performance": "Performance",
+      "data": "Data/Content",
+      "other": "Other"
+    },
+    "status": {
+      "all": "All statuses",
+      "open": "Open",
+      "closed": "Closed",
+      "triage": "Triage",
+      "inProgress": "In progress",
+      "planned": "Planned",
+      "resolved": "Resolved",
+      "wontFix": "Won't fix"
+    },
+    "form": {
+      "title": "Submit feedback",
+      "edit": "Edit",
+      "preview": "Preview",
+      "backToEdit": "Back to edit",
+      "markdownHint": "Markdown is supported (e.g. **bold**, `code`, [link](https://example.com), lists).",
+      "type": "Type",
+      "typePlaceholder": "Select a type",
+      "issueTitle": "Title",
+      "issueTitlePlaceholder": "A short summary",
+      "description": "Description",
+      "descriptionPlaceholder": "Provide context, impact, and expected outcome.",
+      "showMore": "Add more details",
+      "hideMore": "Hide details",
+      "steps": "Repro steps (optional)",
+      "stepsPlaceholder": "1. ...\n2. ...\n3. ...",
+      "expected": "Expected (optional)",
+      "expectedPlaceholder": "What should happen?",
+      "actual": "Actual (optional)",
+      "actualPlaceholder": "What happens now?",
+      "contact": "Contact (optional)",
+      "contactPlaceholder": "Email / Telegram / etc.",
+      "pageUrl": "Page URL (optional)",
+      "submit": "Submit",
+      "submitting": "Submitting...",
+      "missingRequired": "Title and description are required.",
+      "submitFailed": "Submit failed. Please try again later.",
+      "submitted": "Submitted.",
+      "viewOnGitHub": "View on GitHub: Issue #{number}",
+      "tokenMissing": "GitHub token is not configured. You can create the issue after signing in to GitHub.",
+      "openIssuePage": "Open GitHub issue page",
+      "dismiss": "Dismiss"
+    },
+    "list": {
+      "title": "Feedback records",
+      "sortedByUpdated": "Sorted by latest update",
+      "searchPlaceholder": "Search title / description",
+      "statusPlaceholder": "Status",
+      "typePlaceholder": "Type",
+      "loading": "Loading...",
+      "loadFailed": "Failed to load. Please try again later.",
+      "missingRepo": "Feedback repo is not configured. Set NEXT_PUBLIC_GITHUB_FEEDBACK_REPO=owner/repo in frontend/.env.local.",
+      "empty": "No feedback yet.",
+      "comments": "{count} comments",
+      "noComments": "No comments",
+      "updatedAt": "Updated {time}",
+      "createdAt": "Created {time}",
+      "author": "Author: {author}",
+      "openOnGitHub": "Open on GitHub",
+      "noBody": "(No content)",
+      "prev": "Prev",
+      "next": "Next",
+      "page": "Page {page}"
     }
   },
   "developer": {

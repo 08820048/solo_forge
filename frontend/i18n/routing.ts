@@ -20,7 +20,8 @@ export const routing = defineRouting({
     '/leaderboard': '/leaderboard',
     '/developer': '/developer',
     '/submit': '/submit',
-    '/about': '/about'
+    '/about': '/about',
+    '/feedback': '/feedback'
   }
 });
 

@@ -76,6 +76,34 @@ type DeveloperWithFollowers = {
 
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
+function renderRank(rank: number) {
+  if (rank === 1) {
+    return (
+      <span className="flex items-center gap-1 text-yellow-500">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-xs font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  if (rank === 2) {
+    return (
+      <span className="flex items-center gap-1 text-slate-300">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-xs font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  if (rank === 3) {
+    return (
+      <span className="flex items-center gap-1 text-amber-700">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-xs font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  return <span className="text-xs font-semibold text-muted-foreground">#{rank}</span>;
+}
+
 /**
  * DeveloperPopularitySidebar
  * 首页左侧栏：展示「热门开发者 Top 5」与「上月最受欢迎开发者」。
@@ -265,7 +293,7 @@ export default function DeveloperPopularitySidebar() {
                     key={d.email}
                     className="flex items-start gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
                   >
-                    <div className="w-6 shrink-0 text-xs font-semibold text-muted-foreground">#{idx + 1}</div>
+                    <div className="w-12 shrink-0 flex items-center pt-0.5">{renderRank(idx + 1)}</div>
                     <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
                       {(d.name || d.email).trim().charAt(0).toUpperCase()}
                     </div>
@@ -325,7 +353,7 @@ export default function DeveloperPopularitySidebar() {
                     key={d.email}
                     className="flex items-start gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
                   >
-                    <div className="w-6 shrink-0 text-xs font-semibold text-muted-foreground">#{idx + 1}</div>
+                    <div className="w-12 shrink-0 flex items-center pt-0.5">{renderRank(idx + 1)}</div>
                     <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
                       {(d.name || d.email).trim().charAt(0).toUpperCase()}
                     </div>

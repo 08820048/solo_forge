@@ -23,6 +23,34 @@ type CategoryWithCount = {
   product_count: number;
 };
 
+function renderRank(rank: number) {
+  if (rank === 1) {
+    return (
+      <span className="flex items-center gap-1 text-yellow-500">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-xs font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  if (rank === 2) {
+    return (
+      <span className="flex items-center gap-1 text-slate-300">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-xs font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  if (rank === 3) {
+    return (
+      <span className="flex items-center gap-1 text-amber-700">
+        <i className="ri-medal-line text-base" aria-hidden="true" />
+        <span className="text-xs font-semibold">#{rank}</span>
+      </span>
+    );
+  }
+  return <span className="text-xs font-semibold text-muted-foreground">#{rank}</span>;
+}
+
 /**
  * HomeRightSidebar
  * 首页右侧栏：展示 3 个赞助位产品与热门分类排行榜（Top 10）。
@@ -195,7 +223,7 @@ export default function HomeRightSidebar() {
                     className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-6 shrink-0 text-xs font-semibold text-muted-foreground">#{idx + 1}</div>
+                      <div className="w-12 shrink-0 flex items-center pt-0.5">{renderRank(idx + 1)}</div>
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-foreground truncate">{name}</div>
                         <div className="mt-1 text-[11px] text-muted-foreground">

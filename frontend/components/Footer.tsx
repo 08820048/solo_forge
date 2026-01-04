@@ -7,6 +7,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 
 export default function Footer() {
   const t = useTranslations('footer');
+  const tNav = useTranslations('nav');
   const currentYear = new Date().getFullYear();
 
   return (
@@ -15,15 +16,15 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-8 h-8 bg-foreground rounded-lg flex items-center justify-center spotlight-border">
-                <span className="text-background font-bold text-xl">S</span>
+            <div className="mb-4">
+              <div className="inline-flex items-center gap-2 text-xl font-semibold text-foreground bg-spotlight">
+                <i className="ri-hammer-line text-foreground text-xl" aria-hidden="true" />
+                <span>SoloForge</span>
               </div>
-              <span className="text-xl font-semibold text-foreground bg-spotlight">SoloForge</span>
+              <p className="mt-2 text-sm text-muted-foreground max-w-md font-sans">
+                {t('description')}
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground max-w-md font-sans">
-              {t('description')}
-            </p>
           </div>
 
           {/* Links */}
@@ -57,6 +58,11 @@ export default function Footer() {
           <div>
             <h3 className="text-foreground font-semibold mb-4 font-sans">{t('social.title')}</h3>
             <ul className="space-y-2">
+              <li>
+                <I18nLink href="/feedback" className="text-sm hover:text-foreground transition-colors font-sans">
+                  {tNav('feedback')}
+                </I18nLink>
+              </li>
               <li>
                 <a href="https://twitter.com/soloforge" target="_blank" rel="noopener noreferrer" className="text-sm hover:text-foreground transition-colors font-sans">
                   {t('social.twitter')}
