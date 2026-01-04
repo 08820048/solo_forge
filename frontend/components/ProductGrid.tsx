@@ -23,6 +23,60 @@ function readFollowedDevelopersFromStorage(): string[] {
 }
 
 /**
+ * readFavoritesFromStorage
+ * 从 localStorage 读取已收藏作品 id 列表。
+ */
+function readFavoritesFromStorage(): string[] {
+  try {
+    const raw = localStorage.getItem('sf_favorites');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((v) => typeof v === 'string') as string[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * writeFavoritesToStorage
+ * 写入已收藏作品 id 列表到 localStorage，并广播更新事件。
+ */
+function writeFavoritesToStorage(ids: string[]) {
+  try {
+    localStorage.setItem('sf_favorites', JSON.stringify(ids));
+    window.dispatchEvent(new Event('sf_favorites_updated'));
+  } catch {}
+}
+
+/**
+ * readLikesFromStorage
+ * 从 localStorage 读取已点赞作品 id 列表。
+ */
+function readLikesFromStorage(): string[] {
+  try {
+    const raw = localStorage.getItem('sf_likes');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((v) => typeof v === 'string') as string[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * writeLikesToStorage
+ * 写入已点赞作品 id 列表到 localStorage，并广播更新事件。
+ */
+function writeLikesToStorage(ids: string[]) {
+  try {
+    localStorage.setItem('sf_likes', JSON.stringify(ids));
+    window.dispatchEvent(new Event('sf_likes_updated'));
+  } catch {}
+}
+
+/**
  * writeFollowedDevelopersToStorage
  * 写入已关注开发者列表到 localStorage，并广播更新事件。
  */
@@ -78,34 +132,6 @@ type DeveloperWithFollowers = {
 
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
-function renderRank(rank: number) {
-  if (rank === 1) {
-    return (
-      <span className="flex items-center gap-1 text-yellow-500">
-        <i className="ri-medal-line text-base" aria-hidden="true" />
-        <span className="text-sm font-semibold">#{rank}</span>
-      </span>
-    );
-  }
-  if (rank === 2) {
-    return (
-      <span className="flex items-center gap-1 text-slate-300">
-        <i className="ri-medal-line text-base" aria-hidden="true" />
-        <span className="text-sm font-semibold">#{rank}</span>
-      </span>
-    );
-  }
-  if (rank === 3) {
-    return (
-      <span className="flex items-center gap-1 text-amber-700">
-        <i className="ri-medal-line text-base" aria-hidden="true" />
-        <span className="text-sm font-semibold">#{rank}</span>
-      </span>
-    );
-  }
-  return <span className="text-sm font-semibold text-muted-foreground">#{rank}</span>;
-}
-
 interface ProductGridProps {
   section: 'featured' | 'recent';
 }
@@ -126,6 +152,8 @@ export default function ProductGrid({ section }: ProductGridProps) {
   const [risingStars, setRisingStars] = useState<DeveloperWithFollowers[]>([]);
   const [risingStarsLoading, setRisingStarsLoading] = useState(false);
   const [followedDevelopers, setFollowedDevelopers] = useState<string[]>(() => readFollowedDevelopersFromStorage());
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => readFavoritesFromStorage());
+  const [likeIds, setLikeIds] = useState<string[]>(() => readLikesFromStorage());
 
   useEffect(() => {
     let cancelled = false;
@@ -138,8 +166,9 @@ export default function ProductGrid({ section }: ProductGridProps) {
       setLoading(true);
       try {
         const offset = section === 'featured' ? 6 : 0;
+        const limit = section === 'recent' ? 15 : 6;
         const response = await fetch(
-          `/api/products?status=approved&language=${locale}&limit=6&offset=${offset}`,
+          `/api/products?status=approved&language=${locale}&limit=${limit}&offset=${offset}`,
           { headers: { 'Accept-Language': locale } }
         );
         const json = await response.json();
@@ -169,6 +198,18 @@ export default function ProductGrid({ section }: ProductGridProps) {
     const onUpdate = () => setFollowedDevelopers(readFollowedDevelopersFromStorage());
     window.addEventListener('sf_followed_developers_updated', onUpdate as EventListener);
     return () => window.removeEventListener('sf_followed_developers_updated', onUpdate as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const onUpdate = () => setFavoriteIds(readFavoritesFromStorage());
+    window.addEventListener('sf_favorites_updated', onUpdate as EventListener);
+    return () => window.removeEventListener('sf_favorites_updated', onUpdate as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const onUpdate = () => setLikeIds(readLikesFromStorage());
+    window.addEventListener('sf_likes_updated', onUpdate as EventListener);
+    return () => window.removeEventListener('sf_likes_updated', onUpdate as EventListener);
   }, []);
 
   useEffect(() => {
@@ -262,6 +303,88 @@ export default function ProductGrid({ section }: ProductGridProps) {
     }
   };
 
+  /**
+   * toggleFavorite
+   * 收藏/取消收藏作品（本地乐观更新 + 后端写入）。
+   */
+  const toggleFavorite = async (productId: string) => {
+    const normalizedId = productId.trim();
+    if (!normalizedId) return;
+
+    const prev = favoriteIds;
+    const prevSet = new Set(prev);
+    const isFavorited = prevSet.has(normalizedId);
+
+    const nextSet = new Set(prevSet);
+    if (isFavorited) nextSet.delete(normalizedId);
+    else nextSet.add(normalizedId);
+
+    const next = Array.from(nextSet);
+    setFavoriteIds(next);
+    writeFavoritesToStorage(next);
+
+    try {
+      const response = await fetch('/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept-Language': locale },
+        body: JSON.stringify({
+          action: isFavorited ? 'unfavorite' : 'favorite',
+          product_id: normalizedId,
+          user_id: getInteractionUserId(),
+        }),
+      });
+      const json = (await response.json()) as { success?: boolean };
+      if (!response.ok || !json.success) {
+        setFavoriteIds(prev);
+        writeFavoritesToStorage(prev);
+      }
+    } catch {
+      setFavoriteIds(prev);
+      writeFavoritesToStorage(prev);
+    }
+  };
+
+  /**
+   * toggleLike
+   * 点赞/取消点赞作品（本地乐观更新 + 后端写入）。
+   */
+  const toggleLike = async (productId: string) => {
+    const normalizedId = productId.trim();
+    if (!normalizedId) return;
+
+    const prev = likeIds;
+    const prevSet = new Set(prev);
+    const isLiked = prevSet.has(normalizedId);
+
+    const nextSet = new Set(prevSet);
+    if (isLiked) nextSet.delete(normalizedId);
+    else nextSet.add(normalizedId);
+
+    const next = Array.from(nextSet);
+    setLikeIds(next);
+    writeLikesToStorage(next);
+
+    try {
+      const response = await fetch('/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept-Language': locale },
+        body: JSON.stringify({
+          action: isLiked ? 'unlike' : 'like',
+          product_id: normalizedId,
+          user_id: getInteractionUserId(),
+        }),
+      });
+      const json = (await response.json()) as { success?: boolean };
+      if (!response.ok || !json.success) {
+        setLikeIds(prev);
+        writeLikesToStorage(prev);
+      }
+    } catch {
+      setLikeIds(prev);
+      writeLikesToStorage(prev);
+    }
+  };
+
   if (section === 'recent') {
     return (
       <div>
@@ -286,13 +409,18 @@ export default function ProductGrid({ section }: ProductGridProps) {
               <div className="h-4 w-32 bg-muted rounded" />
             </div>
             <div className="divide-y divide-border">
-              {Array.from({ length: 6 }).map((_, idx) => (
-                <div key={idx} className="px-5 py-4 flex items-start gap-4">
-                  <div className="w-8 shrink-0 h-4 bg-muted rounded" />
+              {Array.from({ length: 15 }).map((_, idx) => (
+                <div key={idx} className="px-5 py-4 flex items-center gap-4">
+                  <div className="w-10 h-10 shrink-0 bg-muted rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <div className="h-4 w-56 bg-muted rounded" />
                     <div className="mt-2 h-4 w-full bg-muted rounded" />
                     <div className="mt-3 h-3 w-28 bg-muted rounded" />
+                  </div>
+                  <div className="shrink-0 flex items-center gap-2">
+                    <div className="w-8 h-8 bg-muted rounded-md" />
+                    <div className="w-8 h-8 bg-muted rounded-md" />
+                    <div className="w-8 h-8 bg-muted rounded-md" />
                   </div>
                 </div>
               ))}
@@ -307,9 +435,20 @@ export default function ProductGrid({ section }: ProductGridProps) {
               <span className="text-xs text-muted-foreground">{t('subtitle')}</span>
             </div>
             <div className="divide-y divide-border">
-              {products.map((p, idx) => (
-                <div key={p.id} className="px-5 py-4 flex items-start gap-4">
-                  <div className="w-12 shrink-0 flex items-center pt-0.5">{renderRank(idx + 1)}</div>
+              {products.map((p) => (
+                <div key={p.id} className="px-5 py-4 flex items-center gap-4">
+                  <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                    {p.logo_url ? (
+                      <div
+                        className="w-full h-full bg-center bg-cover"
+                        style={{ backgroundImage: `url(${p.logo_url})` }}
+                        aria-label={p.name}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground text-sm font-semibold">{p.name.trim().charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <Link
@@ -318,12 +457,63 @@ export default function ProductGrid({ section }: ProductGridProps) {
                       >
                         {p.name}
                       </Link>
-                      <Badge variant="secondary">
+                      <Badge variant="secondary" className="shrink-0">
                         {categoryT(p.category)}
                       </Badge>
                     </div>
-                    <div className="mt-1 text-sm text-muted-foreground line-clamp-2">{p.slogan}</div>
-                    <div className="mt-2 text-xs text-muted-foreground">by {p.maker_name}</div>
+                    <div className="mt-1 text-sm text-muted-foreground line-clamp-1">{p.slogan}</div>
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label={favoriteIds.includes(p.id) ? '取消收藏' : '收藏'}
+                      onClick={() => void toggleFavorite(p.id)}
+                      className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                    >
+                      <i
+                        key={favoriteIds.includes(p.id) ? 'favorited' : 'unfavorited'}
+                        className={[
+                          'ri-heart-3-line text-base transition-all duration-200',
+                          favoriteIds.includes(p.id)
+                            ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
+                            : 'text-muted-foreground',
+                        ].join(' ')}
+                        aria-hidden="true"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={likeIds.includes(p.id) ? '取消点赞' : '点赞'}
+                      onClick={() => void toggleLike(p.id)}
+                      className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                    >
+                      <i
+                        key={likeIds.includes(p.id) ? 'liked' : 'unliked'}
+                        className={[
+                          'ri-thumb-up-line text-base transition-all duration-200',
+                          likeIds.includes(p.id)
+                            ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
+                            : 'text-muted-foreground',
+                        ].join(' ')}
+                        aria-hidden="true"
+                      />
+                    </button>
+                    {p.website ? (
+                      <a
+                        href={p.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                        aria-label="浏览"
+                      >
+                        <i className="ri-global-line text-base" aria-hidden="true" />
+                      </a>
+                    ) : (
+                      <span className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 text-muted-foreground">
+                        <i className="ri-global-line text-base" aria-hidden="true" />
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -397,9 +587,14 @@ export default function ProductGrid({ section }: ProductGridProps) {
                         e.stopPropagation();
                         void toggleFollowDeveloper(d.email);
                       }}
-                      className="shrink-0 rounded-md border border-border bg-background/70 px-2.5 py-1.5 text-xs text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                      className="shrink-0 rounded-md border border-border bg-background/70 px-2.5 py-1.5 text-xs text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
                     >
-                      {followedDevelopers.map((v) => v.toLowerCase()).includes(d.email.toLowerCase()) ? devT('unfollow') : devT('follow')}
+                      <span
+                        key={followedDevelopers.map((v) => v.toLowerCase()).includes(d.email.toLowerCase()) ? 'unfollow' : 'follow'}
+                        className="inline-block animate-[sf-scale-in_0.18s_ease-out_forwards]"
+                      >
+                        {followedDevelopers.map((v) => v.toLowerCase()).includes(d.email.toLowerCase()) ? devT('unfollow') : devT('follow')}
+                      </span>
                     </button>
                   </div>
                 </div>

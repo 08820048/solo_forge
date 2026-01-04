@@ -4,7 +4,6 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Heart, ThumbsUp } from 'lucide-react';
 import { useState } from 'react';
 
 function readFavoritesFromStorage(): string[] {
@@ -186,13 +185,15 @@ export default function ProductCard({ product }: ProductCardProps) {
                 e.stopPropagation();
                 void toggleLike();
               }}
-              className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-colors"
+              className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
             >
-              <ThumbsUp
-                size={16}
-                strokeWidth={1.5}
-                className={liked ? 'text-primary' : 'text-muted-foreground'}
-                fill={liked ? 'currentColor' : 'none'}
+              <i
+                key={liked ? 'liked' : 'unliked'}
+                className={[
+                  'ri-thumb-up-line text-base transition-all duration-200',
+                  liked ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
+                ].join(' ')}
+                aria-hidden="true"
               />
             </button>
             <button
@@ -203,13 +204,15 @@ export default function ProductCard({ product }: ProductCardProps) {
                 e.stopPropagation();
                 void toggleFavorite();
               }}
-              className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-colors"
+              className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
             >
-              <Heart
-                size={16}
-                strokeWidth={1.5}
-                className={favorited ? 'text-primary' : 'text-muted-foreground'}
-                fill={favorited ? 'currentColor' : 'none'}
+              <i
+                key={favorited ? 'favorited' : 'unfavorited'}
+                className={[
+                  'ri-heart-3-line text-base transition-all duration-200',
+                  favorited ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
+                ].join(' ')}
+                aria-hidden="true"
               />
             </button>
           </div>

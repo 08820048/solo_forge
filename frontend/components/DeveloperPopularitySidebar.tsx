@@ -325,9 +325,14 @@ export default function DeveloperPopularitySidebar() {
                     <button
                       type="button"
                       onClick={() => void toggleFollowDeveloper(d.email)}
-                      className="shrink-0 rounded-md border border-border bg-background/70 px-2.5 py-1.5 text-xs text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                      className="shrink-0 rounded-md border border-border bg-background/70 px-2.5 py-1.5 text-xs text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
                     >
-                      {followedDevelopers.map((v) => v.toLowerCase()).includes(d.email.toLowerCase()) ? tTop('unfollow') : tTop('follow')}
+                      <span
+                        key={followedDevelopers.map((v) => v.toLowerCase()).includes(d.email.toLowerCase()) ? 'unfollow' : 'follow'}
+                        className="inline-block animate-[sf-scale-in_0.18s_ease-out_forwards]"
+                      >
+                        {followedDevelopers.map((v) => v.toLowerCase()).includes(d.email.toLowerCase()) ? tTop('unfollow') : tTop('follow')}
+                      </span>
                     </button>
                   </div>
                 ))}
