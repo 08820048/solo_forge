@@ -6,6 +6,22 @@ let localClient: SupabaseClient | null = null;
 let sessionClient: SupabaseClient | null = null;
 
 const AUTH_STORAGE_KEY = 'sf_auth_storage';
+const GLOBAL_CLIENT_KEY = '__sf_supabase_clients__';
+
+function getProjectRefFromUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname || '';
+    const suffix = '.supabase.co';
+    if (host.endsWith(suffix)) {
+      const ref = host.slice(0, -suffix.length);
+      return ref || 'supabase';
+    }
+    return host || 'supabase';
+  } catch {
+    return 'supabase';
+  }
+}
 
 /**
  * setSupabaseAuthStoragePreference
@@ -54,14 +70,36 @@ export function getSupabaseBrowserClient(options?: { storage?: SupabaseAuthStora
     throw new Error('getSupabaseBrowserClient must be called in the browser');
   }
 
+  const globalStore = (globalThis as unknown as Record<string, unknown>)[GLOBAL_CLIENT_KEY] as
+    | { local?: SupabaseClient; session?: SupabaseClient }
+    | undefined;
+  const globalCached = globalStore?.[storage];
+  if (globalCached) {
+    if (storage === 'session') sessionClient = globalCached;
+    else localClient = globalCached;
+    return globalCached;
+  }
+
+  const projectRef = getProjectRefFromUrl(url);
+  const storageKey = `sb-${projectRef}-auth-token-${storage}`;
+
   const nextClient = createClient(url, key, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      storageKey,
       storage: storage === 'session' ? window.sessionStorage : window.localStorage,
     },
   });
+
+  const nextStore =
+    globalStore ??
+    (((globalThis as unknown as Record<string, unknown>)[GLOBAL_CLIENT_KEY] = {}) as {
+      local?: SupabaseClient;
+      session?: SupabaseClient;
+    });
+  nextStore[storage] = nextClient;
 
   if (storage === 'session') sessionClient = nextClient;
   else localClient = nextClient;

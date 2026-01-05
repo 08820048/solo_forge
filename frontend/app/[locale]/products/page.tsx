@@ -16,6 +16,8 @@ interface Product {
   category: string;
   maker_name: string;
   website: string;
+  likes: number;
+  favorites: number;
 }
 
 interface Category {
@@ -63,7 +65,15 @@ export default function ProductsPage() {
         const productsData: ApiResponse<Product> = await productsResponse.json();
 
         if (productsData.success) {
-          setProducts(productsData.data);
+          const nextProducts = (productsData.data ?? []).map((p) => ({
+            ...p,
+            likes: typeof (p as unknown as { likes?: unknown }).likes === 'number' ? p.likes : Number((p as unknown as { likes?: unknown }).likes ?? 0),
+            favorites:
+              typeof (p as unknown as { favorites?: unknown }).favorites === 'number'
+                ? p.favorites
+                : Number((p as unknown as { favorites?: unknown }).favorites ?? 0),
+          }));
+          setProducts(nextProducts);
         }
 
         // Fetch categories

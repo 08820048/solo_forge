@@ -6,6 +6,7 @@
     "submit": "提交",
     "feedback": "反馈",
     "login": "登录",
+    "profile": "个人资料",
     "developerCenter": "开发者面板",
     "logout": "退出登录",
     "about": "关于"
@@ -28,6 +29,7 @@
     "verifyEmailSent": "已向 {email} 发送验证邮件，请前往邮箱完成验证后再登录。",
     "emailNotVerified": "该邮箱尚未完成验证：{email}。请先前往邮箱完成验证。",
     "wrongCredentials": "邮箱或密码不正确，请重试。",
+    "emailAlreadyRegistered": "该邮箱已注册，请直接登录。",
     "unknownError": "发生未知错误，请稍后重试。"
   },
   "footer": {
@@ -155,6 +157,28 @@
       "next": "下一页",
       "page": "第 {page} 页"
     }
+  },
+  "profile": {
+    "title": "个人资料",
+    "subtitle": "更新你的昵称与头像。",
+    "notLoggedIn": "请先登录后再编辑个人资料。",
+    "name": "昵称",
+    "namePlaceholder": "请输入昵称",
+    "avatarTip": "头像会显示在右上角。",
+    "uploadAvatar": "上传头像",
+    "uploadHelp": "支持 PNG/JPG/WebP 等图片格式，建议小于 5MB。",
+    "avatarTooLarge": "图片过大，请选择 5MB 以内的图片。",
+    "avatarInvalidType": "文件类型不正确，请选择图片文件。",
+    "avatarUploadFailed": "头像上传失败，请稍后重试。",
+    "avatarUploaded": "头像已上传，点击保存生效。",
+    "avatarUrl": "头像链接",
+    "avatarUrlPlaceholder": "上传后会自动生成",
+    "avatarHelp": "头像会保存到 Supabase Storage，并写入你的账户资料。",
+    "clearAvatar": "清除头像",
+    "save": "保存",
+    "saving": "保存中...",
+    "uploading": "上传中...",
+    "saved": "已保存。"
   },
   "developer": {
     "title": "开发者中心",

@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::sync::Arc;
 use std::time::Duration as StdDuration;
-use uuid::Uuid;
 
 /**
  * is_db_unavailable_error
@@ -26,11 +25,17 @@ fn is_db_unavailable_error(err: &anyhow::Error) -> bool {
         || msg.contains("connection timed out")
         || msg.contains("connection refused")
         || msg.contains("error connecting")
+        || msg.contains("decoding column")
+        || msg.contains("value buffer exceeds 8 bytes while decoding to integer type")
+        || msg.contains("invalid byte sequence for encoding")
+        || msg.contains("encoding \"utf8\"")
+        || msg.contains("null character not permitted")
         || msg.contains("password authentication failed")
         || msg.contains("could not translate host name")
         || msg.contains("pool timed out")
         || msg.contains("prepared statement")
         || msg.contains("bind message supplies")
+        || msg.contains("insufficient data left in message")
 }
 
 /**
@@ -436,16 +441,38 @@ pub struct InteractionBody {
     pub user_id: Option<String>,
 }
 
+/**
+ * extract_user_id
+ * 从交互请求体提取用户标识（并做 trim），缺失则返回 None。
+ */
+fn extract_user_id(body: &Option<web::Json<InteractionBody>>) -> Option<String> {
+    body.as_ref()
+        .and_then(|b| b.user_id.clone())
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+/**
+ * is_anonymous_user_id
+ * 判断是否为匿名用户标识（前端曾使用 anon_ 前缀）。
+ */
+fn is_anonymous_user_id(user_id: &str) -> bool {
+    user_id.to_ascii_lowercase().starts_with("anon_")
+}
+
 pub async fn follow_developer(
     path: web::Path<String>,
     body: Option<web::Json<InteractionBody>>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let email = path.into_inner();
-    let user_id = body
-        .as_ref()
-        .and_then(|b| b.user_id.clone())
-        .unwrap_or_else(|| format!("anon_{}", Uuid::new_v4()));
+    let user_id = match extract_user_id(&body) {
+        Some(v) if !is_anonymous_user_id(&v) => v,
+        _ => {
+            return HttpResponse::Unauthorized()
+                .json(ApiResponse::<()>::error("Unauthorized".to_string()))
+        }
+    };
 
     match db.follow_developer(&email, &user_id).await {
         Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
@@ -469,10 +496,13 @@ pub async fn unfollow_developer(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let email = path.into_inner();
-    let user_id = body
-        .as_ref()
-        .and_then(|b| b.user_id.clone())
-        .unwrap_or_else(|| format!("anon_{}", Uuid::new_v4()));
+    let user_id = match extract_user_id(&body) {
+        Some(v) if !is_anonymous_user_id(&v) => v,
+        _ => {
+            return HttpResponse::Unauthorized()
+                .json(ApiResponse::<()>::error("Unauthorized".to_string()))
+        }
+    };
 
     match db.unfollow_developer(&email, &user_id).await {
         Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
@@ -496,10 +526,13 @@ pub async fn like_product(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let product_id = path.into_inner();
-    let user_id = body
-        .as_ref()
-        .and_then(|b| b.user_id.clone())
-        .unwrap_or_else(|| format!("anon_{}", Uuid::new_v4()));
+    let user_id = match extract_user_id(&body) {
+        Some(v) if !is_anonymous_user_id(&v) => v,
+        _ => {
+            return HttpResponse::Unauthorized()
+                .json(ApiResponse::<()>::error("Unauthorized".to_string()))
+        }
+    };
 
     match db.like_product(&product_id, &user_id).await {
         Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
@@ -523,10 +556,13 @@ pub async fn unlike_product(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let product_id = path.into_inner();
-    let user_id = body
-        .as_ref()
-        .and_then(|b| b.user_id.clone())
-        .unwrap_or_else(|| format!("anon_{}", Uuid::new_v4()));
+    let user_id = match extract_user_id(&body) {
+        Some(v) if !is_anonymous_user_id(&v) => v,
+        _ => {
+            return HttpResponse::Unauthorized()
+                .json(ApiResponse::<()>::error("Unauthorized".to_string()))
+        }
+    };
 
     match db.unlike_product(&product_id, &user_id).await {
         Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
@@ -550,10 +586,13 @@ pub async fn favorite_product(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let product_id = path.into_inner();
-    let user_id = body
-        .as_ref()
-        .and_then(|b| b.user_id.clone())
-        .unwrap_or_else(|| format!("anon_{}", Uuid::new_v4()));
+    let user_id = match extract_user_id(&body) {
+        Some(v) if !is_anonymous_user_id(&v) => v,
+        _ => {
+            return HttpResponse::Unauthorized()
+                .json(ApiResponse::<()>::error("Unauthorized".to_string()))
+        }
+    };
 
     match db.favorite_product(&product_id, &user_id).await {
         Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
@@ -577,10 +616,13 @@ pub async fn unfavorite_product(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let product_id = path.into_inner();
-    let user_id = body
-        .as_ref()
-        .and_then(|b| b.user_id.clone())
-        .unwrap_or_else(|| format!("anon_{}", Uuid::new_v4()));
+    let user_id = match extract_user_id(&body) {
+        Some(v) if !is_anonymous_user_id(&v) => v,
+        _ => {
+            return HttpResponse::Unauthorized()
+                .json(ApiResponse::<()>::error("Unauthorized".to_string()))
+        }
+    };
 
     match db.unfavorite_product(&product_id, &user_id).await {
         Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),

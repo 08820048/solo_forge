@@ -6,6 +6,7 @@
     "submit": "Submit",
     "feedback": "Feedback",
     "login": "Log in",
+    "profile": "Profile",
     "developerCenter": "Developer Center",
     "logout": "Log out",
     "about": "About"
@@ -28,6 +29,7 @@
     "verifyEmailSent": "We sent a verification email to {email}. Please verify your account before logging in.",
     "emailNotVerified": "This email is not verified yet: {email}. Please verify it in your inbox.",
     "wrongCredentials": "Incorrect email or password. Please try again.",
+    "emailAlreadyRegistered": "This email is already registered. Please log in instead.",
     "unknownError": "Something went wrong. Please try again."
   },
   "footer": {
@@ -44,6 +46,28 @@
       "github": "GitHub"
     },
     "copyright": "© {year} SoloForge. All rights reserved."
+  },
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Update your display name and avatar.",
+    "notLoggedIn": "Please log in to edit your profile.",
+    "name": "Display name",
+    "namePlaceholder": "Enter your name",
+    "avatarTip": "Your avatar will show in the top-right menu.",
+    "uploadAvatar": "Upload avatar",
+    "uploadHelp": "PNG/JPG/WebP supported. Recommended under 5MB.",
+    "avatarTooLarge": "File is too large. Please pick an image under 5MB.",
+    "avatarInvalidType": "Invalid file type. Please choose an image file.",
+    "avatarUploadFailed": "Failed to upload avatar. Please try again.",
+    "avatarUploaded": "Avatar uploaded. Click Save to apply.",
+    "avatarUrl": "Avatar URL",
+    "avatarUrlPlaceholder": "Generated after upload",
+    "avatarHelp": "Your avatar is stored in Supabase Storage and saved to your profile.",
+    "clearAvatar": "Clear avatar",
+    "save": "Save",
+    "saving": "Saving...",
+    "uploading": "Uploading...",
+    "saved": "Saved."
   },
   "submit": {
     "title": "Submit Your Product",

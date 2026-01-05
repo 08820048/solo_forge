@@ -66,9 +66,13 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as { action?: string; email?: string; user_id?: string };
     const action = (body.action || '').toLowerCase();
     const email = (body.email || '').trim();
+    const userId = (body.user_id || '').trim();
 
     if (!email) {
       return NextResponse.json({ success: false, message: 'Missing email' }, { status: 400 });
+    }
+    if (!userId || userId.toLowerCase().startsWith('anon_')) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const subPath = action === 'unfollow' ? 'unfollow' : 'follow';
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
         'Accept-Language': request.headers.get('Accept-Language') || 'en',
       },
-      body: JSON.stringify({ user_id: body.user_id }),
+      body: JSON.stringify({ user_id: userId }),
       cache: 'no-store',
     });
 

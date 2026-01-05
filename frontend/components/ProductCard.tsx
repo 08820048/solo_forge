@@ -44,7 +44,11 @@ function writeLikesToStorage(ids: string[]) {
   } catch {}
 }
 
-function getInteractionUserId(): string {
+/**
+ * getAuthenticatedUserEmail
+ * 获取已登录用户邮箱（未登录返回 null）。
+ */
+function getAuthenticatedUserEmail(): string | null {
   try {
     const raw = localStorage.getItem('sf_user');
     if (raw) {
@@ -54,14 +58,21 @@ function getInteractionUserId(): string {
     }
   } catch {}
 
+  return null;
+}
+
+/**
+ * requestAuth
+ * 触发全局登录弹窗，并记录登录后回跳路径。
+ */
+function requestAuth(redirectPath: string) {
   try {
-    const existing = localStorage.getItem('sf_anon_id');
-    if (existing) return existing;
-    const next = `anon_${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now())}`;
-    localStorage.setItem('sf_anon_id', next);
-    return next;
+    sessionStorage.setItem('sf_post_login_redirect', redirectPath);
+  } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent('sf_require_auth', { detail: { redirectPath } }));
   } catch {
-    return `anon_${String(Date.now())}`;
+    window.dispatchEvent(new Event('sf_require_auth'));
   }
 }
 
@@ -73,6 +84,8 @@ interface Product {
   category: string;
   maker_name: string;
   website: string;
+  likes: number;
+  favorites: number;
 }
 
 interface ProductCardProps {
@@ -83,8 +96,16 @@ export default function ProductCard({ product }: ProductCardProps) {
   const t = useTranslations('categories');
   const [favorited, setFavorited] = useState(() => readFavoritesFromStorage().includes(product.id));
   const [liked, setLiked] = useState(() => readLikesFromStorage().includes(product.id));
+  const [favoriteCount, setFavoriteCount] = useState(() => product.favorites ?? 0);
+  const [likeCount, setLikeCount] = useState(() => product.likes ?? 0);
 
   const toggleFavorite = async () => {
+    const userEmail = getAuthenticatedUserEmail();
+    if (!userEmail) {
+      requestAuth('/');
+      return;
+    }
+
     const ids = readFavoritesFromStorage();
     const set = new Set(ids);
     const prev = favorited;
@@ -96,6 +117,8 @@ export default function ProductCard({ product }: ProductCardProps) {
       setFavorited(true);
     }
     writeFavoritesToStorage(Array.from(set));
+    const delta = prev ? -1 : 1;
+    setFavoriteCount((cur) => Math.max(0, cur + delta));
 
     try {
       const action = prev ? 'unfavorite' : 'favorite';
@@ -105,18 +128,20 @@ export default function ProductCard({ product }: ProductCardProps) {
         body: JSON.stringify({
           action,
           product_id: product.id,
-          user_id: getInteractionUserId(),
+          user_id: userEmail,
         }),
       });
       const json = (await response.json()) as { success?: boolean };
       if (!response.ok || !json.success) {
         setFavorited(prev);
+        setFavoriteCount((cur) => Math.max(0, cur - delta));
         if (prev) set.add(product.id);
         else set.delete(product.id);
         writeFavoritesToStorage(Array.from(set));
       }
     } catch {
       setFavorited(prev);
+      setFavoriteCount((cur) => Math.max(0, cur - delta));
       if (prev) set.add(product.id);
       else set.delete(product.id);
       writeFavoritesToStorage(Array.from(set));
@@ -124,6 +149,12 @@ export default function ProductCard({ product }: ProductCardProps) {
   };
 
   const toggleLike = async () => {
+    const userEmail = getAuthenticatedUserEmail();
+    if (!userEmail) {
+      requestAuth('/');
+      return;
+    }
+
     const ids = readLikesFromStorage();
     const set = new Set(ids);
     const prev = liked;
@@ -135,6 +166,8 @@ export default function ProductCard({ product }: ProductCardProps) {
       setLiked(true);
     }
     writeLikesToStorage(Array.from(set));
+    const delta = prev ? -1 : 1;
+    setLikeCount((cur) => Math.max(0, cur + delta));
 
     try {
       const action = prev ? 'unlike' : 'like';
@@ -144,18 +177,20 @@ export default function ProductCard({ product }: ProductCardProps) {
         body: JSON.stringify({
           action,
           product_id: product.id,
-          user_id: getInteractionUserId(),
+          user_id: userEmail,
         }),
       });
       const json = (await response.json()) as { success?: boolean };
       if (!response.ok || !json.success) {
         setLiked(prev);
+        setLikeCount((cur) => Math.max(0, cur - delta));
         if (prev) set.add(product.id);
         else set.delete(product.id);
         writeLikesToStorage(Array.from(set));
       }
     } catch {
       setLiked(prev);
+      setLikeCount((cur) => Math.max(0, cur - delta));
       if (prev) set.add(product.id);
       else set.delete(product.id);
       writeLikesToStorage(Array.from(set));
@@ -176,45 +211,51 @@ export default function ProductCard({ product }: ProductCardProps) {
             <div className="absolute left-3/4 top-0 w-px h-full bg-foreground/5"></div>
           </div>
 
-          <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
-            <button
-              type="button"
-              aria-label={liked ? '取消点赞' : '点赞'}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                void toggleLike();
-              }}
-              className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
-            >
-              <i
-                key={liked ? 'liked' : 'unliked'}
-                className={[
-                  'ri-thumb-up-line text-base transition-all duration-200',
-                  liked ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
-                ].join(' ')}
-                aria-hidden="true"
-              />
-            </button>
-            <button
-              type="button"
-              aria-label={favorited ? '取消收藏' : '收藏'}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                void toggleFavorite();
-              }}
-              className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
-            >
-              <i
-                key={favorited ? 'favorited' : 'unfavorited'}
-                className={[
-                  'ri-heart-3-line text-base transition-all duration-200',
-                  favorited ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
-                ].join(' ')}
-                aria-hidden="true"
-              />
-            </button>
+          <div className="absolute right-4 top-4 z-20 flex items-start gap-3">
+            <div className="flex flex-col items-center">
+              <button
+                type="button"
+                aria-label={liked ? '取消点赞' : '点赞'}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void toggleLike();
+                }}
+                className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+              >
+                <i
+                  key={liked ? 'liked' : 'unliked'}
+                  className={[
+                    `${liked ? 'ri-thumb-up-fill' : 'ri-thumb-up-line'} text-base transition-all duration-200`,
+                    liked ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
+                  ].join(' ')}
+                  aria-hidden="true"
+                />
+              </button>
+              <span className="mt-1 text-[10px] leading-none text-muted-foreground tabular-nums">{likeCount}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <button
+                type="button"
+                aria-label={favorited ? '取消收藏' : '收藏'}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void toggleFavorite();
+                }}
+                className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+              >
+                <i
+                  key={favorited ? 'favorited' : 'unfavorited'}
+                  className={[
+                    `${favorited ? 'ri-heart-3-fill' : 'ri-heart-3-line'} text-base transition-all duration-200`,
+                    favorited ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
+                  ].join(' ')}
+                  aria-hidden="true"
+                />
+              </button>
+              <span className="mt-1 text-[10px] leading-none text-muted-foreground tabular-nums">{favoriteCount}</span>
+            </div>
           </div>
 
           {/* Logo */}

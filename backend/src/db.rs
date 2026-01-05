@@ -40,6 +40,8 @@ struct ProductRow {
     status: String,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    likes: i64,
+    favorites: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -75,7 +77,7 @@ struct DeveloperWithFollowersRow {
     name: String,
     avatar_url: Option<String>,
     website: Option<String>,
-    followers: i64,
+    followers: String,
 }
 
 #[derive(sqlx::FromRow)]
@@ -217,6 +219,8 @@ fn map_product_row(row: ProductRow) -> Product {
         status: parse_product_status(&row.status),
         created_at: row.created_at,
         updated_at: row.updated_at,
+        likes: row.likes,
+        favorites: row.favorites,
     }
 }
 
@@ -250,30 +254,54 @@ fn map_category_with_count_row(row: CategoryWithCountRow) -> crate::models::Cate
 }
 
 fn map_developer_row(row: DeveloperRow) -> Developer {
+    let mut email = row.email;
+    let mut name = row.name;
+    let mut avatar_url = row.avatar_url;
+    let mut website = row.website;
+    strip_nul_in_place(&mut email);
+    strip_nul_in_place(&mut name);
+    strip_nul_in_place_opt(&mut avatar_url);
+    strip_nul_in_place_opt(&mut website);
     Developer {
-        email: row.email,
-        name: row.name,
-        avatar_url: row.avatar_url,
-        website: row.website,
+        email,
+        name,
+        avatar_url,
+        website,
     }
 }
 
 fn map_developer_with_followers_row(row: DeveloperWithFollowersRow) -> DeveloperWithFollowers {
+    let mut email = row.email;
+    let mut name = row.name;
+    let mut avatar_url = row.avatar_url;
+    let mut website = row.website;
+    strip_nul_in_place(&mut email);
+    strip_nul_in_place(&mut name);
+    strip_nul_in_place_opt(&mut avatar_url);
+    strip_nul_in_place_opt(&mut website);
     DeveloperWithFollowers {
-        email: row.email,
-        name: row.name,
-        avatar_url: row.avatar_url,
-        website: row.website,
-        followers: row.followers,
+        email,
+        name,
+        avatar_url,
+        website,
+        followers: row.followers.parse::<i64>().unwrap_or(0),
     }
 }
 
 fn map_developer_popularity_row(row: DeveloperPopularityRow) -> DeveloperPopularity {
+    let mut email = row.email;
+    let mut name = row.name;
+    let mut avatar_url = row.avatar_url;
+    let mut website = row.website;
+    strip_nul_in_place(&mut email);
+    strip_nul_in_place(&mut name);
+    strip_nul_in_place_opt(&mut avatar_url);
+    strip_nul_in_place_opt(&mut website);
     DeveloperPopularity {
-        email: row.email,
-        name: row.name,
-        avatar_url: row.avatar_url,
-        website: row.website,
+        email,
+        name,
+        avatar_url,
+        website,
         likes: row.likes,
         favorites: row.favorites,
         score: row.score,
@@ -458,36 +486,40 @@ impl Database {
         if let Some(pool) = &self.postgres {
             let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
                 "SELECT \
-                    id::text as id, \
-                    name, \
-                    slogan, \
-                    description, \
-                    website, \
-                    logo_url, \
-                    category, \
-                    COALESCE(tags, ARRAY[]::text[]) as tags, \
-                    maker_name, \
-                    maker_email, \
-                    maker_website, \
-                    language, \
-                    status::text as status, \
-                    created_at, \
-                    updated_at \
-                 FROM products",
+                    p.id::text as id, \
+                    p.name, \
+                    p.slogan, \
+                    p.description, \
+                    p.website, \
+                    p.logo_url, \
+                    p.category, \
+                    COALESCE(p.tags, ARRAY[]::text[]) as tags, \
+                    p.maker_name, \
+                    p.maker_email, \
+                    p.maker_website, \
+                    p.language, \
+                    p.status::text as status, \
+                    p.created_at, \
+                    p.updated_at, \
+                    COALESCE(l.likes, 0)::bigint as likes, \
+                    COALESCE(f.favorites, 0)::bigint as favorites \
+                 FROM products p \
+                 LEFT JOIN (SELECT product_id, COUNT(*)::bigint as likes FROM product_likes GROUP BY product_id) l ON l.product_id = p.id \
+                 LEFT JOIN (SELECT product_id, COUNT(*)::bigint as favorites FROM product_favorites GROUP BY product_id) f ON f.product_id = p.id",
             );
 
             let mut has_where = false;
             if let Some(category) = &params.category {
                 qb.push(if has_where { " AND " } else { " WHERE " });
                 has_where = true;
-                qb.push("category = ");
+                qb.push("p.category = ");
                 qb.push_bind(category);
             }
 
             if let Some(language) = &params.language {
                 qb.push(if has_where { " AND " } else { " WHERE " });
                 has_where = true;
-                qb.push("language = ");
+                qb.push("p.language = ");
                 qb.push_bind(language);
             }
 
@@ -495,9 +527,9 @@ impl Database {
                 qb.push(if has_where { " AND " } else { " WHERE " });
                 has_where = true;
                 if dev_include_pending_in_approved() && status == "approved" {
-                    qb.push("status::text IN ('approved','pending')");
+                    qb.push("p.status::text IN ('approved','pending')");
                 } else {
-                    qb.push("status::text = ");
+                    qb.push("p.status::text = ");
                     qb.push_bind(status);
                 }
             }
@@ -507,7 +539,7 @@ impl Database {
                 if !tag.is_empty() {
                     qb.push(if has_where { " AND " } else { " WHERE " });
                     has_where = true;
-                    qb.push("tags @> ARRAY[");
+                    qb.push("p.tags @> ARRAY[");
                     qb.push_bind(tag);
                     qb.push("]::text[]");
                 }
@@ -516,20 +548,20 @@ impl Database {
             if let Some(search) = &params.search {
                 let q = format!("%{}%", search);
                 qb.push(if has_where { " AND " } else { " WHERE " });
-                qb.push("(name ILIKE ");
+                qb.push("(p.name ILIKE ");
                 qb.push_bind(q.clone());
-                qb.push(" OR slogan ILIKE ");
+                qb.push(" OR p.slogan ILIKE ");
                 qb.push_bind(q.clone());
-                qb.push(" OR description ILIKE ");
+                qb.push(" OR p.description ILIKE ");
                 qb.push_bind(q.clone());
-                qb.push(" OR maker_name ILIKE ");
+                qb.push(" OR p.maker_name ILIKE ");
                 qb.push_bind(q.clone());
-                qb.push(" OR maker_email ILIKE ");
+                qb.push(" OR p.maker_email ILIKE ");
                 qb.push_bind(q);
                 qb.push(")");
             }
 
-            qb.push(" ORDER BY created_at DESC");
+            qb.push(" ORDER BY p.created_at DESC");
 
             if let Some(limit) = params.limit {
                 qb.push(" LIMIT ");
@@ -665,9 +697,13 @@ impl Database {
                         p.language, \
                         p.status::text as status, \
                         p.created_at, \
-                        p.updated_at \
+                        p.updated_at, \
+                        COALESCE(pl.likes, 0)::bigint as likes, \
+                        COALESCE(pf2.favorites, 0)::bigint as favorites \
                      FROM product_favorites f \
                      JOIN products p ON p.id = f.product_id \
+                     LEFT JOIN (SELECT product_id, COUNT(*)::bigint as likes FROM product_likes GROUP BY product_id) pl ON pl.product_id = p.id \
+                     LEFT JOIN (SELECT product_id, COUNT(*)::bigint as favorites FROM product_favorites GROUP BY product_id) pf2 ON pf2.product_id = p.id \
                      WHERE f.user_id = $1 AND {} AND p.language = $2 \
                      ORDER BY f.created_at DESC \
                      LIMIT $3",
@@ -698,9 +734,13 @@ impl Database {
                         p.language, \
                         p.status::text as status, \
                         p.created_at, \
-                        p.updated_at \
+                        p.updated_at, \
+                        COALESCE(pl.likes, 0)::bigint as likes, \
+                        COALESCE(pf2.favorites, 0)::bigint as favorites \
                      FROM product_favorites f \
                      JOIN products p ON p.id = f.product_id \
+                     LEFT JOIN (SELECT product_id, COUNT(*)::bigint as likes FROM product_likes GROUP BY product_id) pl ON pl.product_id = p.id \
+                     LEFT JOIN (SELECT product_id, COUNT(*)::bigint as favorites FROM product_favorites GROUP BY product_id) pf2 ON pf2.product_id = p.id \
                      WHERE f.user_id = $1 AND {} \
                      ORDER BY f.created_at DESC \
                      LIMIT $2",
@@ -725,23 +765,27 @@ impl Database {
         if let Some(pool) = &self.postgres {
             let row = sqlx::query_as::<_, ProductRow>(
                 "SELECT \
-                    id::text as id, \
-                    name, \
-                    slogan, \
-                    description, \
-                    website, \
-                    logo_url, \
-                    category, \
-                    COALESCE(tags, ARRAY[]::text[]) as tags, \
-                    maker_name, \
-                    maker_email, \
-                    maker_website, \
-                    language, \
-                    status::text as status, \
-                    created_at, \
-                    updated_at \
-                 FROM products \
-                 WHERE id::text = $1 \
+                    p.id::text as id, \
+                    p.name, \
+                    p.slogan, \
+                    p.description, \
+                    p.website, \
+                    p.logo_url, \
+                    p.category, \
+                    COALESCE(p.tags, ARRAY[]::text[]) as tags, \
+                    p.maker_name, \
+                    p.maker_email, \
+                    p.maker_website, \
+                    p.language, \
+                    p.status::text as status, \
+                    p.created_at, \
+                    p.updated_at, \
+                    COALESCE(l.likes, 0)::bigint as likes, \
+                    COALESCE(f.favorites, 0)::bigint as favorites \
+                 FROM products p \
+                 LEFT JOIN (SELECT product_id, COUNT(*)::bigint as likes FROM product_likes GROUP BY product_id) l ON l.product_id = p.id \
+                 LEFT JOIN (SELECT product_id, COUNT(*)::bigint as favorites FROM product_favorites GROUP BY product_id) f ON f.product_id = p.id \
+                 WHERE p.id::text = $1 \
                  LIMIT 1",
             )
             .persistent(false)
@@ -814,7 +858,9 @@ impl Database {
                     language, \
                     status::text as status, \
                     created_at, \
-                    updated_at",
+                    updated_at, \
+                    (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = id) as likes, \
+                    (SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = id) as favorites",
             )
             .persistent(false)
             .bind(&product.name)
@@ -969,7 +1015,9 @@ impl Database {
                     language, \
                     status::text as status, \
                     created_at, \
-                    updated_at",
+                    updated_at, \
+                    (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = id) as likes, \
+                    (SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = id) as favorites",
             );
 
             let row = qb
@@ -1218,6 +1266,7 @@ impl Database {
         let limit = limit.clamp(1, 50);
 
         if let Some(pool) = &self.postgres {
+            let query = strip_nul_str(query);
             let q = format!("%{}%", query);
             let rows = sqlx::query_as::<_, DeveloperRow>(
                 "SELECT email, name, avatar_url, website \
@@ -1251,11 +1300,11 @@ impl Database {
                     d.name, \
                     d.avatar_url, \
                     d.website, \
-                    COALESCE(COUNT(f.id), 0)::bigint as followers \
+                    COUNT(f.id)::bigint::text as followers \
                  FROM developers d \
                  LEFT JOIN developer_follows f ON f.developer_email = d.email \
                  GROUP BY d.email, d.name, d.avatar_url, d.website \
-                 ORDER BY followers DESC, d.name ASC \
+                 ORDER BY COUNT(f.id) DESC, d.name ASC \
                  LIMIT $1",
             )
             .persistent(false)
@@ -1285,7 +1334,7 @@ impl Database {
                     d.name, \
                     d.avatar_url, \
                     d.website, \
-                    COALESCE(COUNT(f.id), 0)::bigint as followers \
+                    COUNT(f.id)::bigint::text as followers \
                  FROM developers d \
                  LEFT JOIN developer_follows f ON f.developer_email = d.email \
                  GROUP BY d.email, d.name, d.avatar_url, d.website, d.created_at \
@@ -1366,14 +1415,16 @@ impl Database {
 
     pub async fn follow_developer(&self, email: &str, user_id: &str) -> Result<()> {
         if let Some(pool) = &self.postgres {
+            let email = strip_nul_str(email);
+            let user_id = strip_nul_str(user_id);
             sqlx::query(
                 "INSERT INTO developer_follows (developer_email, user_id) \
                  VALUES ($1, $2) \
                  ON CONFLICT (developer_email, user_id) DO NOTHING",
             )
             .persistent(false)
-            .bind(email)
-            .bind(user_id)
+            .bind(email.as_ref())
+            .bind(user_id.as_ref())
             .execute(pool)
             .await?;
             return Ok(());
@@ -1384,13 +1435,15 @@ impl Database {
 
     pub async fn unfollow_developer(&self, email: &str, user_id: &str) -> Result<()> {
         if let Some(pool) = &self.postgres {
+            let email = strip_nul_str(email);
+            let user_id = strip_nul_str(user_id);
             sqlx::query(
                 "DELETE FROM developer_follows \
                  WHERE developer_email = $1 AND user_id = $2",
             )
             .persistent(false)
-            .bind(email)
-            .bind(user_id)
+            .bind(email.as_ref())
+            .bind(user_id.as_ref())
             .execute(pool)
             .await?;
             return Ok(());

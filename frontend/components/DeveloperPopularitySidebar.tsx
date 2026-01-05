@@ -32,10 +32,10 @@ function writeFollowedDevelopersToStorage(emails: string[]) {
 }
 
 /**
- * getInteractionUserId
- * 获取交互用户标识：优先使用登录用户邮箱，否则生成匿名 id。
+ * getAuthenticatedUserEmail
+ * 获取已登录用户邮箱（未登录返回 null）。
  */
-function getInteractionUserId(): string {
+function getAuthenticatedUserEmail(): string | null {
   try {
     const raw = localStorage.getItem('sf_user');
     if (raw) {
@@ -45,14 +45,21 @@ function getInteractionUserId(): string {
     }
   } catch {}
 
+  return null;
+}
+
+/**
+ * requestAuth
+ * 触发全局登录弹窗，并记录登录后回跳路径。
+ */
+function requestAuth(redirectPath: string) {
   try {
-    const existing = localStorage.getItem('sf_anon_id');
-    if (existing) return existing;
-    const next = `anon_${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now())}`;
-    localStorage.setItem('sf_anon_id', next);
-    return next;
+    sessionStorage.setItem('sf_post_login_redirect', redirectPath);
+  } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent('sf_require_auth', { detail: { redirectPath } }));
   } catch {
-    return `anon_${String(Date.now())}`;
+    window.dispatchEvent(new Event('sf_require_auth'));
   }
 }
 
@@ -220,6 +227,12 @@ export default function DeveloperPopularitySidebar() {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) return;
 
+    const userEmail = getAuthenticatedUserEmail();
+    if (!userEmail) {
+      requestAuth('/');
+      return;
+    }
+
     const prev = followedDevelopers;
     const prevSet = new Set(prev.map((e) => e.toLowerCase()));
     const isFollowing = prevSet.has(normalizedEmail);
@@ -246,7 +259,7 @@ export default function DeveloperPopularitySidebar() {
         body: JSON.stringify({
           action: isFollowing ? 'unfollow' : 'follow',
           email: normalizedEmail,
-          user_id: getInteractionUserId(),
+          user_id: userEmail,
         }),
       });
       const json = (await response.json()) as { success?: boolean };

@@ -88,10 +88,10 @@ function writeFollowedDevelopersToStorage(emails: string[]) {
 }
 
 /**
- * getInteractionUserId
- * 获取交互用户标识：优先使用登录用户邮箱，否则生成匿名 id。
+ * getAuthenticatedUserEmail
+ * 获取已登录用户邮箱（未登录返回 null）。
  */
-function getInteractionUserId(): string {
+function getAuthenticatedUserEmail(): string | null {
   try {
     const raw = localStorage.getItem('sf_user');
     if (raw) {
@@ -101,14 +101,21 @@ function getInteractionUserId(): string {
     }
   } catch {}
 
+  return null;
+}
+
+/**
+ * requestAuth
+ * 触发全局登录弹窗，并记录登录后回跳路径。
+ */
+function requestAuth(redirectPath: string) {
   try {
-    const existing = localStorage.getItem('sf_anon_id');
-    if (existing) return existing;
-    const next = `anon_${globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : String(Date.now())}`;
-    localStorage.setItem('sf_anon_id', next);
-    return next;
+    sessionStorage.setItem('sf_post_login_redirect', redirectPath);
+  } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent('sf_require_auth', { detail: { redirectPath } }));
   } catch {
-    return `anon_${String(Date.now())}`;
+    window.dispatchEvent(new Event('sf_require_auth'));
   }
 }
 
@@ -120,6 +127,8 @@ interface Product {
   category: string;
   maker_name: string;
   website: string;
+  likes: number;
+  favorites: number;
 }
 
 type DeveloperWithFollowers = {
@@ -165,16 +174,33 @@ export default function ProductGrid({ section }: ProductGridProps) {
     async function fetchProducts() {
       setLoading(true);
       try {
-        const offset = section === 'featured' ? 6 : 0;
+        const offset = section === 'recent' ? 6 : 0;
         const limit = section === 'recent' ? 15 : 6;
-        const response = await fetch(
-          `/api/products?status=approved&language=${locale}&limit=${limit}&offset=${offset}`,
-          { headers: { 'Accept-Language': locale } }
-        );
-        const json = await response.json();
+
+        const fetchWithOffset = async (nextOffset: number) => {
+          const response = await fetch(
+            `/api/products?status=approved&language=${locale}&limit=${limit}&offset=${nextOffset}`,
+            { headers: { 'Accept-Language': locale } }
+          );
+          const json = await response.json();
+          const rawProducts = json.success ? (json.data ?? []) : [];
+          const nextProducts = Array.isArray(rawProducts)
+            ? rawProducts.map((p) => ({
+                ...p,
+                likes: typeof p.likes === 'number' ? p.likes : Number(p.likes ?? 0),
+                favorites: typeof p.favorites === 'number' ? p.favorites : Number(p.favorites ?? 0),
+              }))
+            : [];
+          return nextProducts as Product[];
+        };
+
+        let nextProducts = await fetchWithOffset(offset);
+        if (section === 'featured' && nextProducts.length === 0) {
+          nextProducts = await fetchWithOffset(0);
+        }
 
         if (!cancelled) {
-          setProducts(json.success ? json.data ?? [] : []);
+          setProducts(nextProducts);
         }
       } catch {
         if (!cancelled) {
@@ -249,6 +275,12 @@ export default function ProductGrid({ section }: ProductGridProps) {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail) return;
 
+    const userEmail = getAuthenticatedUserEmail();
+    if (!userEmail) {
+      requestAuth('/');
+      return;
+    }
+
     const prev = followedDevelopers;
     const prevSet = new Set(prev.map((e) => e.toLowerCase()));
     const isFollowing = prevSet.has(normalizedEmail);
@@ -275,7 +307,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
         body: JSON.stringify({
           action: isFollowing ? 'unfollow' : 'follow',
           email: normalizedEmail,
-          user_id: getInteractionUserId(),
+          user_id: userEmail,
         }),
       });
       const json = (await response.json()) as { success?: boolean };
@@ -303,6 +335,16 @@ export default function ProductGrid({ section }: ProductGridProps) {
     }
   };
 
+  const adjustProductCount = (productId: string, field: 'likes' | 'favorites', delta: number) => {
+    setProducts((cur) =>
+      cur.map((p) => {
+        if (p.id !== productId) return p;
+        const nextValue = Math.max(0, (p[field] ?? 0) + delta);
+        return { ...p, [field]: nextValue };
+      })
+    );
+  };
+
   /**
    * toggleFavorite
    * 收藏/取消收藏作品（本地乐观更新 + 后端写入）。
@@ -310,6 +352,12 @@ export default function ProductGrid({ section }: ProductGridProps) {
   const toggleFavorite = async (productId: string) => {
     const normalizedId = productId.trim();
     if (!normalizedId) return;
+
+    const userEmail = getAuthenticatedUserEmail();
+    if (!userEmail) {
+      requestAuth('/');
+      return;
+    }
 
     const prev = favoriteIds;
     const prevSet = new Set(prev);
@@ -322,6 +370,8 @@ export default function ProductGrid({ section }: ProductGridProps) {
     const next = Array.from(nextSet);
     setFavoriteIds(next);
     writeFavoritesToStorage(next);
+    const delta = isFavorited ? -1 : 1;
+    adjustProductCount(normalizedId, 'favorites', delta);
 
     try {
       const response = await fetch('/api/interactions', {
@@ -330,17 +380,19 @@ export default function ProductGrid({ section }: ProductGridProps) {
         body: JSON.stringify({
           action: isFavorited ? 'unfavorite' : 'favorite',
           product_id: normalizedId,
-          user_id: getInteractionUserId(),
+          user_id: userEmail,
         }),
       });
       const json = (await response.json()) as { success?: boolean };
       if (!response.ok || !json.success) {
         setFavoriteIds(prev);
         writeFavoritesToStorage(prev);
+        adjustProductCount(normalizedId, 'favorites', -delta);
       }
     } catch {
       setFavoriteIds(prev);
       writeFavoritesToStorage(prev);
+      adjustProductCount(normalizedId, 'favorites', -delta);
     }
   };
 
@@ -351,6 +403,12 @@ export default function ProductGrid({ section }: ProductGridProps) {
   const toggleLike = async (productId: string) => {
     const normalizedId = productId.trim();
     if (!normalizedId) return;
+
+    const userEmail = getAuthenticatedUserEmail();
+    if (!userEmail) {
+      requestAuth('/');
+      return;
+    }
 
     const prev = likeIds;
     const prevSet = new Set(prev);
@@ -363,6 +421,8 @@ export default function ProductGrid({ section }: ProductGridProps) {
     const next = Array.from(nextSet);
     setLikeIds(next);
     writeLikesToStorage(next);
+    const delta = isLiked ? -1 : 1;
+    adjustProductCount(normalizedId, 'likes', delta);
 
     try {
       const response = await fetch('/api/interactions', {
@@ -371,17 +431,19 @@ export default function ProductGrid({ section }: ProductGridProps) {
         body: JSON.stringify({
           action: isLiked ? 'unlike' : 'like',
           product_id: normalizedId,
-          user_id: getInteractionUserId(),
+          user_id: userEmail,
         }),
       });
       const json = (await response.json()) as { success?: boolean };
       if (!response.ok || !json.success) {
         setLikeIds(prev);
         writeLikesToStorage(prev);
+        adjustProductCount(normalizedId, 'likes', -delta);
       }
     } catch {
       setLikeIds(prev);
       writeLikesToStorage(prev);
+      adjustProductCount(normalizedId, 'likes', -delta);
     }
   };
 
@@ -464,41 +526,49 @@ export default function ProductGrid({ section }: ProductGridProps) {
                     <div className="mt-1 text-sm text-muted-foreground line-clamp-1">{p.slogan}</div>
                   </div>
 
-                  <div className="shrink-0 flex items-center gap-2">
-                    <button
-                      type="button"
-                      aria-label={favoriteIds.includes(p.id) ? '取消收藏' : '收藏'}
-                      onClick={() => void toggleFavorite(p.id)}
-                      className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
-                    >
-                      <i
-                        key={favoriteIds.includes(p.id) ? 'favorited' : 'unfavorited'}
-                        className={[
-                          'ri-heart-3-line text-base transition-all duration-200',
-                          favoriteIds.includes(p.id)
-                            ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
-                            : 'text-muted-foreground',
-                        ].join(' ')}
-                        aria-hidden="true"
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={likeIds.includes(p.id) ? '取消点赞' : '点赞'}
-                      onClick={() => void toggleLike(p.id)}
-                      className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
-                    >
-                      <i
-                        key={likeIds.includes(p.id) ? 'liked' : 'unliked'}
-                        className={[
-                          'ri-thumb-up-line text-base transition-all duration-200',
-                          likeIds.includes(p.id)
-                            ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
-                            : 'text-muted-foreground',
-                        ].join(' ')}
-                        aria-hidden="true"
-                      />
-                    </button>
+                  <div className="shrink-0 flex items-start gap-3">
+                    <div className="flex flex-col items-center">
+                      <button
+                        type="button"
+                        aria-label={favoriteIds.includes(p.id) ? '取消收藏' : '收藏'}
+                        onClick={() => void toggleFavorite(p.id)}
+                        className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                      >
+                        <i
+                          key={favoriteIds.includes(p.id) ? 'favorited' : 'unfavorited'}
+                          className={[
+                            `${favoriteIds.includes(p.id) ? 'ri-heart-3-fill' : 'ri-heart-3-line'} text-base transition-all duration-200`,
+                            favoriteIds.includes(p.id)
+                              ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
+                              : 'text-muted-foreground',
+                          ].join(' ')}
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <span className="mt-1 text-[10px] leading-none text-muted-foreground tabular-nums">
+                        {p.favorites}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <button
+                        type="button"
+                        aria-label={likeIds.includes(p.id) ? '取消点赞' : '点赞'}
+                        onClick={() => void toggleLike(p.id)}
+                        className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                      >
+                        <i
+                          key={likeIds.includes(p.id) ? 'liked' : 'unliked'}
+                          className={[
+                            `${likeIds.includes(p.id) ? 'ri-thumb-up-fill' : 'ri-thumb-up-line'} text-base transition-all duration-200`,
+                            likeIds.includes(p.id)
+                              ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
+                              : 'text-muted-foreground',
+                          ].join(' ')}
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <span className="mt-1 text-[10px] leading-none text-muted-foreground tabular-nums">{p.likes}</span>
+                    </div>
                     {p.website ? (
                       <a
                         href={p.website}

@@ -27,9 +27,13 @@ export async function POST(request: NextRequest) {
 
     const action = (body.action || '').toLowerCase();
     const productId = (body.product_id || '').trim();
+    const userId = (body.user_id || '').trim();
 
     if (!productId) {
       return NextResponse.json({ success: false, message: 'Missing product_id' }, { status: 400 });
+    }
+    if (!userId || userId.toLowerCase().startsWith('anon_')) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
 
     const subPath =
@@ -47,7 +51,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
         'Accept-Language': request.headers.get('Accept-Language') || 'en',
       },
-      body: JSON.stringify({ user_id: body.user_id }),
+      body: JSON.stringify({ user_id: userId }),
       cache: 'no-store',
     });
 

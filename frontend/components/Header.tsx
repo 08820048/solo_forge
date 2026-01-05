@@ -85,6 +85,15 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function getSupabaseErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  if ('code' in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === 'string' && code.trim()) return code;
+  }
+  return null;
+}
+
 /**
  * Header
  * 复刻 ui.html 的顶部胶囊导航（Pill Navigation），包括：
@@ -104,6 +113,7 @@ export default function Header() {
   const [user, setUser] = useState<{ name?: string; email?: string; avatarUrl?: string } | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signIn');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -218,6 +228,42 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
+    /**
+     * onRequireAuth
+     * 响应全局“需要登录”事件，打开登录弹窗并设置回跳路径。
+     */
+    const onRequireAuth = (event: Event) => {
+      if (isAuthenticated) return;
+
+      const nextRedirect =
+        event instanceof CustomEvent && typeof (event as CustomEvent).detail?.redirectPath === 'string'
+          ? String((event as CustomEvent).detail.redirectPath)
+          : '/';
+
+      try {
+        sessionStorage.setItem('sf_post_login_redirect', nextRedirect);
+      } catch {}
+
+      setAuthError(null);
+      setAuthNotice(null);
+      setAuthMode('signIn');
+      const initialStorage = getSupabaseAuthStoragePreference();
+      const nextRemember = initialStorage === 'local';
+      setRememberMe(nextRemember);
+      const savedEmail = readAuthEmailFromStorage();
+      if (nextRemember && savedEmail) setAuthEmail(savedEmail);
+
+      if (!authEnabled) {
+        setAuthError(tAuth('notConfigured'));
+      }
+      setAuthOpen(true);
+    };
+
+    window.addEventListener('sf_require_auth', onRequireAuth as EventListener);
+    return () => window.removeEventListener('sf_require_auth', onRequireAuth as EventListener);
+  }, [authEnabled, isAuthenticated, tAuth]);
+
+  useEffect(() => {
     if (!isAuthenticated) return;
     try {
       const nextPath = sessionStorage.getItem('sf_post_login_redirect');
@@ -253,7 +299,7 @@ export default function Header() {
     setUserMenuOpen(false);
   }
 
-  async function onEmailAuth() {
+  async function onEmailSignIn() {
     setAuthError(null);
     setAuthNotice(null);
     setAuthLoading(true);
@@ -267,41 +313,69 @@ export default function Header() {
       if (rememberMe) writeAuthEmailToStorage(email);
       else writeAuthEmailToStorage(null);
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (!signInError) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (!error) {
         setAuthOpen(false);
         setAuthPassword('');
         return;
       }
 
-      const signInMessage = getErrorMessage(signInError, '');
+      const code = getSupabaseErrorCode(error);
+      const signInMessage = getErrorMessage(error, '');
       const signInMessageLower = signInMessage.toLowerCase();
 
-      if (signInMessageLower.includes('email not confirmed')) {
+      if (code === 'email_not_confirmed' || signInMessageLower.includes('email not confirmed')) {
         setAuthNotice(tAuth('emailNotVerified', { email }));
         return;
       }
 
-      if (!signInMessageLower.includes('invalid login credentials')) {
-        setAuthError(getErrorMessage(signInError, tAuth('unknownError')));
+      if (code === 'invalid_login_credentials' || signInMessageLower.includes('invalid login credentials')) {
+        setAuthError(tAuth('wrongCredentials'));
         return;
       }
 
-      const { error: signUpError } = await supabase.auth.signUp({ email, password });
-      if (!signUpError) {
+      setAuthError(getErrorMessage(error, tAuth('unknownError')));
+    } catch (e) {
+      setAuthError(getErrorMessage(e, tAuth('unknownError')));
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function onEmailSignUp() {
+    setAuthError(null);
+    setAuthNotice(null);
+    setAuthLoading(true);
+    try {
+      const storage = rememberMe ? 'local' : 'session';
+      setSupabaseAuthStoragePreference(storage);
+      const supabase = getSupabaseBrowserClient({ storage });
+      const email = authEmail.trim();
+      const password = authPassword;
+
+      if (rememberMe) writeAuthEmailToStorage(email);
+      else writeAuthEmailToStorage(null);
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (!error) {
         setAuthNotice(tAuth('verifyEmailSent', { email }));
         setAuthPassword('');
         return;
       }
 
-      const signUpMessage = getErrorMessage(signUpError, '');
+      const code = getSupabaseErrorCode(error);
+      const signUpMessage = getErrorMessage(error, '');
       const signUpMessageLower = signUpMessage.toLowerCase();
-      if (signUpMessageLower.includes('already registered')) {
-        setAuthError(tAuth('wrongCredentials'));
+
+      if (code === 'user_already_exists' || signUpMessageLower.includes('already registered') || signUpMessageLower.includes('already exists')) {
+        setAuthError(tAuth('emailAlreadyRegistered'));
         return;
       }
 
-      setAuthError(getErrorMessage(signUpError, tAuth('unknownError')));
+      setAuthError(getErrorMessage(error, tAuth('unknownError')));
     } catch (e) {
       setAuthError(getErrorMessage(e, tAuth('unknownError')));
     } finally {
@@ -344,6 +418,7 @@ export default function Header() {
   function onLoginClick() {
     setAuthError(null);
     setAuthNotice(null);
+    setAuthMode('signIn');
     const initialStorage = getSupabaseAuthStoragePreference();
     const nextRemember = initialStorage === 'local';
     setRememberMe(nextRemember);
@@ -490,6 +565,15 @@ export default function Header() {
                     <div className="h-px bg-border" />
                     <button
                       onClick={() => {
+                        router.push('/profile');
+                        setUserMenuOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                    >
+                      {tNav('profile')}
+                    </button>
+                    <button
+                      onClick={() => {
                         router.push('/developer');
                         setUserMenuOpen(false);
                       }}
@@ -531,7 +615,14 @@ export default function Header() {
             setAuthError(null);
             setAuthNotice(null);
             setAuthPassword('');
+            setAuthMode('signIn');
           }
+        }}
+        mode={authMode}
+        setMode={(nextMode) => {
+          setAuthMode(nextMode);
+          setAuthError(null);
+          setAuthNotice(null);
         }}
         email={authEmail}
         setEmail={setAuthEmail}
@@ -547,7 +638,8 @@ export default function Header() {
         loading={authLoading}
         error={authError}
         notice={authNotice}
-        onEmailAuth={onEmailAuth}
+        onEmailSignIn={onEmailSignIn}
+        onEmailSignUp={onEmailSignUp}
         onOAuthLogin={onOAuthLogin}
         tAuth={tAuth}
       />
@@ -737,6 +829,8 @@ function SearchDialog({
 function AuthDialog({
   open,
   onOpenChange,
+  mode,
+  setMode,
   email,
   setEmail,
   password,
@@ -747,12 +841,15 @@ function AuthDialog({
   loading,
   error,
   notice,
-  onEmailAuth,
+  onEmailSignIn,
+  onEmailSignUp,
   onOAuthLogin,
   tAuth,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mode: 'signIn' | 'signUp';
+  setMode: (mode: 'signIn' | 'signUp') => void;
   email: string;
   setEmail: (email: string) => void;
   password: string;
@@ -763,7 +860,8 @@ function AuthDialog({
   loading: boolean;
   error: string | null;
   notice: string | null;
-  onEmailAuth: () => Promise<void>;
+  onEmailSignIn: () => Promise<void>;
+  onEmailSignUp: () => Promise<void>;
   onOAuthLogin: (provider: Provider) => Promise<void>;
   tAuth: ReturnType<typeof useTranslations>;
 }) {
@@ -890,9 +988,38 @@ function AuthDialog({
               className="space-y-6"
               onSubmit={(e) => {
                 e.preventDefault();
-                void onEmailAuth();
+                if (mode === 'signUp') void onEmailSignUp();
+                else void onEmailSignIn();
               }}
             >
+              <div
+                className="opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
+                style={{ animationDelay: '1.15s' }}
+              >
+                <div className="grid grid-cols-2 rounded-lg border border-border bg-background/60 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setMode('signIn')}
+                    className={`h-9 rounded-md text-sm font-medium transition-colors ${
+                      mode === 'signIn' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    disabled={loading}
+                  >
+                    {tAuth('signIn')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('signUp')}
+                    className={`h-9 rounded-md text-sm font-medium transition-colors ${
+                      mode === 'signUp' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    disabled={loading}
+                  >
+                    {tAuth('signUp')}
+                  </button>
+                </div>
+              </div>
+
               <div
                 className="opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
                 style={{ animationDelay: '1.2s' }}
@@ -933,7 +1060,7 @@ function AuthDialog({
                   <Input
                     id="sf-auth-password"
                     type="password"
-                    autoComplete="current-password"
+                    autoComplete={mode === 'signUp' ? 'new-password' : 'current-password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={tAuth('passwordPlaceholder')}
@@ -984,7 +1111,7 @@ function AuthDialog({
                   disabled={loading || !enabled || !email || !password}
                   className="w-full h-11 rounded-lg bg-foreground hover:bg-foreground/90 text-background"
                 >
-                  {loading ? tAuth('loading') : tAuth('continue')}
+                  {loading ? tAuth('loading') : mode === 'signUp' ? tAuth('signUp') : tAuth('signIn')}
                 </Button>
               </div>
             </form>

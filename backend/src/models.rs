@@ -18,6 +18,10 @@ pub struct Product {
     pub status: ProductStatus,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub likes: i64,
+    #[serde(default)]
+    pub favorites: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
