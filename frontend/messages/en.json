@@ -55,14 +55,14 @@
     "namePlaceholder": "Enter your name",
     "avatarTip": "Your avatar will show in the top-right menu.",
     "uploadAvatar": "Upload avatar",
-    "uploadHelp": "PNG/JPG/WebP supported. Recommended under 5MB.",
-    "avatarTooLarge": "File is too large. Please pick an image under 5MB.",
+    "uploadHelp": "PNG/JPG/WebP supported. Max size 3MB per image.",
+    "avatarTooLarge": "File is too large. Please pick an image under 3MB.",
     "avatarInvalidType": "Invalid file type. Please choose an image file.",
     "avatarUploadFailed": "Failed to upload avatar. Please try again.",
     "avatarUploaded": "Avatar uploaded. Click Save to apply.",
     "avatarUrl": "Avatar URL",
     "avatarUrlPlaceholder": "Generated after upload",
-    "avatarHelp": "Your avatar is stored in Supabase Storage and saved to your profile.",
+    "avatarHelp": "",
     "clearAvatar": "Clear avatar",
     "save": "Save",
     "saving": "Saving...",
@@ -73,18 +73,29 @@
     "title": "Submit Your Product",
     "subtitle": "Share your creation with the world",
     "form": {
+      "productInfoTitle": "Product information",
       "productName": "Product Name",
       "productNamePlaceholder": "e.g., AI Writing Assistant",
       "slogan": "Slogan",
       "sloganPlaceholder": "Short, catchy tagline",
       "description": "Description",
+      "descriptionMarkdownHint": "Markdown is supported. Use headings, lists, links, and code blocks.",
       "descriptionPlaceholder": "Describe your product, features, and target users",
       "website": "Website",
       "websitePlaceholder": "https://your-product.com",
+      "logo": "Product Logo",
+      "logoUpload": "Upload logo",
+      "logoUploading": "Uploading logo...",
+      "logoUrl": "Logo URL",
+      "logoUrlPlaceholder": "Paste an image URL or upload above",
+      "logoHelp": "Optional. Upload an image (requires login) or paste a public image URL.",
+      "logoPreview": "No logo",
+      "clearLogo": "Clear",
       "category": "Category",
       "categoryPlaceholder": "Select a category",
       "tags": "Tags",
       "tagsPlaceholder": "Comma-separated, e.g., ai, writing, productivity",
+      "makerInfoTitle": "Maker information",
       "makerName": "Maker Name",
       "makerNamePlaceholder": "Your name",
       "makerEmail": "Maker Email",
@@ -100,6 +111,12 @@
       "backToHome": "Back to Home"
     },
     "error": {
+      "fieldTooLong": "{field} is too long (max {max} characters).",
+      "logoInvalidUrl": "Logo URL is invalid. Please use an http(s) image URL.",
+      "logoTooLarge": "Logo is too large. Please pick an image under 5MB.",
+      "logoInvalidType": "Invalid file type. Please choose an image file.",
+      "logoLoginRequired": "Please log in before uploading a logo. You can still paste a Logo URL.",
+      "logoUploadFailed": "Failed to upload logo. Please try again.",
       "tryAgain": "Try Again"
     }
   },
@@ -191,7 +208,12 @@
       "submit": "Submit",
       "manage": "Manage",
       "viewWebsite": "Visit website",
-      "viewDetail": "View details"
+      "viewDetail": "View details",
+      "edit": "Edit",
+      "delete": "Delete",
+      "update": "Update",
+      "editing": "Editing product",
+      "cancelEdit": "Cancel edit"
     },
     "tabs": {
       "overview": "Overview",
@@ -243,6 +265,13 @@
       "item1": "Make sure your website and slogan are clear and up to date.",
       "item2": "Use relevant tags to help users discover your product.",
       "item3": "Check your submission status here after publishing."
+    },
+    "deleteDialog": {
+      "title": "Delete product",
+      "desc": "Delete “{name}”? This cannot be undone.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "deleting": "Deleting..."
     }
   },
   "categories": {

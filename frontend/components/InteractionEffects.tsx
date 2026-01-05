@@ -47,7 +47,38 @@ export default function InteractionEffects() {
       });
     }, { threshold: 0.05, rootMargin: '0px 0px -10% 0px' });
 
-    document.querySelectorAll('.animate-on-scroll').forEach((el) => observer.observe(el));
+    const observed = new WeakSet<Element>();
+
+    const observeIfNeeded = (el: Element) => {
+      if (!(el instanceof HTMLElement)) return;
+      if (!el.classList.contains('animate-on-scroll')) return;
+      if (observed.has(el)) return;
+      observed.add(el);
+      observer.observe(el);
+    };
+
+    const scanAndObserve = (root: ParentNode | Element) => {
+      if (root instanceof Element) observeIfNeeded(root);
+      root.querySelectorAll?.('.animate-on-scroll').forEach((el) => observeIfNeeded(el));
+    };
+
+    scanAndObserve(document);
+
+    const mutationObserver = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        m.addedNodes.forEach((node) => {
+          if (!(node instanceof Element)) return;
+          scanAndObserve(node);
+        });
+      }
+    });
+
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      mutationObserver.disconnect();
+      observer.disconnect();
+    };
   }, []);
 
   return null;

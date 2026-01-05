@@ -66,6 +66,11 @@ async fn main() -> std::io::Result<()> {
                                 "/popularity-last-month",
                                 web::get().to(handlers::get_developer_popularity_last_month),
                             )
+                            .route("/{email}", web::get().to(handlers::get_developer_by_email))
+                            .route(
+                                "/{email}",
+                                web::put().to(handlers::update_developer_profile),
+                            )
                             .route(
                                 "/{email}/follow",
                                 web::post().to(handlers::follow_developer),

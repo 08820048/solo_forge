@@ -163,6 +163,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
   const [followedDevelopers, setFollowedDevelopers] = useState<string[]>(() => readFollowedDevelopersFromStorage());
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => readFavoritesFromStorage());
   const [likeIds, setLikeIds] = useState<string[]>(() => readLikesFromStorage());
+  const [developersVersion, setDevelopersVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -239,6 +240,12 @@ export default function ProductGrid({ section }: ProductGridProps) {
   }, []);
 
   useEffect(() => {
+    const onDevelopersUpdated = () => setDevelopersVersion((v) => v + 1);
+    window.addEventListener('sf_developers_updated', onDevelopersUpdated as EventListener);
+    return () => window.removeEventListener('sf_developers_updated', onDevelopersUpdated as EventListener);
+  }, []);
+
+  useEffect(() => {
     if (section !== 'featured') return;
     let cancelled = false;
 
@@ -265,7 +272,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
     return () => {
       cancelled = true;
     };
-  }, [locale, section]);
+  }, [developersVersion, locale, section]);
 
   /**
    * toggleFollowDeveloper
@@ -501,10 +508,12 @@ export default function ProductGrid({ section }: ProductGridProps) {
                 <div key={p.id} className="px-5 py-4 flex items-center gap-4">
                   <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                     {p.logo_url ? (
-                      <div
-                        className="w-full h-full bg-center bg-cover"
-                        style={{ backgroundImage: `url(${p.logo_url})` }}
-                        aria-label={p.name}
+                      <img
+                        src={p.logo_url}
+                        alt={p.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
                       />
                     ) : (
                       <span className="text-muted-foreground text-sm font-semibold">{p.name.trim().charAt(0).toUpperCase()}</span>
@@ -630,8 +639,18 @@ export default function ProductGrid({ section }: ProductGridProps) {
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 min-w-0 flex-1"
                       >
-                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground">
-                          {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden text-sm font-semibold text-muted-foreground">
+                          {d.avatar_url ? (
+                            <img
+                              src={d.avatar_url}
+                              alt={d.name || d.email}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            (d.name || d.email).trim().charAt(0).toUpperCase()
+                          )}
                         </div>
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
@@ -640,8 +659,18 @@ export default function ProductGrid({ section }: ProductGridProps) {
                       </a>
                     ) : (
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground">
-                          {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden text-sm font-semibold text-muted-foreground">
+                          {d.avatar_url ? (
+                            <img
+                              src={d.avatar_url}
+                              alt={d.name || d.email}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            (d.name || d.email).trim().charAt(0).toUpperCase()
+                          )}
                         </div>
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>

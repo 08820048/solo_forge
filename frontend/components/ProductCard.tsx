@@ -259,10 +259,20 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
 
           {/* Logo */}
-          <div className="relative z-10 w-16 h-16 bg-secondary rounded-lg mb-4 flex items-center justify-center transition-all duration-300 group-hover:opacity-90 spotlight-border">
-            <span className="text-secondary-foreground text-2xl font-bold font-sans">
-              {product.name.charAt(0)}
-            </span>
+          <div className="relative z-10 w-16 h-16 bg-secondary rounded-lg mb-4 flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:opacity-90 spotlight-border">
+            {product.logo_url ? (
+              <img
+                src={product.logo_url}
+                alt={product.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span className="text-secondary-foreground text-2xl font-bold font-sans">
+                {product.name.trim().charAt(0).toUpperCase()}
+              </span>
+            )}
           </div>
 
           {/* Content */}

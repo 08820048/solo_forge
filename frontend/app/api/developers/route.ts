@@ -106,3 +106,59 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function PUT(request: NextRequest) {
+  try {
+    const body = (await request.json()) as {
+      email?: string;
+      user_id?: string;
+      name?: string | null;
+      avatar_url?: string | null;
+      website?: string | null;
+    };
+
+    const email = (body.email || '').trim();
+    const userId = (body.user_id || '').trim();
+
+    if (!email) {
+      return NextResponse.json({ success: false, message: 'Missing email' }, { status: 400 });
+    }
+    if (!userId || userId.toLowerCase().startsWith('anon_')) {
+      return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+
+    const payload: Record<string, unknown> = { user_id: userId };
+    if (typeof body.name !== 'undefined') payload.name = body.name;
+    if (typeof body.avatar_url !== 'undefined') payload.avatar_url = body.avatar_url;
+    if (typeof body.website !== 'undefined') payload.website = body.website;
+
+    const response = await fetch(`${BACKEND_API_URL}/developers/${encodeURIComponent(email)}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept-Language': request.headers.get('Accept-Language') || 'en',
+      },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    });
+
+    const data = await readJsonSafe<ApiResponse<unknown>>(response);
+    if (!response.ok) {
+      return NextResponse.json(
+        { success: false, message: data?.message || 'Failed to update developer profile' },
+        { status: response.status }
+      );
+    }
+
+    if (!data) {
+      return NextResponse.json({ success: false, message: 'Invalid response from backend' }, { status: 502 });
+    }
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error updating developer profile:', error);
+    return NextResponse.json(
+      { success: false, message: 'Network error. Please try again later.' },
+      { status: 500 }
+    );
+  }
+}

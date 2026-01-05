@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 type TabKey = 'overview' | 'submit' | 'products' | 'favorites' | 'stats';
@@ -21,11 +22,14 @@ type Product = {
   id: string;
   name: string;
   slogan: string;
+  description?: string;
   website: string;
+  logo_url?: string | null;
   category: string;
   tags: string[];
   maker_name: string;
   maker_email: string;
+  maker_website?: string | null;
   language: string;
   status: ProductStatus;
   created_at: string;
@@ -72,6 +76,10 @@ export default function DeveloperCenterPage() {
   const [favoritesLoading, setFavoritesLoading] = useState(true);
   const [favoritesMessage, setFavoritesMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     const nextTab = (searchParams.get('tab') || '').toLowerCase();
@@ -219,6 +227,29 @@ export default function DeveloperCenterPage() {
     return { total, approved, pending, rejected, topCategories };
   }, [myProducts]);
 
+  const onConfirmDelete = async () => {
+    if (!deleteTarget || deleteLoading) return;
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const response = await fetch(`/api/products?id=${encodeURIComponent(deleteTarget.id)}`, {
+        method: 'DELETE',
+        headers: { 'Accept-Language': locale },
+      });
+      const json = (await response.json()) as ApiResponse<unknown>;
+      if (!response.ok || !json.success) {
+        setDeleteError(json.message ?? t('networkError'));
+        return;
+      }
+      setDeleteTarget(null);
+      setRefreshKey((k) => k + 1);
+    } catch {
+      setDeleteError(t('networkError'));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   if (!sessionReady) {
     return (
         <div className="min-h-screen">
@@ -237,7 +268,7 @@ export default function DeveloperCenterPage() {
             <h1 className="text-3xl font-bold text-foreground tracking-tight">{t('title')}</h1>
             <p className="mt-3 text-muted-foreground">{t('loginRequired')}</p>
             <div className="mt-8 flex items-center justify-center gap-3">
-              <Button asChild variant="default">
+              <Button asChild variant="default" className="bg-black text-white hover:bg-black/90">
                 <Link href="/">{navT('home')}</Link>
               </Button>
               <Button asChild variant="outline">
@@ -283,12 +314,29 @@ export default function DeveloperCenterPage() {
             </CardHeader>
             <CardContent className="pt-0">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-lg font-semibold text-foreground truncate">{user.name || t('profile.unnamed')}</div>
-                  <div className="text-sm text-muted-foreground truncate">{user.email}</div>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 shrink-0 rounded-full bg-muted border border-border/60 flex items-center justify-center overflow-hidden">
+                    {user.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.name || user.email || 'User'}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="text-sm font-semibold text-muted-foreground">
+                        {(user.name || user.email || 'U').trim().slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-lg font-semibold text-foreground truncate">{user.name || t('profile.unnamed')}</div>
+                    <div className="text-sm text-muted-foreground truncate">{user.email}</div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="default" onClick={() => setTab('submit')}>
+                  <Button variant="default" onClick={() => setTab('submit')} className="bg-black text-white hover:bg-black/90">
                     {t('actions.submit')}
                   </Button>
                   <Button variant="outline" onClick={() => setTab('products')}>
@@ -350,6 +398,21 @@ export default function DeveloperCenterPage() {
                     <div className="divide-y divide-border">
                       {myProducts.slice(0, 5).map((p) => (
                         <div key={p.id} className="py-4 flex items-start gap-4">
+                          <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden border border-border/60">
+                            {p.logo_url ? (
+                              <img
+                                src={p.logo_url}
+                                alt={p.name}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <span className="text-sm font-semibold text-muted-foreground">
+                                {p.name.trim().slice(0, 1).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
                               <Link
@@ -393,12 +456,29 @@ export default function DeveloperCenterPage() {
                     <div className="space-y-3">
                       {favoriteProducts.slice(0, 5).map((p) => (
                         <div key={p.id} className="flex items-center justify-between gap-3">
-                          <Link
-                            href={{ pathname: '/products/[slug]', params: { slug: p.id } }}
-                            className="min-w-0 text-sm text-foreground truncate hover:underline"
-                          >
-                            {p.name}
-                          </Link>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-7 h-7 shrink-0 rounded-md bg-muted flex items-center justify-center overflow-hidden border border-border/60">
+                              {p.logo_url ? (
+                                <img
+                                  src={p.logo_url}
+                                  alt={p.name}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <span className="text-[10px] font-semibold text-muted-foreground">
+                                  {p.name.trim().slice(0, 1).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <Link
+                              href={{ pathname: '/products/[slug]', params: { slug: p.id } }}
+                              className="min-w-0 text-sm text-foreground truncate hover:underline"
+                            >
+                              {p.name}
+                            </Link>
+                          </div>
                           <Badge variant="outline" className="shrink-0">
                             {categoryT(p.category)}
                           </Badge>
@@ -413,13 +493,51 @@ export default function DeveloperCenterPage() {
 
           <TabsContent value="submit" className="mt-6">
             <div className="rounded-2xl border border-border bg-card/50 p-6">
+              {editingProduct ? (
+                <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-foreground">{t('actions.editing')}</div>
+                    <div className="text-xs text-muted-foreground truncate">{editingProduct.name}</div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingProduct(null);
+                    }}
+                  >
+                    {t('actions.cancelEdit')}
+                  </Button>
+                </div>
+              ) : null}
               <SubmitForm
+                key={editingProduct ? `edit-${editingProduct.id}` : 'create'}
                 showHeader={false}
                 defaultMakerName={user.name}
                 defaultMakerEmail={user.email}
                 lockMakerIdentity
+                embedded
+                primaryButtonClassName="bg-black text-white hover:bg-black/90"
+                mode={editingProduct ? 'update' : 'create'}
+                productId={editingProduct?.id}
+                initialProduct={
+                  editingProduct
+                    ? {
+                        name: editingProduct.name,
+                        slogan: editingProduct.slogan,
+                        description: editingProduct.description ?? '',
+                        website: editingProduct.website,
+                        logo_url: editingProduct.logo_url ?? null,
+                        category: editingProduct.category,
+                        tags: editingProduct.tags ?? [],
+                        maker_website: editingProduct.maker_website ?? null,
+                      }
+                    : undefined
+                }
+                submitLabel={editingProduct ? t('actions.update') : undefined}
                 onSubmitted={() => {
                   setRefreshKey((k) => k + 1);
+                  setEditingProduct(null);
                   setTab('products');
                 }}
               />
@@ -445,6 +563,21 @@ export default function DeveloperCenterPage() {
                 <div className="divide-y divide-border">
                   {myProducts.map((p) => (
                     <div key={p.id} className="px-5 py-4 flex items-start gap-4">
+                      <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden border border-border/60">
+                        {p.logo_url ? (
+                          <img
+                            src={p.logo_url}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="text-sm font-semibold text-muted-foreground">
+                            {p.name.trim().slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <Link
@@ -461,6 +594,22 @@ export default function DeveloperCenterPage() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setEditingProduct(p);
+                              setTab('submit');
+                            }}
+                          >
+                            {t('actions.edit')}
+                          </Button>
+                          <Button type="button" size="sm" variant="destructive" onClick={() => setDeleteTarget(p)}>
+                            {t('actions.delete')}
+                          </Button>
+                        </div>
                         <a
                           href={p.website}
                           target="_blank"
@@ -499,6 +648,21 @@ export default function DeveloperCenterPage() {
                 <div className="divide-y divide-border">
                   {favoriteProducts.map((p) => (
                     <div key={p.id} className="px-5 py-4 flex items-start gap-4">
+                      <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden border border-border/60">
+                        {p.logo_url ? (
+                          <img
+                            src={p.logo_url}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="text-sm font-semibold text-muted-foreground">
+                            {p.name.trim().slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <Link
@@ -563,6 +727,41 @@ export default function DeveloperCenterPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+            setDeleteLoading(false);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('deleteDialog.title')}</DialogTitle>
+            <DialogDescription>{t('deleteDialog.desc', { name: deleteTarget?.name ?? '' })}</DialogDescription>
+          </DialogHeader>
+          {deleteError ? <div className="text-sm text-destructive">{deleteError}</div> : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deleteLoading}
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+            >
+              {t('deleteDialog.cancel')}
+            </Button>
+            <Button type="button" variant="destructive" disabled={deleteLoading} onClick={onConfirmDelete}>
+              {deleteLoading ? t('deleteDialog.deleting') : t('deleteDialog.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

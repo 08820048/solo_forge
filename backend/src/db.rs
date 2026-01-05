@@ -455,6 +455,173 @@ impl Database {
         Self { postgres, supabase }
     }
 
+    pub async fn get_developer_by_email(&self, email: &str) -> Result<Option<Developer>> {
+        if let Some(pool) = &self.postgres {
+            let email = strip_nul_str(email);
+            let row = sqlx::query_as::<_, DeveloperRow>(
+                "SELECT email, name, avatar_url, website \
+                 FROM developers \
+                 WHERE lower(email) = lower($1) \
+                 ORDER BY updated_at DESC NULLS LAST \
+                 LIMIT 1",
+            )
+            .persistent(false)
+            .bind(email.as_ref())
+            .fetch_optional(pool)
+            .await?;
+
+            return Ok(row.map(map_developer_row));
+        }
+
+        let supabase = match &self.supabase {
+            Some(v) => v,
+            None => return Ok(None),
+        };
+
+        let email = strip_nul_str(email);
+        let mut url = Url::parse(&format!("{}/rest/v1/developers", supabase.supabase_url))?;
+        url.query_pairs_mut()
+            .append_pair("select", "email,name,avatar_url,website")
+            .append_pair("email", &format!("eq.{}", email));
+
+        let response = supabase
+            .client
+            .get(url)
+            .header("apikey", &supabase.supabase_key)
+            .header(
+                "Authorization",
+                &format!("Bearer {}", supabase.supabase_key),
+            )
+            .header("Accept", "application/json")
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!(
+                "Failed to fetch developer: {}. Body: {}",
+                status,
+                body
+            ));
+        }
+
+        let developers: Vec<Developer> = response.json().await?;
+        Ok(developers.first().cloned())
+    }
+
+    pub async fn update_developer_profile(
+        &self,
+        email: &str,
+        name: Option<String>,
+        avatar_url: Option<Option<String>>,
+        website: Option<Option<String>>,
+    ) -> Result<Developer> {
+        if let Some(pool) = &self.postgres {
+            let name_update = name.is_some();
+            let avatar_update = avatar_url.is_some();
+            let website_update = website.is_some();
+
+            let email_clean = strip_nul_str(email);
+            let name_value = name.unwrap_or_else(|| email_clean.to_string());
+            let name_value = strip_nul_str(&name_value).into_owned();
+            let avatar_value = avatar_url.flatten().map(|v| strip_nul_str(&v).into_owned());
+            let website_value = website.flatten().map(|v| strip_nul_str(&v).into_owned());
+
+            let row = sqlx::query_as::<_, DeveloperRow>(
+                "INSERT INTO developers (email, name, avatar_url, website) \
+                 VALUES ($1, $2, $3, $4) \
+                 ON CONFLICT (email) DO UPDATE SET \
+                    name = CASE WHEN $5 THEN EXCLUDED.name ELSE developers.name END, \
+                    avatar_url = CASE WHEN $6 THEN EXCLUDED.avatar_url ELSE developers.avatar_url END, \
+                    website = CASE WHEN $7 THEN EXCLUDED.website ELSE developers.website END, \
+                    updated_at = NOW() \
+                 RETURNING email, name, avatar_url, website",
+            )
+            .persistent(false)
+            .bind(email_clean.as_ref())
+            .bind(name_value.as_str())
+            .bind(avatar_value.as_deref())
+            .bind(website_value.as_deref())
+            .bind(name_update)
+            .bind(avatar_update)
+            .bind(website_update)
+            .fetch_one(pool)
+            .await?;
+
+            return Ok(map_developer_row(row));
+        }
+
+        let supabase = self
+            .supabase
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No database configured"))?;
+
+        let email_clean = strip_nul_str(email);
+        let name_update = name.is_some();
+        let name_value_raw = name.as_deref().unwrap_or(email_clean.as_ref()).to_string();
+        let name_value = strip_nul_str(&name_value_raw).into_owned();
+
+        let mut payload = serde_json::Map::<String, serde_json::Value>::new();
+        payload.insert(
+            "email".to_string(),
+            serde_json::Value::String(email_clean.to_string()),
+        );
+        let exists = self.get_developer_by_email(email).await?.is_some();
+        if name_update || !exists {
+            payload.insert("name".to_string(), serde_json::Value::String(name_value));
+        }
+
+        if let Some(v) = avatar_url {
+            match v {
+                Some(s) => payload.insert("avatar_url".to_string(), serde_json::Value::String(s)),
+                None => payload.insert("avatar_url".to_string(), serde_json::Value::Null),
+            };
+        }
+        if let Some(v) = website {
+            match v {
+                Some(s) => payload.insert("website".to_string(), serde_json::Value::String(s)),
+                None => payload.insert("website".to_string(), serde_json::Value::Null),
+            };
+        }
+
+        let mut url = Url::parse(&format!("{}/rest/v1/developers", supabase.supabase_url))?;
+        url.query_pairs_mut().append_pair("on_conflict", "email");
+
+        let response = supabase
+            .client
+            .post(url)
+            .header("apikey", &supabase.supabase_key)
+            .header(
+                "Authorization",
+                &format!("Bearer {}", supabase.supabase_key),
+            )
+            .header("Accept", "application/json")
+            .header(
+                "Prefer",
+                "resolution=merge-duplicates,return=representation",
+            )
+            .json(&serde_json::Value::Object(payload))
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!(
+                "Failed to update developer: {}. Body: {}",
+                status,
+                body
+            ));
+        }
+
+        let returned: Vec<Developer> = response.json().await?;
+        returned
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Invalid response from database"))
+    }
+
     async fn upsert_developer_pg(
         &self,
         pool: &PgPool,
@@ -859,8 +1026,8 @@ impl Database {
                     status::text as status, \
                     created_at, \
                     updated_at, \
-                    (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = id) as likes, \
-                    (SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = id) as favorites",
+                    0::bigint as likes, \
+                    0::bigint as favorites",
             )
             .persistent(false)
             .bind(&product.name)
@@ -1016,8 +1183,8 @@ impl Database {
                     status::text as status, \
                     created_at, \
                     updated_at, \
-                    (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = id) as likes, \
-                    (SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = id) as favorites",
+                    (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = products.id) as likes, \
+                    (SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = products.id) as favorites",
             );
 
             let row = qb

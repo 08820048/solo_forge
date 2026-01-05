@@ -16,6 +16,8 @@ import {
 } from '@/lib/supabase';
 import type { Provider } from '@supabase/supabase-js';
 
+type StoredUser = { name?: string; email?: string; avatarUrl?: string };
+
 /**
  * readUserFromStorage
  * 从 localStorage 读取登录态用户信息（可选），用于 Header 头像展示。
@@ -41,6 +43,34 @@ function writeUserToStorage(user: { name?: string; email?: string; avatarUrl?: s
     }
     window.dispatchEvent(new Event('sf_user_updated'));
   } catch {}
+}
+
+/**
+ * syncDeveloperProfileToBackend
+ * 将登录态用户的基础信息（name/avatar）尽量同步到后端 developers 表，供全站头像展示使用。
+ */
+async function syncDeveloperProfileToBackend(user: StoredUser): Promise<boolean> {
+  const email = (user.email || '').trim();
+  if (!email) return false;
+
+  const name = (user.name || '').trim();
+  const avatarUrl = (user.avatarUrl || '').trim();
+
+  const payload: Record<string, unknown> = { email, user_id: email };
+  if (name) payload.name = name;
+  if (avatarUrl) payload.avatar_url = avatarUrl;
+
+  if (Object.keys(payload).length <= 2) return false;
+
+  try {
+    const response = await fetch('/api/developers', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return response.ok;
+  } catch {}
+  return false;
 }
 
 /**
@@ -159,6 +189,7 @@ export default function Header() {
         const local = getSupabaseBrowserClient({ storage: 'local' });
         const session = getSupabaseBrowserClient({ storage: 'session' });
 
+        let lastDeveloperSyncKey = '';
         const applySession = (nextSession: Awaited<ReturnType<typeof local.auth.getSession>>['data']['session']) => {
           if (nextSession?.user) {
             setIsAuthenticated(true);
@@ -172,10 +203,26 @@ export default function Header() {
             };
             writeUserToStorage(nextUser);
             setUser(nextUser);
+
+            const nextEmail = (nextUser.email || '').trim().toLowerCase();
+            const syncKey = `${nextEmail}|${(nextUser.name || '').trim()}|${(nextUser.avatarUrl || '').trim()}`;
+            if (nextEmail && syncKey !== lastDeveloperSyncKey) {
+              lastDeveloperSyncKey = syncKey;
+              void syncDeveloperProfileToBackend(nextUser).then((synced) => {
+                if (!synced) return;
+                try {
+                  window.dispatchEvent(new Event('sf_developers_updated'));
+                } catch {}
+                try {
+                  router.refresh();
+                } catch {}
+              });
+            }
           } else {
             setIsAuthenticated(false);
             writeUserToStorage(null);
             setUser(null);
+            lastDeveloperSyncKey = '';
           }
         };
 
@@ -225,7 +272,7 @@ export default function Header() {
       window.removeEventListener('sf_user_updated', onUserUpdated as EventListener);
       unsubscribeAuth?.();
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     /**

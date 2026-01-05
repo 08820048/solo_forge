@@ -14,7 +14,7 @@ type ProfileFormState = {
 };
 
 const AVATAR_BUCKET = 'avatars';
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const MAX_AVATAR_BYTES = 3 * 1024 * 1024;
 
 function getInitialProfileState(): ProfileFormState {
   try {
@@ -165,6 +165,26 @@ export default function ProfilePage() {
           window.dispatchEvent(new Event('sf_user_updated'));
         } catch {
         }
+        if (stored.email) {
+          try {
+            const response = await fetch('/api/developers', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: stored.email,
+                user_id: stored.email,
+                name: stored.name,
+                avatar_url: stored.avatarUrl ?? null,
+              }),
+            });
+            if (response.ok) {
+              try {
+                window.dispatchEvent(new Event('sf_developers_updated'));
+              } catch {}
+            }
+          } catch {
+          }
+        }
         setForm({
           name: stored.name,
           avatarUrl: stored.avatarUrl ?? '',
@@ -264,7 +284,6 @@ export default function ProfilePage() {
             >
               {t('clearAvatar')}
             </Button>
-            <p className="text-xs text-muted-foreground">{t('avatarHelp')}</p>
           </div>
         </div>
 
@@ -272,7 +291,12 @@ export default function ProfilePage() {
         {success ? <div className="text-sm text-emerald-600 dark:text-emerald-400">{success}</div> : null}
 
         <div className="pt-2">
-          <Button type="button" onClick={() => void onSave()} disabled={saving || uploading || !currentEmail}>
+          <Button
+            type="button"
+            onClick={() => void onSave()}
+            disabled={saving || uploading || !currentEmail}
+            className="bg-black text-white hover:bg-black/90"
+          >
             {saving ? t('saving') : uploading ? t('uploading') : t('save')}
           </Button>
         </div>

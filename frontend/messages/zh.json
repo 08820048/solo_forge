@@ -51,18 +51,29 @@
     "title": "提交你的产品",
     "subtitle": "把你的作品分享给世界",
     "form": {
+      "productInfoTitle": "产品信息",
       "productName": "产品名称",
       "productNamePlaceholder": "如：AI 写作助手",
       "slogan": "标语",
       "sloganPlaceholder": "简短有力的宣传语",
       "description": "产品描述",
+      "descriptionMarkdownHint": "支持 Markdown（标题、列表、链接、代码块等）。",
       "descriptionPlaceholder": "介绍你的产品、功能与目标用户",
       "website": "网站",
       "websitePlaceholder": "https://your-product.com",
+      "logo": "产品 Logo",
+      "logoUpload": "上传 Logo",
+      "logoUploading": "Logo 上传中...",
+      "logoUrl": "Logo 地址",
+      "logoUrlPlaceholder": "粘贴图片地址，或在上方上传",
+      "logoHelp": "可选。登录后可直接上传图片，或填写公开可访问的图片地址。",
+      "logoPreview": "暂无 Logo",
+      "clearLogo": "清除",
       "category": "分类",
       "categoryPlaceholder": "选择一个分类",
       "tags": "标签",
       "tagsPlaceholder": "逗号分隔，如：ai, 写作, 效率",
+      "makerInfoTitle": "开发者信息",
       "makerName": "开发者姓名",
       "makerNamePlaceholder": "你的名字",
       "makerEmail": "开发者邮箱",
@@ -78,6 +89,12 @@
       "backToHome": "返回首页"
     },
     "error": {
+      "fieldTooLong": "{field} 字数过长（最多 {max} 个字符）。",
+      "logoInvalidUrl": "Logo 地址无效，请使用 http(s) 的图片链接。",
+      "logoTooLarge": "图片过大，请选择 5MB 以内的图片。",
+      "logoInvalidType": "文件类型不正确，请选择图片文件。",
+      "logoLoginRequired": "请先登录后再上传 Logo；你仍可填写 Logo 地址。",
+      "logoUploadFailed": "Logo 上传失败，请稍后重试。",
       "tryAgain": "重试"
     }
   },
@@ -166,14 +183,14 @@
     "namePlaceholder": "请输入昵称",
     "avatarTip": "头像会显示在右上角。",
     "uploadAvatar": "上传头像",
-    "uploadHelp": "支持 PNG/JPG/WebP 等图片格式，建议小于 5MB。",
-    "avatarTooLarge": "图片过大，请选择 5MB 以内的图片。",
+    "uploadHelp": "支持 PNG/JPG/WebP 等图片格式，单张图片小于 3MB。",
+    "avatarTooLarge": "图片过大，请选择 3MB 以内的图片。",
     "avatarInvalidType": "文件类型不正确，请选择图片文件。",
     "avatarUploadFailed": "头像上传失败，请稍后重试。",
     "avatarUploaded": "头像已上传，点击保存生效。",
     "avatarUrl": "头像链接",
     "avatarUrlPlaceholder": "上传后会自动生成",
-    "avatarHelp": "头像会保存到 Supabase Storage，并写入你的账户资料。",
+    "avatarHelp": "",
     "clearAvatar": "清除头像",
     "save": "保存",
     "saving": "保存中...",
@@ -191,7 +208,12 @@
       "submit": "提交作品",
       "manage": "管理作品",
       "viewWebsite": "访问网站",
-      "viewDetail": "查看详情"
+      "viewDetail": "查看详情",
+      "edit": "编辑",
+      "delete": "删除",
+      "update": "更新",
+      "editing": "正在编辑",
+      "cancelEdit": "取消编辑"
     },
     "tabs": {
       "overview": "总览",
@@ -243,6 +265,13 @@
       "item1": "保持网站、标语与截图信息清晰，审核更顺畅。",
       "item2": "合理填写分类与标签，提升曝光与搜索命中率。",
       "item3": "提交后可在「我的作品」里查看审核状态。"
+    },
+    "deleteDialog": {
+      "title": "删除作品",
+      "desc": "确定删除「{name}」吗？该操作不可撤销。",
+      "cancel": "取消",
+      "confirm": "删除",
+      "deleting": "删除中..."
     }
   },
   "categories": {

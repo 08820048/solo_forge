@@ -490,6 +490,84 @@ pub async fn follow_developer(
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct DeveloperPath {
+    pub email: String,
+}
+
+pub async fn get_developer_by_email(
+    path: web::Path<DeveloperPath>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let email = path.into_inner().email.trim().to_ascii_lowercase();
+
+    match db.get_developer_by_email(&email).await {
+        Ok(Some(dev)) => HttpResponse::Ok().json(ApiResponse::success(dev)),
+        Ok(None) => HttpResponse::NotFound()
+            .json(ApiResponse::<()>::error("Developer not found".to_string())),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateDeveloperRequest {
+    pub user_id: Option<String>,
+    pub name: Option<String>,
+    pub avatar_url: Option<Option<String>>,
+    pub website: Option<Option<String>>,
+}
+
+pub async fn update_developer_profile(
+    path: web::Path<DeveloperPath>,
+    body: web::Json<UpdateDeveloperRequest>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let email = path.into_inner().email.trim().to_ascii_lowercase();
+
+    let user_id = body.user_id.as_deref().unwrap_or("").trim().to_string();
+    if user_id.is_empty() || is_anonymous_user_id(&user_id) || user_id.to_ascii_lowercase() != email
+    {
+        return HttpResponse::Unauthorized()
+            .json(ApiResponse::<()>::error("Unauthorized".to_string()));
+    }
+
+    let name = body
+        .name
+        .as_ref()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    let avatar_url = body.avatar_url.clone().map(|v| {
+        v.and_then(|s| {
+            let trimmed = s.trim().to_string();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+    });
+    let website = body.website.clone().map(|v| {
+        v.and_then(|s| {
+            let trimmed = s.trim().to_string();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+    });
+
+    match db
+        .update_developer_profile(&email, name, avatar_url, website)
+        .await
+    {
+        Ok(dev) => HttpResponse::Ok().json(ApiResponse::success(dev)),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
 pub async fn unfollow_developer(
     path: web::Path<String>,
     body: Option<web::Json<InteractionBody>>,

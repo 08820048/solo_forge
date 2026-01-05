@@ -84,6 +84,24 @@ type DeveloperWithFollowers = {
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
 /**
+ * getCurrentUserAvatarOverride
+ * 当列表项是当前登录用户时，用本地 sf_user.avatarUrl 覆盖后端返回的 avatar_url（避免等待后端数据刷新）。
+ */
+function getCurrentUserAvatarOverride(email: string, fallbackAvatarUrl?: string | null): string | null {
+  try {
+    const raw = localStorage.getItem('sf_user');
+    if (!raw) return fallbackAvatarUrl ?? null;
+    const parsed = JSON.parse(raw) as { email?: string; avatarUrl?: string } | null;
+    const storedEmail = (parsed?.email || '').trim().toLowerCase();
+    const avatarUrl = (parsed?.avatarUrl || '').trim();
+    if (!storedEmail || storedEmail !== email.trim().toLowerCase()) return fallbackAvatarUrl ?? null;
+    return avatarUrl || fallbackAvatarUrl || null;
+  } catch {
+    return fallbackAvatarUrl ?? null;
+  }
+}
+
+/**
  * renderRank
  * 渲染名次徽章：前三名显示 medal 图标与配色，其他显示灰色 #N。
  */
@@ -170,6 +188,31 @@ export default function DeveloperPopularitySidebar() {
     return () => {
       cancelled = true;
     };
+  }, [locale]);
+
+  useEffect(() => {
+    const onDevelopersUpdated = () => {
+      const refetch = async () => {
+        try {
+          const [popRes, topRes] = await Promise.all([
+            fetch(`/api/developers?kind=popularity_last_month&limit=10`, {
+              headers: { 'Accept-Language': locale },
+            }),
+            fetch(`/api/developers?kind=top&limit=5`, {
+              headers: { 'Accept-Language': locale },
+            }),
+          ]);
+          const popJson: ApiResponse<DeveloperPopularity[]> = await popRes.json();
+          const topJson: ApiResponse<DeveloperWithFollowers[]> = await topRes.json();
+          if (popJson.success) setList(popJson.data ?? []);
+          if (topJson.success) setTopList(topJson.data ?? []);
+        } catch {
+        }
+      };
+      void refetch();
+    };
+    window.addEventListener('sf_developers_updated', onDevelopersUpdated as EventListener);
+    return () => window.removeEventListener('sf_developers_updated', onDevelopersUpdated as EventListener);
   }, [locale]);
 
   useEffect(() => {
@@ -318,13 +361,33 @@ export default function DeveloperPopularitySidebar() {
                             href={d.website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground hover:opacity-90 transition-opacity"
+                            className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground hover:opacity-90 transition-opacity"
                           >
-                            {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                            {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
+                              <img
+                                src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
+                                alt={d.name || d.email}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              (d.name || d.email).trim().charAt(0).toUpperCase()
+                            )}
                           </a>
                         ) : (
-                          <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
-                            {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                          <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground">
+                            {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
+                              <img
+                                src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
+                                alt={d.name || d.email}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              (d.name || d.email).trim().charAt(0).toUpperCase()
+                            )}
                           </div>
                         )}
                         <div className="min-w-0">
@@ -385,13 +448,33 @@ export default function DeveloperPopularitySidebar() {
                             href={d.website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground hover:opacity-90 transition-opacity"
+                            className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground hover:opacity-90 transition-opacity"
                           >
-                            {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                            {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
+                              <img
+                                src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
+                                alt={d.name || d.email}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              (d.name || d.email).trim().charAt(0).toUpperCase()
+                            )}
                           </a>
                         ) : (
-                          <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground">
-                            {(d.name || d.email).trim().charAt(0).toUpperCase()}
+                          <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground">
+                            {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
+                              <img
+                                src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
+                                alt={d.name || d.email}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              (d.name || d.email).trim().charAt(0).toUpperCase()
+                            )}
                           </div>
                         )}
                         <div className="min-w-0">
