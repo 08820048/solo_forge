@@ -10,6 +10,35 @@ use actix_web::{middleware::Logger, web, App, HttpServer};
 use dotenv::dotenv;
 use std::env;
 use std::sync::Arc;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        handlers::health_check,
+        handlers::get_products,
+        handlers::search,
+        handlers::get_product_by_id,
+        handlers::create_product
+    ),
+    components(schemas(
+        models::ApiError,
+        models::EmptyApiResponse,
+        models::Product,
+        models::ProductApiResponse,
+        models::ProductsApiResponse,
+        models::ProductStatus,
+        models::CreateProductRequest,
+        models::UpdateProductRequest,
+        models::QueryParams,
+        models::SearchApiResponse,
+        models::SearchResult,
+        handlers::HealthCheckResponse,
+        handlers::SearchQuery
+    ))
+)]
+struct ApiDoc;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -39,6 +68,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(db.clone()))
             .wrap(Logger::default())
             .wrap(cors)
+            .service(SwaggerUi::new("/api/docs/{_:.*}").url("/api/openapi.json", ApiDoc::openapi()))
             .service(
                 web::scope("/api")
                     .service(handlers::health_check)
@@ -90,6 +120,18 @@ async fn main() -> std::io::Result<()> {
                             .route("", web::get().to(handlers::get_leaderboard)),
                     )
                     .service(web::scope("/search").route("", web::get().to(handlers::search)))
+                    .service(
+                        web::scope("/home")
+                            .route(
+                                "/sponsored-top",
+                                web::get().to(handlers::get_home_sponsored_top),
+                            )
+                            .route(
+                                "/sponsored-right",
+                                web::get().to(handlers::get_home_sponsored_right),
+                            )
+                            .route("/featured", web::get().to(handlers::get_home_featured)),
+                    )
                     .service(
                         web::scope("/dev")
                             .route("/bootstrap", web::post().to(handlers::dev_bootstrap))

@@ -4,7 +4,9 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 function readFavoritesFromStorage(): string[] {
   try {
@@ -76,6 +78,69 @@ function requestAuth(redirectPath: string) {
   }
 }
 
+/**
+ * isSameUserEmail
+ * 判断两个邮箱是否属于同一用户（忽略大小写与空值）。
+ */
+function isSameUserEmail(a?: string | null, b?: string | null): boolean {
+  const left = (a || '').trim().toLowerCase();
+  const right = (b || '').trim().toLowerCase();
+  if (!left || !right) return false;
+  return left === right;
+}
+
+type DeveloperProfile = {
+  email: string;
+  name: string;
+  avatar_url?: string | null;
+};
+
+type ApiResponse<T> = { success: boolean; data?: T; message?: string };
+
+const developerProfileCache = new Map<string, DeveloperProfile | null>();
+const developerProfileInflight = new Map<string, Promise<DeveloperProfile | null>>();
+
+function getCurrentUserAvatarOverride(email: string, fallbackAvatarUrl?: string | null): string | null {
+  try {
+    const raw = localStorage.getItem('sf_user');
+    if (!raw) return fallbackAvatarUrl ?? null;
+    const parsed = JSON.parse(raw) as { email?: string; avatarUrl?: string } | null;
+    const storedEmail = (parsed?.email || '').trim().toLowerCase();
+    const avatarUrl = (parsed?.avatarUrl || '').trim();
+    if (!storedEmail || storedEmail !== email.trim().toLowerCase()) return fallbackAvatarUrl ?? null;
+    return avatarUrl || fallbackAvatarUrl || null;
+  } catch {
+    return fallbackAvatarUrl ?? null;
+  }
+}
+
+async function fetchDeveloperProfile(email: string): Promise<DeveloperProfile | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+
+  if (developerProfileCache.has(normalized)) return developerProfileCache.get(normalized) ?? null;
+  const inflight = developerProfileInflight.get(normalized);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    try {
+      const response = await fetch(`/api/developers?email=${encodeURIComponent(normalized)}`);
+      const json = (await response.json().catch(() => null)) as ApiResponse<DeveloperProfile> | null;
+      const profile = response.ok && json?.success ? (json.data ?? null) : null;
+      developerProfileCache.set(normalized, profile);
+      return profile;
+    } catch {
+      developerProfileCache.set(normalized, null);
+      return null;
+    } finally {
+      developerProfileInflight.delete(normalized);
+    }
+  })();
+
+  developerProfileInflight.set(normalized, promise);
+  return promise;
+}
+
 interface Product {
   id: string;
   name: string;
@@ -83,6 +148,7 @@ interface Product {
   logo_url?: string;
   category: string;
   maker_name: string;
+  maker_email?: string | null;
   website: string;
   likes: number;
   favorites: number;
@@ -90,14 +156,79 @@ interface Product {
 
 interface ProductCardProps {
   product: Product;
+  variant?: 'homeFeatured' | 'productsList';
 }
 
-export default function ProductCard({ product }: ProductCardProps) {
+function SloganMarkdown({ value }: { value: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <span>{children}</span>,
+        a: ({ href, children }) => (
+          <a
+            href={href ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:opacity-80"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (href) window.open(href, '_blank', 'noopener,noreferrer');
+            }}
+          >
+            {children}
+          </a>
+        ),
+        code: ({ children }) => (
+          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
+        ),
+        ul: ({ children }) => <span>{children}</span>,
+        ol: ({ children }) => <span>{children}</span>,
+        li: ({ children }) => <span>• {children} </span>,
+        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        blockquote: ({ children }) => <span>{children}</span>,
+        pre: ({ children }) => <span>{children}</span>,
+        br: () => <span> </span>,
+      }}
+    >
+      {value}
+    </ReactMarkdown>
+  );
+}
+
+export default function ProductCard({ product, variant = 'homeFeatured' }: ProductCardProps) {
   const t = useTranslations('categories');
   const [favorited, setFavorited] = useState(() => readFavoritesFromStorage().includes(product.id));
   const [liked, setLiked] = useState(() => readLikesFromStorage().includes(product.id));
   const [favoriteCount, setFavoriteCount] = useState(() => product.favorites ?? 0);
   const [likeCount, setLikeCount] = useState(() => product.likes ?? 0);
+  const [makerProfile, setMakerProfile] = useState<DeveloperProfile | null>(null);
+  const currentUserEmail = getAuthenticatedUserEmail();
+  const selfActionDisabled = isSameUserEmail(product.maker_email ?? null, currentUserEmail);
+  const websiteUrl = (product.website || '').trim();
+  const hasWebsite = Boolean(websiteUrl);
+  const isProductsList = variant === 'productsList';
+  const makerEmail = (product.maker_email || '').trim().toLowerCase();
+
+  useEffect(() => {
+    if (!isProductsList) return;
+    if (!makerEmail) return;
+    let cancelled = false;
+    void fetchDeveloperProfile(makerEmail).then((profile) => {
+      if (cancelled) return;
+      setMakerProfile(profile);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isProductsList, makerEmail]);
+
+  const makerDisplayName = (makerProfile?.name || product.maker_name || makerEmail || '').trim();
+  const makerAvatarUrl = makerEmail ? getCurrentUserAvatarOverride(makerEmail, makerProfile?.avatar_url ?? null) : null;
+  const makerInitial = (makerDisplayName || makerEmail || 'U').trim().slice(0, 1).toUpperCase();
 
   const toggleFavorite = async () => {
     const userEmail = getAuthenticatedUserEmail();
@@ -105,6 +236,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       requestAuth('/');
       return;
     }
+    if (isSameUserEmail(product.maker_email ?? null, userEmail)) return;
 
     const ids = readFavoritesFromStorage();
     const set = new Set(ids);
@@ -154,6 +286,7 @@ export default function ProductCard({ product }: ProductCardProps) {
       requestAuth('/');
       return;
     }
+    if (isSameUserEmail(product.maker_email ?? null, userEmail)) return;
 
     const ids = readLikesFromStorage();
     const set = new Set(ids);
@@ -204,24 +337,21 @@ export default function ProductCard({ product }: ProductCardProps) {
     >
       <Card className="h-full bg-card/70 backdrop-blur-sm border-border hover:bg-card transition-all duration-300 hover:shadow-2xl hover:shadow-black/5 spotlight-group">
         <CardContent className="p-6 flex flex-col h-full relative overflow-hidden">
-          {/* Background lines */}
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute left-4 top-0 w-px h-full bg-foreground/5"></div>
-            <div className="absolute left-1/2 top-0 w-px h-full bg-foreground/5"></div>
-            <div className="absolute left-3/4 top-0 w-px h-full bg-foreground/5"></div>
-          </div>
-
           <div className="absolute right-4 top-4 z-20 flex items-start gap-3">
             <div className="flex flex-col items-center">
               <button
                 type="button"
                 aria-label={liked ? '取消点赞' : '点赞'}
+                disabled={selfActionDisabled}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   void toggleLike();
                 }}
-                className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                className={[
+                  'rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                  selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
+                ].join(' ')}
               >
                 <i
                   key={liked ? 'liked' : 'unliked'}
@@ -238,12 +368,16 @@ export default function ProductCard({ product }: ProductCardProps) {
               <button
                 type="button"
                 aria-label={favorited ? '取消收藏' : '收藏'}
+                disabled={selfActionDisabled}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   void toggleFavorite();
                 }}
-                className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                className={[
+                  'rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                  selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
+                ].join(' ')}
               >
                 <i
                   key={favorited ? 'favorited' : 'unfavorited'}
@@ -255,6 +389,29 @@ export default function ProductCard({ product }: ProductCardProps) {
                 />
               </button>
               <span className="mt-1 text-[10px] leading-none text-muted-foreground tabular-nums">{favoriteCount}</span>
+            </div>
+            <div className="flex flex-col items-center">
+              {hasWebsite ? (
+                <button
+                  type="button"
+                  aria-label="访问官网"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    try {
+                      window.open(websiteUrl, '_blank', 'noopener,noreferrer');
+                    } catch {}
+                  }}
+                  className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                >
+                  <i className="ri-global-line text-base" aria-hidden="true" />
+                </button>
+              ) : (
+                <span className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 text-muted-foreground">
+                  <i className="ri-global-line text-base" aria-hidden="true" />
+                </span>
+              )}
+              <span className="mt-1 text-[10px] leading-none text-transparent select-none">0</span>
             </div>
           </div>
 
@@ -277,23 +434,43 @@ export default function ProductCard({ product }: ProductCardProps) {
 
           {/* Content */}
           <div className="relative z-10 flex-1">
-            <h3 className="text-xl font-semibold text-foreground mb-2 font-sans tracking-tight">
-              {product.name}
-            </h3>
+            <div className="flex items-start gap-3 mb-2">
+              <h3 className="min-w-0 flex-1 text-xl font-semibold text-foreground font-sans tracking-tight truncate">
+                {product.name}
+              </h3>
+              {!isProductsList ? (
+                <Badge variant="secondary" className="shrink-0">
+                  {t(product.category)}
+                </Badge>
+              ) : null}
+            </div>
             <p className="text-muted-foreground mb-4 line-clamp-2 font-sans">
-              {product.slogan}
+              <SloganMarkdown value={product.slogan} />
             </p>
           </div>
 
           {/* Footer */}
-          <div className="relative z-10 flex items-center justify-between pt-4 border-t border-border">
-            <span className="text-sm text-muted-foreground font-sans">
-              by {product.maker_name}
-            </span>
-            <Badge variant="secondary">
-              {t(product.category)}
-            </Badge>
-          </div>
+          {isProductsList ? (
+            <div className="relative z-10 flex items-center justify-between pt-4 border-t border-border">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-[10px] font-semibold text-muted-foreground">
+                  {makerAvatarUrl ? (
+                    <img
+                      src={makerAvatarUrl}
+                      alt={makerDisplayName || makerEmail}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    makerInitial
+                  )}
+                </div>
+                <span className="text-sm text-muted-foreground font-sans truncate">{makerDisplayName || makerEmail}</span>
+              </div>
+              <Badge variant="secondary">{t(product.category)}</Badge>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </Link>

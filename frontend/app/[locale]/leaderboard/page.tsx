@@ -5,6 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 type WindowKey = 'day' | 'week' | 'month' | 'all';
 
@@ -32,32 +34,69 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+function SloganMarkdown({ value }: { value: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <span>{children}</span>,
+        a: ({ href, children }) => (
+          <a
+            href={href ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:opacity-80"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (href) window.open(href, '_blank', 'noopener,noreferrer');
+            }}
+          >
+            {children}
+          </a>
+        ),
+        code: ({ children }) => (
+          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
+        ),
+        ul: ({ children }) => <span>{children}</span>,
+        ol: ({ children }) => <span>{children}</span>,
+        li: ({ children }) => <span>• {children} </span>,
+        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        blockquote: ({ children }) => <span>{children}</span>,
+        pre: ({ children }) => <span>{children}</span>,
+        br: () => <span> </span>,
+      }}
+    >
+      {value}
+    </ReactMarkdown>
+  );
+}
+
 function renderRankBadge(rank: number) {
   if (rank === 1) {
     return (
-      <span className="flex items-center gap-1 text-yellow-500">
+      <span className="flex items-center text-yellow-500">
         <i className="ri-medal-line text-base" aria-hidden="true" />
-        <span className="text-sm font-semibold">#{rank}</span>
       </span>
     );
   }
   if (rank === 2) {
     return (
-      <span className="flex items-center gap-1 text-slate-300">
+      <span className="flex items-center text-slate-300">
         <i className="ri-medal-line text-base" aria-hidden="true" />
-        <span className="text-sm font-semibold">#{rank}</span>
       </span>
     );
   }
   if (rank === 3) {
     return (
-      <span className="flex items-center gap-1 text-amber-700">
+      <span className="flex items-center text-amber-700">
         <i className="ri-medal-line text-base" aria-hidden="true" />
-        <span className="text-sm font-semibold">#{rank}</span>
       </span>
     );
   }
-  return <span className="text-sm font-semibold text-muted-foreground">#{rank}</span>;
+  return <span className="text-sm font-semibold text-muted-foreground">{rank}</span>;
 }
 
 /**
@@ -184,7 +223,9 @@ export default function LeaderboardPage() {
                                 {categoryT(p.category)}
                               </Badge>
                             </div>
-                            <div className="mt-1 text-sm text-muted-foreground line-clamp-2">{p.slogan}</div>
+                            <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                              <SloganMarkdown value={p.slogan} />
+                            </div>
                             <div className="mt-2 text-xs text-muted-foreground">by {p.maker_name}</div>
                           </div>
                         </div>

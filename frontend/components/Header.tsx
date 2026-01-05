@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   getSupabaseAuthStoragePreference,
   getSupabaseBrowserClient,
@@ -43,6 +45,46 @@ function writeUserToStorage(user: { name?: string; email?: string; avatarUrl?: s
     }
     window.dispatchEvent(new Event('sf_user_updated'));
   } catch {}
+}
+
+function SloganMarkdown({ value }: { value: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <span>{children}</span>,
+        a: ({ href, children }) => (
+          <a
+            href={href ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:opacity-80"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (href) window.open(href, '_blank', 'noopener,noreferrer');
+            }}
+          >
+            {children}
+          </a>
+        ),
+        code: ({ children }) => (
+          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
+        ),
+        ul: ({ children }) => <span>{children}</span>,
+        ol: ({ children }) => <span>{children}</span>,
+        li: ({ children }) => <span>• {children} </span>,
+        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        blockquote: ({ children }) => <span>{children}</span>,
+        pre: ({ children }) => <span>{children}</span>,
+        br: () => <span> </span>,
+      }}
+    >
+      {value}
+    </ReactMarkdown>
+  );
 }
 
 /**
@@ -825,7 +867,9 @@ function SearchDialog({
                     className="block rounded-lg border border-border bg-background/40 px-3 py-2 hover:bg-accent/30 transition-colors"
                   >
                     <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground truncate">{p.slogan}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                      <SloganMarkdown value={p.slogan} />
+                    </div>
                     <div className="mt-1 text-[11px] text-muted-foreground truncate">by {p.maker_name}</div>
                   </Link>
                 ))}

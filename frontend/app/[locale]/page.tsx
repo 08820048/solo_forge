@@ -1,7 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 import Hero from '@/components/Hero';
 import ProductGrid from '@/components/ProductGrid';
-import CategoryList from '@/components/CategoryList';
 import DeveloperPopularitySidebar from '@/components/DeveloperPopularitySidebar';
 import HomeRightSidebar from '@/components/HomeRightSidebar';
 
@@ -21,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
 /**
  * HomePage
- * 首页结构为：Hero（焦点横幅）+ 热门产品 + 最新上架 + 分类浏览；
+ * 首页结构为：Hero（焦点横幅）+ 精选产品 + 最新提交；
  * 所有内容模块均复用独立的 UI 组件，且不使用渐变背景。
  */
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
@@ -39,7 +38,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             <div className="space-y-16 min-w-0">
               <ProductGrid section="featured" />
               <ProductGrid section="recent" />
-              <CategoryList />
             </div>
             <div className="hidden lg:block">
               <HomeRightSidebar />

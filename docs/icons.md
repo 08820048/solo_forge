@@ -11,3 +11,17 @@
 ## 登录界面
 - 邮箱表单：mail-fill
 - 密码表单：lock-fill
+
+---
+
+## 产品分类图标
+- AI工具：robot-3-line
+- 设计：figma-line
+- 开发者工具：code-ai-line
+- 教育：school-line
+- 金融:visa-line
+- 游戏：gamepad-line
+- 生活方式：home-smile-line
+- 营销：bubble-chart-line
+- 效率工具：tools-line
+- 写作：quill-pen-ai-line

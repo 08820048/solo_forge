@@ -20,8 +20,32 @@ async function readJsonSafe<T>(response: Response): Promise<T | null> {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const email = (searchParams.get('email') || '').trim();
     const kind = (searchParams.get('kind') || '').toLowerCase();
     const limit = searchParams.get('limit');
+
+    if (email) {
+      const response = await fetch(`${BACKEND_API_URL}/developers/${encodeURIComponent(email)}`, {
+        headers: {
+          'Accept-Language': request.headers.get('Accept-Language') || 'en',
+        },
+        cache: 'no-store',
+      });
+
+      const data = await readJsonSafe<ApiResponse<unknown>>(response);
+      if (!response.ok) {
+        return NextResponse.json(
+          { success: false, message: data?.message || 'Failed to fetch developer' },
+          { status: response.status }
+        );
+      }
+
+      if (!data) {
+        return NextResponse.json({ success: false, message: 'Invalid response from backend' }, { status: 502 });
+      }
+
+      return NextResponse.json(data);
+    }
 
     const params = new URLSearchParams();
     if (limit) params.set('limit', limit);
@@ -73,6 +97,9 @@ export async function POST(request: NextRequest) {
     }
     if (!userId || userId.toLowerCase().startsWith('anon_')) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 });
+    }
+    if (email.toLowerCase() === userId.toLowerCase()) {
+      return NextResponse.json({ success: false, message: 'Cannot follow yourself' }, { status: 400 });
     }
 
     const subPath = action === 'unfollow' ? 'unfollow' : 'follow';

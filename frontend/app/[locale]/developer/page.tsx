@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 type TabKey = 'overview' | 'submit' | 'products' | 'favorites' | 'stats';
 
@@ -36,6 +38,41 @@ type Product = {
 };
 
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
+
+function SloganMarkdown({ value }: { value: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <span>{children}</span>,
+        a: ({ href, children }) => (
+          <a
+            href={href ?? '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:opacity-80"
+          >
+            {children}
+          </a>
+        ),
+        code: ({ children }) => (
+          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
+        ),
+        ul: ({ children }) => <span>{children}</span>,
+        ol: ({ children }) => <span>{children}</span>,
+        li: ({ children }) => <span>• {children} </span>,
+        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+        blockquote: ({ children }) => <span>{children}</span>,
+        pre: ({ children }) => <span>{children}</span>,
+        br: () => <span> </span>,
+      }}
+    >
+      {value}
+    </ReactMarkdown>
+  );
+}
 
 function readUserFromStorage(): UserInfo | null {
   try {
@@ -423,7 +460,9 @@ export default function DeveloperCenterPage() {
                               </Link>
                               {statusBadge(p.status)}
                             </div>
-                            <div className="mt-1 text-sm text-muted-foreground line-clamp-1">{p.slogan}</div>
+                            <div className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                              <SloganMarkdown value={p.slogan} />
+                            </div>
                             <div className="mt-2 text-xs text-muted-foreground">
                               {categoryT(p.category)} · {formatDate(p.created_at, locale)}
                             </div>
@@ -588,7 +627,9 @@ export default function DeveloperCenterPage() {
                           </Link>
                           {statusBadge(p.status)}
                         </div>
-                        <div className="mt-1 text-sm text-muted-foreground line-clamp-2">{p.slogan}</div>
+                        <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                          <SloganMarkdown value={p.slogan} />
+                        </div>
                         <div className="mt-2 text-xs text-muted-foreground">
                           {categoryT(p.category)} · {t('products.createdAt', { date: formatDate(p.created_at, locale) })}
                         </div>
@@ -673,7 +714,9 @@ export default function DeveloperCenterPage() {
                           </Link>
                           <Badge variant="outline">{categoryT(p.category)}</Badge>
                         </div>
-                        <div className="mt-1 text-sm text-muted-foreground line-clamp-2">{p.slogan}</div>
+                        <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                          <SloganMarkdown value={p.slogan} />
+                        </div>
                         <div className="mt-2 text-xs text-muted-foreground">{t('favorites.by', { maker: p.maker_name })}</div>
                       </div>
                       <a

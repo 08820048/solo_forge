@@ -127,9 +127,51 @@ export default async function ProductDetailPage({
                 <h1 className="text-4xl font-bold text-foreground mb-2">
                   {product.name}
                 </h1>
-                <p className="text-xl text-muted-foreground mb-4">
-                  {product.slogan}
-                </p>
+                <div className="text-xl text-muted-foreground mb-4">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      p: ({ ...props }) => <span {...props} />,
+                      a: ({ ...props }) => (
+                        <a
+                          {...props}
+                          className="text-foreground underline underline-offset-4"
+                          target="_blank"
+                          rel="noreferrer"
+                        />
+                      ),
+                      code: ({ className: codeClassName, children, ...props }) => {
+                        const inline = !String(codeClassName || '').includes('language-');
+                        if (inline) {
+                          return (
+                            <code
+                              {...props}
+                              className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90"
+                            >
+                              {children}
+                            </code>
+                          );
+                        }
+                        return (
+                          <code {...props} className={codeClassName}>
+                            {children}
+                          </code>
+                        );
+                      },
+                      ul: ({ ...props }) => <span {...props} />,
+                      ol: ({ ...props }) => <span {...props} />,
+                      li: ({ ...props }) => <span {...props} />,
+                      h1: ({ ...props }) => <span {...props} />,
+                      h2: ({ ...props }) => <span {...props} />,
+                      h3: ({ ...props }) => <span {...props} />,
+                      pre: ({ ...props }) => <span {...props} />,
+                      blockquote: ({ ...props }) => <span {...props} />,
+                      br: () => <span> </span>,
+                    }}
+                  >
+                    {String(product.slogan || '')}
+                  </ReactMarkdown>
+                </div>
                 <a
                   href={product.website}
                   target="_blank"

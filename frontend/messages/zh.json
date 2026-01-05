@@ -337,12 +337,13 @@
       "ctaStory": "我们的故事"
     },
     "sponsored": {
-      "title": "赞助推广",
+      "title": "赞助",
       "badge": "赞助位",
       "subtitle": "这里展示首页赞助位产品（赞助支付功能后续规划）。",
       "cta": "申请赞助位",
       "itemBadge": "赞助",
       "visit": "访问官网",
+      "refreshIn": "下次刷新 {time}",
       "loading": "加载中...",
       "empty": "暂无赞助位产品。",
       "previewTip": "提示：若官网禁止嵌入预览，请点击「访问官网」在新标签打开。",
@@ -391,11 +392,14 @@
     },
     "featured": {
       "title": "精选产品",
-      "subtitle": "快速浏览值得关注的作品。"
+      "subtitle": "快速浏览值得关注的作品。",
+      "refreshIn": "下次刷新 {time}"
     },
     "recent": {
-      "title": "最新上架",
-      "subtitle": "刚刚提交的最新产品。",
+      "title": "最新提交",
+      "subtitle": "按提交时间浏览最新产品。",
+      "sortNewest": "最新",
+      "sortOldest": "最早",
       "empty": "暂无最新上架产品。"
     },
     "categories": {

@@ -63,6 +63,13 @@ function requestAuth(redirectPath: string) {
   }
 }
 
+function isSameUserEmail(a?: string | null, b?: string | null): boolean {
+  const left = (a || '').trim().toLowerCase();
+  const right = (b || '').trim().toLowerCase();
+  if (!left || !right) return false;
+  return left === right;
+}
+
 type DeveloperPopularity = {
   email: string;
   name: string;
@@ -103,34 +110,31 @@ function getCurrentUserAvatarOverride(email: string, fallbackAvatarUrl?: string 
 
 /**
  * renderRank
- * 渲染名次徽章：前三名显示 medal 图标与配色，其他显示灰色 #N。
+ * 渲染名次徽章：前三名显示 medal 图标与配色，其他显示灰色数字。
  */
 function renderRank(rank: number) {
   if (rank === 1) {
     return (
-      <span className="flex items-center gap-1 text-yellow-500">
+      <span className="flex items-center text-yellow-500">
         <i className="ri-medal-line text-base" aria-hidden="true" />
-        <span className="text-xs font-semibold">#{rank}</span>
       </span>
     );
   }
   if (rank === 2) {
     return (
-      <span className="flex items-center gap-1 text-slate-300">
+      <span className="flex items-center text-slate-300">
         <i className="ri-medal-line text-base" aria-hidden="true" />
-        <span className="text-xs font-semibold">#{rank}</span>
       </span>
     );
   }
   if (rank === 3) {
     return (
-      <span className="flex items-center gap-1 text-amber-700">
+      <span className="flex items-center text-amber-700">
         <i className="ri-medal-line text-base" aria-hidden="true" />
-        <span className="text-xs font-semibold">#{rank}</span>
       </span>
     );
   }
-  return <span className="text-xs font-semibold text-muted-foreground">#{rank}</span>;
+  return <span className="text-xs font-semibold text-muted-foreground">{rank}</span>;
 }
 
 /**
@@ -148,6 +152,7 @@ export default function DeveloperPopularitySidebar() {
   const [topList, setTopList] = useState<DeveloperWithFollowers[]>([]);
   const [topMessage, setTopMessage] = useState<string | null>(null);
   const [followedDevelopers, setFollowedDevelopers] = useState<string[]>(() => readFollowedDevelopersFromStorage());
+  const currentUserEmail = getAuthenticatedUserEmail();
 
   useEffect(() => {
     let cancelled = false;
@@ -275,6 +280,7 @@ export default function DeveloperPopularitySidebar() {
       requestAuth('/');
       return;
     }
+    if (isSameUserEmail(normalizedEmail, userEmail)) return;
 
     const prev = followedDevelopers;
     const prevSet = new Set(prev.map((e) => e.toLowerCase()));
@@ -400,8 +406,14 @@ export default function DeveloperPopularitySidebar() {
                     </div>
                     <button
                       type="button"
+                      disabled={isSameUserEmail(d.email, currentUserEmail)}
                       onClick={() => void toggleFollowDeveloper(d.email)}
-                      className="shrink-0 rounded-md border border-border bg-background/70 px-2.5 py-1.5 text-xs text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                      className={[
+                        'shrink-0 rounded-md border border-border bg-background/70 px-2.5 py-1.5 text-xs text-foreground transition-all duration-200 active:scale-95',
+                        isSameUserEmail(d.email, currentUserEmail)
+                          ? 'opacity-50 cursor-not-allowed'
+                          : 'hover:bg-accent hover:text-accent-foreground',
+                      ].join(' ')}
                     >
                       <span
                         key={followedDevelopers.map((v) => v.toLowerCase()).includes(d.email.toLowerCase()) ? 'unfollow' : 'follow'}
@@ -488,7 +500,10 @@ export default function DeveloperPopularitySidebar() {
                       </div>
                     </div>
                     <Badge variant="outline" className="shrink-0">
-                      {t('score', { score: d.score })}
+                      <span className="inline-flex items-center gap-1">
+                        <i className="ri-fire-fill text-orange-500" aria-hidden="true" />
+                        <span className="tabular-nums">{d.score}</span>
+                      </span>
                     </Badge>
                   </div>
                 ))}

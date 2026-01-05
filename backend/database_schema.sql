@@ -86,6 +86,16 @@ CREATE TABLE IF NOT EXISTS product_favorites (
     UNIQUE (product_id, user_id)
 );
 
+-- Create home module state table (used for sponsor rotations)
+CREATE TABLE IF NOT EXISTS home_module_state (
+    key TEXT PRIMARY KEY,
+    mode TEXT NOT NULL DEFAULT 'first100',
+    day_key DATE,
+    remaining_ids TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
+    today_ids TEXT[] NOT NULL DEFAULT ARRAY[]::text[],
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
@@ -115,6 +125,12 @@ $$ language 'plpgsql';
 DROP TRIGGER IF EXISTS update_products_updated_at ON products;
 CREATE TRIGGER update_products_updated_at
     BEFORE UPDATE ON products
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_home_module_state_updated_at ON home_module_state;
+CREATE TRIGGER update_home_module_state_updated_at
+    BEFORE UPDATE ON home_module_state
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 

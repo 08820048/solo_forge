@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Product {
     pub id: String,
     pub name: String,
@@ -24,7 +25,7 @@ pub struct Product {
     pub favorites: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ProductStatus {
     Pending,
@@ -32,7 +33,7 @@ pub enum ProductStatus {
     Rejected,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreateProductRequest {
     pub name: String,
     pub slogan: String,
@@ -47,7 +48,7 @@ pub struct CreateProductRequest {
     pub language: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct UpdateProductRequest {
     pub name: Option<String>,
     pub slogan: Option<String>,
@@ -59,7 +60,7 @@ pub struct UpdateProductRequest {
     pub status: Option<ProductStatus>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Category {
     pub id: String,
     pub name_en: String,
@@ -68,7 +69,7 @@ pub struct Category {
     pub color: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct CategoryWithCount {
     pub id: String,
     pub name_en: String,
@@ -78,7 +79,7 @@ pub struct CategoryWithCount {
     pub product_count: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct Developer {
     pub email: String,
     pub name: String,
@@ -86,7 +87,7 @@ pub struct Developer {
     pub website: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct DeveloperWithFollowers {
     pub email: String,
     pub name: String,
@@ -95,7 +96,7 @@ pub struct DeveloperWithFollowers {
     pub followers: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct DeveloperPopularity {
     pub email: String,
     pub name: String,
@@ -106,11 +107,66 @@ pub struct DeveloperPopularity {
     pub score: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct ApiError {
+    pub code: String,
+    pub trace_id: String,
+    pub degraded: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ApiResponse<T> {
     pub success: bool,
     pub data: Option<T>,
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ApiError>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EmptyApiResponse {
+    pub success: bool,
+    pub data: Option<()>,
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ApiError>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ProductApiResponse {
+    pub success: bool,
+    pub data: Option<Product>,
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ApiError>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ProductsApiResponse {
+    pub success: bool,
+    pub data: Option<Vec<Product>>,
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ApiError>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct SearchResult {
+    pub products: Vec<Product>,
+    pub developers: Vec<Developer>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SearchApiResponse {
+    pub success: bool,
+    pub data: Option<SearchResult>,
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ApiError>,
 }
 
 impl<T> ApiResponse<T> {
@@ -119,6 +175,7 @@ impl<T> ApiResponse<T> {
             success: true,
             data: Some(data),
             message: None,
+            error: None,
         }
     }
 
@@ -127,17 +184,20 @@ impl<T> ApiResponse<T> {
             success: false,
             data: None,
             message: Some(message),
+            error: None,
         }
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct QueryParams {
     pub category: Option<String>,
     pub tags: Option<String>,
     pub language: Option<String>,
     pub status: Option<String>,
     pub search: Option<String>,
+    pub sort: Option<String>,
+    pub dir: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }

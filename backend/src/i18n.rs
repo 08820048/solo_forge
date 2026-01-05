@@ -2,10 +2,12 @@
 
 use std::collections::HashMap;
 
+#[allow(dead_code)]
 pub struct I18n {
     messages: HashMap<String, HashMap<String, String>>,
 }
 
+#[allow(dead_code)]
 impl I18n {
     pub fn new() -> Self {
         let mut messages = HashMap::new();

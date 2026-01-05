@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import ProductCard from '@/components/ProductCard';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 
 interface Product {
@@ -15,6 +14,7 @@ interface Product {
   logo_url?: string;
   category: string;
   maker_name: string;
+  maker_email?: string | null;
   website: string;
   likes: number;
   favorites: number;
@@ -28,9 +28,19 @@ interface Category {
   color: string;
 }
 
+interface ApiError {
+  code: string;
+  trace_id: string;
+  degraded: boolean;
+  hint?: string | null;
+  detail?: string | null;
+}
+
 interface ApiResponse<T = unknown> {
   success: boolean;
-  data: T[];
+  data?: T[];
+  message?: string;
+  error?: ApiError | null;
 }
 
 export default function ProductsPage() {
@@ -54,6 +64,9 @@ export default function ProductsPage() {
       try {
         const params = new URLSearchParams();
         params.set('status', 'approved');
+        params.set('sort', 'likes');
+        params.set('dir', 'desc');
+        params.set('language', locale);
         if (selectedCategory !== 'all') params.set('category', selectedCategory);
         if (searchQuery) params.set('search', searchQuery);
 
@@ -83,7 +96,7 @@ export default function ProductsPage() {
         const categoriesData: ApiResponse<Category> = await categoriesResponse.json();
 
         if (categoriesData.success) {
-          setCategories(categoriesData.data);
+          setCategories(categoriesData.data ?? []);
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -105,6 +118,34 @@ export default function ProductsPage() {
 
     return matchesCategory && matchesSearch;
   });
+
+  const categoryIconOverrides: Record<string, string> = {
+    ai: 'robot-3-line',
+    design: 'figma-line',
+    developer: 'code-ai-line',
+    education: 'school-line',
+    finance: 'visa-line',
+    games: 'gamepad-line',
+    lifestyle: 'home-smile-line',
+    marketing: 'bubble-chart-line',
+    productivity: 'tools-line',
+    writing: 'quill-pen-ai-line',
+  };
+
+  const normalizeRemixIconClass = (raw?: string | null) => {
+    const name = (raw || '').trim();
+    if (!name) return null;
+    return name.startsWith('ri-') ? name : `ri-${name}`;
+  };
+
+  const categoryOptions = [
+    { id: 'all', label: t('filters.allCategories'), iconClass: 'ri-apps-line' },
+    ...categories.map((cat) => {
+      const iconClass =
+        normalizeRemixIconClass(categoryIconOverrides[cat.id] ?? cat.icon) ?? 'ri-price-tag-3-line';
+      return { id: cat.id, label: categoryT(cat.id), iconClass };
+    }),
+  ];
 
   if (loading) {
     return (
@@ -135,19 +176,26 @@ export default function ProductsPage() {
             />
           </div>
 
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-full sm:w-[200px] bg-background/60 backdrop-blur">
-              <SelectValue placeholder={t('filters.allCategories')} />
-            </SelectTrigger>
-            <SelectContent className="bg-popover/95 backdrop-blur border-border">
-              <SelectItem value="all">{t('filters.allCategories')}</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {categoryT(cat.id)}
-                </SelectItem>
+          <div className="w-full sm:flex-1 overflow-x-auto">
+            <div className="flex items-center gap-2 whitespace-nowrap">
+              {categoryOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(opt.id)}
+                  className={[
+                    'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
+                    selectedCategory === opt.id
+                      ? 'border-foreground/20 bg-foreground text-background'
+                      : 'border-border bg-background/60 backdrop-blur text-muted-foreground hover:bg-accent hover:text-foreground',
+                  ].join(' ')}
+                >
+                  <i className={opt.iconClass} aria-hidden="true" />
+                  <span>{opt.label}</span>
+                </button>
               ))}
-            </SelectContent>
-          </Select>
+            </div>
+          </div>
 
           {(selectedCategory !== 'all' || searchQuery) && (
             <Button
@@ -165,7 +213,7 @@ export default function ProductsPage() {
 
         <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard key={product.id} product={product} variant="productsList" />
           ))}
         </div>
 

@@ -1,13 +1,17 @@
 use crate::db::Database;
 use crate::models::{
-    ApiResponse, CreateProductRequest, Developer, Product, QueryParams, UpdateProductRequest,
+    ApiError, ApiResponse, CreateProductRequest, EmptyApiResponse, Product, ProductApiResponse,
+    ProductsApiResponse, QueryParams, SearchApiResponse, SearchResult, UpdateProductRequest,
 };
 use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::hash_map::DefaultHasher;
 use std::env;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::time::Duration as StdDuration;
+use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 /**
  * is_db_unavailable_error
@@ -33,6 +37,8 @@ fn is_db_unavailable_error(err: &anyhow::Error) -> bool {
         || msg.contains("password authentication failed")
         || msg.contains("could not translate host name")
         || msg.contains("pool timed out")
+        || msg.contains("statement timeout")
+        || msg.contains("canceling statement due to statement timeout")
         || msg.contains("prepared statement")
         || msg.contains("bind message supplies")
         || msg.contains("insufficient data left in message")
@@ -49,59 +55,127 @@ fn get_language_from_request(req: &HttpRequest) -> &str {
         .unwrap_or("en")
 }
 
-#[get("/health")]
-pub async fn health_check() -> impl Responder {
-    HttpResponse::Ok().json(serde_json::json!({
-        "status": "ok",
-        "timestamp": Utc::now().to_rfc3339()
-    }))
+fn new_trace_id() -> String {
+    Uuid::new_v4().to_string()
 }
 
+fn is_api_diagnostics_enabled() -> bool {
+    matches!(
+        env::var("SF_API_DIAGNOSTICS").ok().as_deref(),
+        Some("1" | "true" | "TRUE")
+    )
+}
+
+fn error_detail_for_client(err: &anyhow::Error) -> Option<String> {
+    if !is_api_diagnostics_enabled() {
+        return None;
+    }
+    let raw = format!("{:?}", err);
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let max_len = 800usize;
+    Some(trimmed.chars().take(max_len).collect())
+}
+
+fn make_db_degraded_error(endpoint: &str, err: &anyhow::Error) -> ApiError {
+    let trace_id = new_trace_id();
+    log::warn!(
+        "db degraded endpoint={} trace_id={} err={:?}",
+        endpoint,
+        trace_id,
+        err
+    );
+    ApiError {
+        code: "DB_DEGRADED".to_string(),
+        trace_id,
+        degraded: true,
+        hint: Some("查看后端日志并按 trace_id 定位具体数据库错误。".to_string()),
+        detail: error_detail_for_client(err),
+    }
+}
+
+fn make_db_degraded_response<T>(
+    endpoint: &str,
+    data: T,
+    message: String,
+    err: &anyhow::Error,
+) -> ApiResponse<T> {
+    ApiResponse {
+        success: true,
+        data: Some(data),
+        message: Some(message),
+        error: Some(make_db_degraded_error(endpoint, err)),
+    }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct HealthCheckResponse {
+    pub status: String,
+    pub timestamp: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/health",
+    responses((status = 200, body = HealthCheckResponse))
+)]
+#[get("/health")]
+pub async fn health_check() -> impl Responder {
+    HttpResponse::Ok().json(HealthCheckResponse {
+        status: "ok".to_string(),
+        timestamp: Utc::now().to_rfc3339(),
+    })
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/products",
+    params(QueryParams),
+    responses(
+        (status = 200, body = ProductsApiResponse),
+        (status = 500, body = EmptyApiResponse)
+    )
+)]
 pub async fn get_products(
     query: web::Query<QueryParams>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
-    let result = tokio::time::timeout(
-        StdDuration::from_secs(4),
-        db.get_products(query.into_inner()),
-    )
-    .await;
-
-    match result {
-        Ok(Ok(products)) => HttpResponse::Ok().json(ApiResponse::success(products)),
-        Ok(Err(e)) => {
+    match db.get_products(query.into_inner()).await {
+        Ok(products) => HttpResponse::Ok().json(ApiResponse::success(products)),
+        Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(Vec::<crate::models::Product>::new()),
-                    message: Some("数据库连接不可用，已降级返回空列表。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/products",
+                    Vec::<crate::models::Product>::new(),
+                    "数据库连接不可用，已降级返回空列表。".to_string(),
+                    &e,
+                ));
             }
 
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
         }
-        Err(_) => HttpResponse::Ok().json(ApiResponse {
-            success: true,
-            data: Some(Vec::<crate::models::Product>::new()),
-            message: Some("数据库请求超时，已降级返回空列表。".to_string()),
-        }),
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct SearchQuery {
     pub q: Option<String>,
-    pub limit: Option<usize>,
+    pub limit: Option<i64>,
     pub language: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct SearchResult {
-    pub products: Vec<Product>,
-    pub developers: Vec<Developer>,
-}
-
+#[utoipa::path(
+    get,
+    path = "/api/search",
+    params(SearchQuery),
+    responses(
+        (status = 200, body = SearchApiResponse),
+        (status = 500, body = EmptyApiResponse)
+    )
+)]
 pub async fn search(
     req: HttpRequest,
     query: web::Query<SearchQuery>,
@@ -116,32 +190,32 @@ pub async fn search(
         }));
     }
 
-    let limit = query.limit.unwrap_or(8).clamp(1, 20) as i64;
+    let limit = query.limit.unwrap_or(8).clamp(1, 20);
     let params = QueryParams {
         category: None,
         tags: None,
         language: query.language.clone(),
         status: Some("approved".to_string()),
         search: Some(q.to_string()),
+        sort: None,
+        dir: None,
         limit: Some(limit),
         offset: None,
     };
 
-    let result = tokio::time::timeout(StdDuration::from_secs(4), async {
+    let result = async {
         let products = db.get_products(params).await?;
         let developers = db.search_developers(q, limit).await?;
         Ok::<_, anyhow::Error>((products, developers))
-    })
+    }
     .await;
 
     match result {
-        Ok(Ok((products, developers))) => {
-            HttpResponse::Ok().json(ApiResponse::success(SearchResult {
-                products,
-                developers,
-            }))
-        }
-        Ok(Err(e)) => {
+        Ok((products, developers)) => HttpResponse::Ok().json(ApiResponse::success(SearchResult {
+            products,
+            developers,
+        })),
+        Err(e) => {
             if is_db_unavailable_error(&e) {
                 let lang = get_language_from_request(&req);
                 let message = if lang.starts_with("zh") {
@@ -150,39 +224,33 @@ pub async fn search(
                     "Database is unavailable. Search results are empty in degraded mode."
                 };
 
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(SearchResult {
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/search",
+                    SearchResult {
                         products: Vec::new(),
                         developers: Vec::new(),
-                    }),
-                    message: Some(message.to_string()),
-                });
+                    },
+                    message.to_string(),
+                    &e,
+                ));
             }
 
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
         }
-        Err(_) => {
-            let lang = get_language_from_request(&req);
-            let message = if lang.starts_with("zh") {
-                "数据库请求超时，已降级返回空搜索结果。"
-            } else {
-                "Database request timed out. Search results are empty in degraded mode."
-            };
-
-            HttpResponse::Ok().json(ApiResponse {
-                success: true,
-                data: Some(SearchResult {
-                    products: Vec::new(),
-                    developers: Vec::new(),
-                }),
-                message: Some(message.to_string()),
-            })
-        }
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/products/{id}",
+    params(("id" = String, Path)),
+    responses(
+        (status = 200, body = ProductApiResponse),
+        (status = 404, body = EmptyApiResponse),
+        (status = 500, body = EmptyApiResponse)
+    )
+)]
 pub async fn get_product_by_id(
     path: web::Path<String>,
     db: web::Data<Arc<Database>>,
@@ -199,6 +267,15 @@ pub async fn get_product_by_id(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/products",
+    request_body = CreateProductRequest,
+    responses(
+        (status = 201, body = ProductApiResponse),
+        (status = 500, body = EmptyApiResponse)
+    )
+)]
 pub async fn create_product(
     req: HttpRequest,
     product_data: web::Json<CreateProductRequest>,
@@ -223,6 +300,7 @@ pub async fn create_product(
                 success: true,
                 data: Some(product),
                 message: Some(message.to_string()),
+                error: None,
             })
         }
         Err(e) => HttpResponse::InternalServerError()
@@ -256,8 +334,9 @@ pub async fn delete_product(
     match db.delete_product(&id).await {
         Ok(true) => HttpResponse::Ok().json(ApiResponse {
             success: true,
-            data: Some(serde_json::json!({"id": id})),
+            data: Some(DeletedIdPayload { id }),
             message: Some("Product deleted successfully".to_string()),
+            error: None,
         }),
         Ok(false) => {
             HttpResponse::NotFound().json(ApiResponse::<()>::error("Product not found".to_string()))
@@ -268,102 +347,76 @@ pub async fn delete_product(
 }
 
 pub async fn get_categories(db: web::Data<Arc<Database>>) -> impl Responder {
-    let result = tokio::time::timeout(StdDuration::from_secs(4), db.get_categories()).await;
-
-    match result {
-        Ok(Ok(categories)) => HttpResponse::Ok().json(ApiResponse::success(categories)),
-        Ok(Err(e)) => {
+    match db.get_categories().await {
+        Ok(categories) => HttpResponse::Ok().json(ApiResponse::success(categories)),
+        Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(Vec::<crate::models::Category>::new()),
-                    message: Some("数据库连接不可用，已降级返回空列表。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/categories",
+                    Vec::<crate::models::Category>::new(),
+                    "数据库连接不可用，已降级返回空列表。".to_string(),
+                    &e,
+                ));
             }
 
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
         }
-        Err(_) => HttpResponse::Ok().json(ApiResponse {
-            success: true,
-            data: Some(Vec::<crate::models::Category>::new()),
-            message: Some("数据库请求超时，已降级返回空列表。".to_string()),
-        }),
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct TopCategoriesQuery {
-    pub limit: Option<usize>,
+    pub limit: Option<i64>,
 }
 
 pub async fn get_top_categories(
     query: web::Query<TopCategoriesQuery>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
-    let limit = query.limit.unwrap_or(10).clamp(1, 50) as i64;
-    let result = tokio::time::timeout(
-        StdDuration::from_secs(4),
-        db.get_top_categories_by_product_count(limit),
-    )
-    .await;
-
-    match result {
-        Ok(Ok(list)) => HttpResponse::Ok().json(ApiResponse::success(list)),
-        Ok(Err(e)) => {
+    let limit = query.limit.unwrap_or(10).clamp(1, 50);
+    match db.get_top_categories_by_product_count(limit).await {
+        Ok(list) => HttpResponse::Ok().json(ApiResponse::success(list)),
+        Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(Vec::<crate::models::CategoryWithCount>::new()),
-                    message: Some("数据库连接不可用，已降级返回空列表。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/categories/top",
+                    Vec::<crate::models::CategoryWithCount>::new(),
+                    "数据库连接不可用，已降级返回空列表。".to_string(),
+                    &e,
+                ));
             }
 
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
         }
-        Err(_) => HttpResponse::Ok().json(ApiResponse {
-            success: true,
-            data: Some(Vec::<crate::models::CategoryWithCount>::new()),
-            message: Some("数据库请求超时，已降级返回空列表。".to_string()),
-        }),
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct TopDevelopersQuery {
-    pub limit: Option<usize>,
+    pub limit: Option<i64>,
 }
 
 pub async fn get_top_developers(
     query: web::Query<TopDevelopersQuery>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
-    let limit = query.limit.unwrap_or(4).clamp(1, 20) as i64;
-    let result = tokio::time::timeout(
-        StdDuration::from_secs(4),
-        db.get_top_developers_by_followers(limit),
-    )
-    .await;
-
-    match result {
-        Ok(Ok(list)) => HttpResponse::Ok().json(ApiResponse::success(list)),
-        Ok(Err(e)) => {
+    let limit = query.limit.unwrap_or(4).clamp(1, 20);
+    match db.get_top_developers_by_followers(limit).await {
+        Ok(list) => HttpResponse::Ok().json(ApiResponse::success(list)),
+        Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(Vec::<crate::models::DeveloperWithFollowers>::new()),
-                    message: Some("数据库连接不可用，已降级返回空列表。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/developers/top",
+                    Vec::<crate::models::DeveloperWithFollowers>::new(),
+                    "数据库连接不可用，已降级返回空列表。".to_string(),
+                    &e,
+                ));
             }
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
         }
-        Err(_) => HttpResponse::Ok().json(ApiResponse {
-            success: true,
-            data: Some(Vec::<crate::models::DeveloperWithFollowers>::new()),
-            message: Some("数据库请求超时，已降级返回空列表。".to_string()),
-        }),
     }
 }
 
@@ -371,74 +424,64 @@ pub async fn get_recent_developers(
     query: web::Query<TopDevelopersQuery>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
-    let limit = query.limit.unwrap_or(4).clamp(1, 20) as i64;
-    let result = tokio::time::timeout(
-        StdDuration::from_secs(4),
-        db.get_recent_developers_by_created_at(limit),
-    )
-    .await;
-
-    match result {
-        Ok(Ok(list)) => HttpResponse::Ok().json(ApiResponse::success(list)),
-        Ok(Err(e)) => {
+    let limit = query.limit.unwrap_or(4).clamp(1, 20);
+    match db.get_recent_developers_by_created_at(limit).await {
+        Ok(list) => HttpResponse::Ok().json(ApiResponse::success(list)),
+        Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(Vec::<crate::models::DeveloperWithFollowers>::new()),
-                    message: Some("数据库连接不可用，已降级返回空列表。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/developers/recent",
+                    Vec::<crate::models::DeveloperWithFollowers>::new(),
+                    "数据库连接不可用，已降级返回空列表。".to_string(),
+                    &e,
+                ));
             }
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
         }
-        Err(_) => HttpResponse::Ok().json(ApiResponse {
-            success: true,
-            data: Some(Vec::<crate::models::DeveloperWithFollowers>::new()),
-            message: Some("数据库请求超时，已降级返回空列表。".to_string()),
-        }),
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct DeveloperPopularityQuery {
-    pub limit: Option<usize>,
+    pub limit: Option<i64>,
 }
 
 pub async fn get_developer_popularity_last_month(
     query: web::Query<DeveloperPopularityQuery>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
-    let limit = query.limit.unwrap_or(10).clamp(1, 50) as i64;
-    let result = tokio::time::timeout(
-        StdDuration::from_secs(4),
-        db.get_developer_popularity_last_month(limit),
-    )
-    .await;
-
-    match result {
-        Ok(Ok(list)) => HttpResponse::Ok().json(ApiResponse::success(list)),
-        Ok(Err(e)) => {
+    let limit = query.limit.unwrap_or(10).clamp(1, 50);
+    match db.get_developer_popularity_last_month(limit).await {
+        Ok(list) => HttpResponse::Ok().json(ApiResponse::success(list)),
+        Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(Vec::<crate::models::DeveloperPopularity>::new()),
-                    message: Some("数据库连接不可用，已降级返回空列表。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/developers/popularity-last-month",
+                    Vec::<crate::models::DeveloperPopularity>::new(),
+                    "数据库连接不可用，已降级返回空列表。".to_string(),
+                    &e,
+                ));
             }
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
         }
-        Err(_) => HttpResponse::Ok().json(ApiResponse {
-            success: true,
-            data: Some(Vec::<crate::models::DeveloperPopularity>::new()),
-            message: Some("数据库请求超时，已降级返回空列表。".to_string()),
-        }),
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct InteractionBody {
     pub user_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct OkPayload {
+    pub ok: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DeletedIdPayload {
+    pub id: String,
 }
 
 /**
@@ -460,6 +503,15 @@ fn is_anonymous_user_id(user_id: &str) -> bool {
     user_id.to_ascii_lowercase().starts_with("anon_")
 }
 
+fn is_same_user_email(a: &str, b: &str) -> bool {
+    let left = a.trim();
+    let right = b.trim();
+    if left.is_empty() || right.is_empty() {
+        return false;
+    }
+    left.eq_ignore_ascii_case(right)
+}
+
 pub async fn follow_developer(
     path: web::Path<String>,
     body: Option<web::Json<InteractionBody>>,
@@ -473,16 +525,22 @@ pub async fn follow_developer(
                 .json(ApiResponse::<()>::error("Unauthorized".to_string()))
         }
     };
+    if is_same_user_email(&email, &user_id) {
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            "Cannot follow yourself".to_string(),
+        ));
+    }
 
     match db.follow_developer(&email, &user_id).await {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
+        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true })),
         Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(serde_json::json!({ "ok": false })),
-                    message: Some("数据库连接不可用，已降级忽略写入。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/developers/{email}/follow",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
             }
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
@@ -490,7 +548,7 @@ pub async fn follow_developer(
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct DeveloperPath {
     pub email: String,
 }
@@ -510,7 +568,7 @@ pub async fn get_developer_by_email(
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateDeveloperRequest {
     pub user_id: Option<String>,
     pub name: Option<String>,
@@ -581,16 +639,22 @@ pub async fn unfollow_developer(
                 .json(ApiResponse::<()>::error("Unauthorized".to_string()))
         }
     };
+    if is_same_user_email(&email, &user_id) {
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            "Cannot unfollow yourself".to_string(),
+        ));
+    }
 
     match db.unfollow_developer(&email, &user_id).await {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
+        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true })),
         Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(serde_json::json!({ "ok": false })),
-                    message: Some("数据库连接不可用，已降级忽略写入。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/developers/{email}/unfollow",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
             }
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
@@ -612,15 +676,41 @@ pub async fn like_product(
         }
     };
 
-    match db.like_product(&product_id, &user_id).await {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
+    let product = match db.get_product_by_id(&product_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return HttpResponse::NotFound()
+                .json(ApiResponse::<()>::error("Product not found".to_string()))
+        }
         Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(serde_json::json!({ "ok": false })),
-                    message: Some("数据库连接不可用，已降级忽略写入。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/products/{id}/like",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
+            }
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+        }
+    };
+    if is_same_user_email(&product.maker_email, &user_id) {
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            "Cannot like your own product".to_string(),
+        ));
+    }
+
+    match db.like_product(&product_id, &user_id).await {
+        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true })),
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/products/{id}/like",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
             }
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
@@ -642,15 +732,41 @@ pub async fn unlike_product(
         }
     };
 
-    match db.unlike_product(&product_id, &user_id).await {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
+    let product = match db.get_product_by_id(&product_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return HttpResponse::NotFound()
+                .json(ApiResponse::<()>::error("Product not found".to_string()))
+        }
         Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(serde_json::json!({ "ok": false })),
-                    message: Some("数据库连接不可用，已降级忽略写入。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/products/{id}/unlike",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
+            }
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+        }
+    };
+    if is_same_user_email(&product.maker_email, &user_id) {
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            "Cannot unlike your own product".to_string(),
+        ));
+    }
+
+    match db.unlike_product(&product_id, &user_id).await {
+        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true })),
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/products/{id}/unlike",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
             }
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
@@ -672,15 +788,41 @@ pub async fn favorite_product(
         }
     };
 
-    match db.favorite_product(&product_id, &user_id).await {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
+    let product = match db.get_product_by_id(&product_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return HttpResponse::NotFound()
+                .json(ApiResponse::<()>::error("Product not found".to_string()))
+        }
         Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(serde_json::json!({ "ok": false })),
-                    message: Some("数据库连接不可用，已降级忽略写入。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/products/{id}/favorite",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
+            }
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+        }
+    };
+    if is_same_user_email(&product.maker_email, &user_id) {
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            "Cannot favorite your own product".to_string(),
+        ));
+    }
+
+    match db.favorite_product(&product_id, &user_id).await {
+        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true })),
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/products/{id}/favorite",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
             }
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
@@ -702,15 +844,41 @@ pub async fn unfavorite_product(
         }
     };
 
-    match db.unfavorite_product(&product_id, &user_id).await {
-        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(serde_json::json!({ "ok": true }))),
+    let product = match db.get_product_by_id(&product_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return HttpResponse::NotFound()
+                .json(ApiResponse::<()>::error("Product not found".to_string()))
+        }
         Err(e) => {
             if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(serde_json::json!({ "ok": false })),
-                    message: Some("数据库连接不可用，已降级忽略写入。".to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/products/{id}/unfavorite",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
+            }
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+        }
+    };
+    if is_same_user_email(&product.maker_email, &user_id) {
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            "Cannot unfavorite your own product".to_string(),
+        ));
+    }
+
+    match db.unfavorite_product(&product_id, &user_id).await {
+        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true })),
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/products/{id}/unfavorite",
+                    OkPayload { ok: false },
+                    "数据库连接不可用，已降级忽略写入。".to_string(),
+                    &e,
+                ));
             }
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
@@ -718,10 +886,10 @@ pub async fn unfavorite_product(
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct FavoriteProductsQuery {
     pub user_id: String,
-    pub limit: Option<usize>,
+    pub limit: Option<i64>,
     pub language: Option<String>,
 }
 
@@ -730,7 +898,7 @@ pub async fn get_favorite_products(
     query: web::Query<FavoriteProductsQuery>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
-    let limit = query.limit.unwrap_or(50).clamp(1, 200) as i64;
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let user_id = query.user_id.trim().to_string();
     let language = query.language.clone();
 
@@ -739,15 +907,12 @@ pub async fn get_favorite_products(
             .json(ApiResponse::<()>::error("Missing user_id".to_string()));
     }
 
-    let result = tokio::time::timeout(
-        StdDuration::from_secs(4),
-        db.get_favorite_products(&user_id, language.as_deref(), limit),
-    )
-    .await;
-
-    match result {
-        Ok(Ok(list)) => HttpResponse::Ok().json(ApiResponse::success(list)),
-        Ok(Err(e)) => {
+    match db
+        .get_favorite_products(&user_id, language.as_deref(), limit)
+        .await
+    {
+        Ok(list) => HttpResponse::Ok().json(ApiResponse::success(list)),
+        Err(e) => {
             if is_db_unavailable_error(&e) {
                 let lang = get_language_from_request(&req);
                 let message = if lang.starts_with("zh") {
@@ -756,40 +921,36 @@ pub async fn get_favorite_products(
                     "Database is unavailable. Returning empty list in degraded mode."
                 };
 
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(Vec::<crate::models::Product>::new()),
-                    message: Some(message.to_string()),
-                });
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/products/favorites",
+                    Vec::<crate::models::Product>::new(),
+                    message.to_string(),
+                    &e,
+                ));
             }
 
             HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
         }
-        Err(_) => HttpResponse::Ok().json(ApiResponse {
-            success: true,
-            data: Some(Vec::<crate::models::Product>::new()),
-            message: Some("数据库请求超时，已降级返回空列表。".to_string()),
-        }),
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct LeaderboardQuery {
     pub window: Option<String>,
-    pub limit: Option<usize>,
+    pub limit: Option<i64>,
     pub language: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct MakerRank {
     pub maker_name: String,
     pub product_count: usize,
 }
 
-#[derive(Debug, Serialize)]
-pub struct LeaderboardData<T> {
-    pub top_products: Vec<T>,
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LeaderboardData {
+    pub top_products: Vec<Product>,
     pub top_makers: Vec<MakerRank>,
 }
 
@@ -798,7 +959,7 @@ pub async fn get_leaderboard(
     query: web::Query<LeaderboardQuery>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
-    let limit = query.limit.unwrap_or(20).clamp(1, 100);
+    let limit = query.limit.unwrap_or(20).clamp(1, 100) as usize;
 
     let window = query
         .window
@@ -820,16 +981,15 @@ pub async fn get_leaderboard(
         language: query.language.clone(),
         status: Some("approved".to_string()),
         search: None,
+        sort: None,
+        dir: None,
         limit: Some((limit as i64) * 5),
         offset: None,
     };
 
-    let products_result =
-        tokio::time::timeout(StdDuration::from_secs(4), db.get_products(params)).await;
-
-    let products = match products_result {
-        Ok(Ok(products)) => products,
-        Ok(Err(e)) => {
+    let products = match db.get_products(params).await {
+        Ok(products) => products,
+        Err(e) => {
             if is_db_unavailable_error(&e) {
                 let lang = get_language_from_request(&req);
                 let message = if lang.starts_with("zh") {
@@ -838,35 +998,19 @@ pub async fn get_leaderboard(
                     "Database is unavailable. Leaderboard is empty in degraded mode."
                 };
 
-                return HttpResponse::Ok().json(ApiResponse {
-                    success: true,
-                    data: Some(LeaderboardData::<crate::models::Product> {
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/leaderboard",
+                    LeaderboardData {
                         top_products: Vec::new(),
                         top_makers: Vec::new(),
-                    }),
-                    message: Some(message.to_string()),
-                });
+                    },
+                    message.to_string(),
+                    &e,
+                ));
             }
 
             return HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
-        }
-        Err(_) => {
-            let lang = get_language_from_request(&req);
-            let message = if lang.starts_with("zh") {
-                "数据库请求超时，排行榜已降级为暂无数据。"
-            } else {
-                "Database request timed out. Leaderboard is empty in degraded mode."
-            };
-
-            return HttpResponse::Ok().json(ApiResponse {
-                success: true,
-                data: Some(LeaderboardData::<crate::models::Product> {
-                    top_products: Vec::new(),
-                    top_makers: Vec::new(),
-                }),
-                message: Some(message.to_string()),
-            });
         }
     };
 
@@ -902,7 +1046,372 @@ pub async fn get_leaderboard(
     }))
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
+pub struct HomeModuleQuery {
+    pub language: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct HomeProductsPayload {
+    pub products: Vec<Product>,
+    pub next_refresh_at: String,
+}
+
+fn start_of_next_day_utc(now: chrono::DateTime<Utc>) -> chrono::DateTime<Utc> {
+    let today = now.date_naive();
+    let next = today
+        .succ_opt()
+        .unwrap_or_else(|| today + chrono::Duration::days(1));
+    chrono::DateTime::<Utc>::from_naive_utc_and_offset(next.and_hms_opt(0, 0, 0).unwrap(), Utc)
+}
+
+fn stable_pick_ids(ids: &[String], k: usize, seed: u64) -> Vec<String> {
+    if k == 0 || ids.is_empty() {
+        return Vec::new();
+    }
+    if ids.len() <= k {
+        return ids.to_vec();
+    }
+
+    let mut scored: Vec<(u64, &String)> = ids
+        .iter()
+        .map(|id| {
+            let mut hasher = DefaultHasher::new();
+            seed.hash(&mut hasher);
+            id.hash(&mut hasher);
+            (hasher.finish(), id)
+        })
+        .collect();
+    scored.sort_by(|a, b| a.0.cmp(&b.0));
+    scored
+        .into_iter()
+        .take(k)
+        .map(|(_, id)| id.clone())
+        .collect()
+}
+
+fn stable_seed_from_day_key(day: chrono::NaiveDate, extra: u64) -> u64 {
+    let origin = chrono::NaiveDate::from_ymd_opt(1, 1, 1).unwrap();
+    let days = day.signed_duration_since(origin).num_days().max(0) as u64;
+    (days << 1) ^ extra.wrapping_mul(1315423911)
+}
+
+#[allow(dead_code)]
+fn stable_seed_from_window_key(window_start_ts: i64, extra: u64) -> u64 {
+    (window_start_ts as u64) ^ extra.wrapping_mul(2654435761)
+}
+
+pub async fn get_home_sponsored_top(
+    req: HttpRequest,
+    query: web::Query<HomeModuleQuery>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let now = Utc::now();
+    let next_refresh = start_of_next_day_utc(now);
+    let day_key = now.date_naive();
+
+    let key = "home_sponsored_top";
+    let mut ids: Vec<String> = Vec::new();
+    if let Ok(Some(state)) = db.get_home_module_state(key).await {
+        if state.day_key == Some(day_key) && state.today_ids.len() == 2 {
+            ids = state.today_ids;
+        }
+    }
+
+    if ids.is_empty() {
+        let params = QueryParams {
+            category: None,
+            tags: None,
+            language: query.language.clone(),
+            status: Some("approved".to_string()),
+            search: None,
+            sort: Some("popularity".to_string()),
+            dir: Some("desc".to_string()),
+            limit: Some(2),
+            offset: None,
+        };
+
+        let products = match db.get_products(params).await {
+            Ok(list) => list,
+            Err(e) => {
+                if is_db_unavailable_error(&e) {
+                    let message = if get_language_from_request(&req).starts_with("zh") {
+                        "数据库连接不可用，已降级返回空列表。"
+                    } else {
+                        "Database is unavailable. Returning empty list in degraded mode."
+                    };
+                    return HttpResponse::Ok().json(make_db_degraded_response(
+                        "GET /api/home/sponsored-top",
+                        HomeProductsPayload {
+                            products: Vec::new(),
+                            next_refresh_at: next_refresh.to_rfc3339(),
+                        },
+                        message.to_string(),
+                        &e,
+                    ));
+                }
+                return HttpResponse::InternalServerError()
+                    .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+            }
+        };
+
+        ids = products.iter().map(|p| p.id.clone()).collect();
+        let _ = db
+            .upsert_home_module_state(crate::db::HomeModuleState {
+                key: key.to_string(),
+                mode: Some("daily".to_string()),
+                day_key: Some(day_key),
+                remaining_ids: Vec::new(),
+                today_ids: ids.clone(),
+            })
+            .await;
+
+        return HttpResponse::Ok().json(ApiResponse::success(HomeProductsPayload {
+            products,
+            next_refresh_at: next_refresh.to_rfc3339(),
+        }));
+    }
+
+    let products = match db.get_products_by_ids(&ids).await {
+        Ok(list) => list,
+        Err(e) => {
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+        }
+    };
+
+    HttpResponse::Ok().json(ApiResponse::success(HomeProductsPayload {
+        products,
+        next_refresh_at: next_refresh.to_rfc3339(),
+    }))
+}
+
+pub async fn get_home_sponsored_right(
+    req: HttpRequest,
+    query: web::Query<HomeModuleQuery>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let now = Utc::now();
+    let next_refresh = start_of_next_day_utc(now);
+    let day_key = now.date_naive();
+    let key = "home_sponsored_right";
+
+    let mut mode = "first100".to_string();
+    let mut remaining_ids: Vec<String> = Vec::new();
+    let mut today_ids: Vec<String> = Vec::new();
+
+    if let Ok(Some(state)) = db.get_home_module_state(key).await {
+        if let Some(m) = state.mode {
+            mode = m;
+        }
+        remaining_ids = state.remaining_ids;
+        if state.day_key == Some(day_key) && state.today_ids.len() == 3 {
+            today_ids = state.today_ids;
+        }
+    }
+
+    if today_ids.is_empty() {
+        if mode == "first100" && remaining_ids.is_empty() {
+            let params = QueryParams {
+                category: None,
+                tags: None,
+                language: query.language.clone(),
+                status: Some("approved".to_string()),
+                search: None,
+                sort: Some("created_at".to_string()),
+                dir: Some("asc".to_string()),
+                limit: Some(100),
+                offset: None,
+            };
+            remaining_ids = match db.get_products(params).await {
+                Ok(list) => list.into_iter().map(|p| p.id).collect(),
+                Err(_) => Vec::new(),
+            };
+            if remaining_ids.is_empty() {
+                mode = "all".to_string();
+            }
+        }
+
+        let seed = stable_seed_from_day_key(day_key, 0x9E3779B97F4A7C15);
+        if mode == "first100" && !remaining_ids.is_empty() {
+            let pick = stable_pick_ids(&remaining_ids, 3, seed);
+            let pick_set: std::collections::HashSet<String> = pick.iter().cloned().collect();
+            remaining_ids.retain(|id| !pick_set.contains(id));
+
+            today_ids = pick;
+            if today_ids.len() < 3 {
+                mode = "all".to_string();
+            }
+        }
+
+        if mode != "first100" || today_ids.len() < 3 {
+            let params = QueryParams {
+                category: None,
+                tags: None,
+                language: query.language.clone(),
+                status: Some("approved".to_string()),
+                search: None,
+                sort: Some("created_at".to_string()),
+                dir: Some("desc".to_string()),
+                limit: Some(5000),
+                offset: None,
+            };
+            let all_ids: Vec<String> = match db.get_products(params).await {
+                Ok(list) => list.into_iter().map(|p| p.id).collect(),
+                Err(e) => {
+                    if is_db_unavailable_error(&e) {
+                        let message = if get_language_from_request(&req).starts_with("zh") {
+                            "数据库连接不可用，已降级返回空列表。"
+                        } else {
+                            "Database is unavailable. Returning empty list in degraded mode."
+                        };
+                        return HttpResponse::Ok().json(make_db_degraded_response(
+                            "GET /api/home/sponsored-right",
+                            HomeProductsPayload {
+                                products: Vec::new(),
+                                next_refresh_at: next_refresh.to_rfc3339(),
+                            },
+                            message.to_string(),
+                            &e,
+                        ));
+                    }
+                    return HttpResponse::InternalServerError()
+                        .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+                }
+            };
+
+            let existing: std::collections::HashSet<String> = today_ids.iter().cloned().collect();
+            let candidates: Vec<String> = all_ids
+                .into_iter()
+                .filter(|id| !existing.contains(id))
+                .collect();
+            let needed = 3usize.saturating_sub(today_ids.len());
+            let extra = stable_pick_ids(&candidates, needed, seed ^ 0xD1B54A32D192ED03);
+            today_ids.extend(extra);
+        }
+
+        let _ = db
+            .upsert_home_module_state(crate::db::HomeModuleState {
+                key: key.to_string(),
+                mode: Some(mode.clone()),
+                day_key: Some(day_key),
+                remaining_ids,
+                today_ids: today_ids.clone(),
+            })
+            .await;
+    }
+
+    if today_ids.is_empty() {
+        return HttpResponse::Ok().json(ApiResponse::success(HomeProductsPayload {
+            products: Vec::new(),
+            next_refresh_at: next_refresh.to_rfc3339(),
+        }));
+    }
+
+    let products = match db.get_products_by_ids(&today_ids).await {
+        Ok(list) => list,
+        Err(e) => {
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+        }
+    };
+
+    HttpResponse::Ok().json(ApiResponse::success(HomeProductsPayload {
+        products,
+        next_refresh_at: next_refresh.to_rfc3339(),
+    }))
+}
+
+pub async fn get_home_featured(
+    req: HttpRequest,
+    query: web::Query<HomeModuleQuery>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let now = Utc::now();
+    let window_seconds: i64 = 2 * 60 * 60;
+    let window_start_ts = (now.timestamp() / window_seconds) * window_seconds;
+    let window_end_ts = window_start_ts + window_seconds;
+    let next_refresh = chrono::DateTime::<Utc>::from_timestamp(window_end_ts, 0)
+        .unwrap_or_else(|| now + chrono::Duration::seconds(window_seconds));
+
+    let key = "home_featured";
+    let window_key = window_start_ts.to_string();
+    let mut ids: Vec<String> = Vec::new();
+    if let Ok(Some(state)) = db.get_home_module_state(key).await {
+        if state.mode.as_deref() == Some(window_key.as_str()) && state.today_ids.len() == 6 {
+            ids = state.today_ids;
+        }
+    }
+
+    if ids.is_empty() {
+        let params = QueryParams {
+            category: None,
+            tags: None,
+            language: query.language.clone(),
+            status: Some("approved".to_string()),
+            search: None,
+            sort: Some("popularity".to_string()),
+            dir: Some("desc".to_string()),
+            limit: Some(6),
+            offset: None,
+        };
+
+        let products = match db.get_products(params).await {
+            Ok(list) => list,
+            Err(e) => {
+                if is_db_unavailable_error(&e) {
+                    let message = if get_language_from_request(&req).starts_with("zh") {
+                        "数据库连接不可用，已降级返回空列表。"
+                    } else {
+                        "Database is unavailable. Returning empty list in degraded mode."
+                    };
+                    return HttpResponse::Ok().json(make_db_degraded_response(
+                        "GET /api/home/featured",
+                        HomeProductsPayload {
+                            products: Vec::new(),
+                            next_refresh_at: next_refresh.to_rfc3339(),
+                        },
+                        message.to_string(),
+                        &e,
+                    ));
+                }
+                return HttpResponse::InternalServerError()
+                    .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+            }
+        };
+
+        ids = products.iter().map(|p| p.id.clone()).collect();
+        let _ = db
+            .upsert_home_module_state(crate::db::HomeModuleState {
+                key: key.to_string(),
+                mode: Some(window_key),
+                day_key: None,
+                remaining_ids: Vec::new(),
+                today_ids: ids.clone(),
+            })
+            .await;
+
+        return HttpResponse::Ok().json(ApiResponse::success(HomeProductsPayload {
+            products,
+            next_refresh_at: next_refresh.to_rfc3339(),
+        }));
+    }
+
+    let products = match db.get_products_by_ids(&ids).await {
+        Ok(list) => list,
+        Err(e) => {
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+        }
+    };
+
+    HttpResponse::Ok().json(ApiResponse::success(HomeProductsPayload {
+        products,
+        next_refresh_at: next_refresh.to_rfc3339(),
+    }))
+}
+
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DevSeedResult {
     pub categories_upserted: usize,
     pub products_created: usize,
@@ -1032,7 +1541,7 @@ fn validate_dev_seed_token(req: &HttpRequest) -> Result<(), HttpResponse> {
     Ok(())
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DevBootstrapResult {
     pub bootstrapped: bool,
 }

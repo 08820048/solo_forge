@@ -343,6 +343,7 @@
       "cta": "Apply for sponsor",
       "itemBadge": "Sponsored",
       "visit": "Visit website",
+      "refreshIn": "Next refresh in {time}",
       "loading": "Loading...",
       "empty": "No sponsored product yet.",
       "previewTip": "Tip: if embedding is blocked, use “Visit website” to open in a new tab.",
@@ -391,11 +392,14 @@
     },
     "featured": {
       "title": "Featured",
-      "subtitle": "A quick scan of products worth your attention."
+      "subtitle": "A quick scan of products worth your attention.",
+      "refreshIn": "Next refresh in {time}"
     },
     "recent": {
       "title": "Latest",
       "subtitle": "Newly submitted products.",
+      "sortNewest": "Newest",
+      "sortOldest": "Oldest",
       "empty": "No recent products yet."
     },
     "categories": {

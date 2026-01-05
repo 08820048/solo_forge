@@ -21,3 +21,5 @@ fluent-langneg = "0.14"
 unic-langid = "0.9"
 anyhow = "1.0"
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono", "uuid", "macros"] }
+utoipa = { version = "5", features = ["actix_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "9", features = ["actix-web", "vendored"] }

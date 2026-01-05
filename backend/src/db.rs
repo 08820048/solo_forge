@@ -91,6 +91,33 @@ struct DeveloperPopularityRow {
     score: i64,
 }
 
+#[derive(sqlx::FromRow)]
+pub struct HomeModuleStateRow {
+    key: String,
+    mode: Option<String>,
+    day_key: Option<chrono::NaiveDate>,
+    remaining_ids: Vec<String>,
+    today_ids: Vec<String>,
+}
+
+pub struct HomeModuleState {
+    pub key: String,
+    pub mode: Option<String>,
+    pub day_key: Option<chrono::NaiveDate>,
+    pub remaining_ids: Vec<String>,
+    pub today_ids: Vec<String>,
+}
+
+fn map_home_module_state_row(row: HomeModuleStateRow) -> HomeModuleState {
+    HomeModuleState {
+        key: row.key,
+        mode: row.mode,
+        day_key: row.day_key,
+        remaining_ids: row.remaining_ids,
+        today_ids: row.today_ids,
+    }
+}
+
 /**
  * parse_product_status
  * 将数据库/接口返回的 status 字符串解析为 ProductStatus。
@@ -124,6 +151,18 @@ fn dev_include_pending_in_approved() -> bool {
         Ok(v) if v.eq_ignore_ascii_case("1") || v.eq_ignore_ascii_case("true") => true,
         _ => env::var("DEV_SEED_TOKEN").is_ok(),
     }
+}
+
+fn is_retryable_db_error(err: &anyhow::Error) -> bool {
+    let msg = format!("{:?}", err).to_ascii_lowercase();
+    msg.contains("prepared statement")
+        || msg.contains("bind message supplies")
+        || msg.contains("insufficient data left in message")
+        || msg.contains("pool timed out")
+        || msg.contains("operation timed out")
+        || msg.contains("connection timed out")
+        || msg.contains("connection refused")
+        || msg.contains("error connecting")
 }
 
 fn strip_nul_in_place(value: &mut String) {
@@ -439,11 +478,23 @@ impl Database {
         };
 
         let postgres = env::var("DATABASE_URL").ok().and_then(|u| {
-            let mut options = PgConnectOptions::from_str(&u).ok()?;
-            options = options.statement_cache_capacity(0);
+            let options = PgConnectOptions::from_str(&u).ok()?;
+            let options = options.statement_cache_capacity(0);
             Some(
                 PgPoolOptions::new()
-                    .max_connections(5)
+                    .max_connections(15)
+                    .min_connections(1)
+                    .acquire_timeout(Duration::from_secs(8))
+                    .test_before_acquire(true)
+                    .after_connect(|conn, _meta| {
+                        Box::pin(async move {
+                            sqlx::query("SET statement_timeout = 15000")
+                                .persistent(false)
+                                .execute(conn)
+                                .await?;
+                            Ok(())
+                        })
+                    })
                     .connect_lazy_with(options),
             )
         });
@@ -517,39 +568,54 @@ impl Database {
         avatar_url: Option<Option<String>>,
         website: Option<Option<String>>,
     ) -> Result<Developer> {
+        let name_update = name.is_some();
+        let avatar_update = avatar_url.is_some();
+        let website_update = website.is_some();
+
+        let email_clean = strip_nul_str(email);
+        let name_value = name.clone().unwrap_or_else(|| email_clean.to_string());
+        let name_value = strip_nul_str(&name_value).into_owned();
+        let avatar_value = avatar_url
+            .clone()
+            .and_then(|v| v)
+            .map(|v| strip_nul_str(&v).into_owned());
+        let website_value = website
+            .clone()
+            .and_then(|v| v)
+            .map(|v| strip_nul_str(&v).into_owned());
+
         if let Some(pool) = &self.postgres {
-            let name_update = name.is_some();
-            let avatar_update = avatar_url.is_some();
-            let website_update = website.is_some();
+            let attempt = async {
+                let row = sqlx::query_as::<_, DeveloperRow>(
+                    "INSERT INTO developers (email, name, avatar_url, website) \
+                     VALUES ($1, $2, $3, $4) \
+                     ON CONFLICT (email) DO UPDATE SET \
+                        name = CASE WHEN $5 THEN EXCLUDED.name ELSE developers.name END, \
+                        avatar_url = CASE WHEN $6 THEN EXCLUDED.avatar_url ELSE developers.avatar_url END, \
+                        website = CASE WHEN $7 THEN EXCLUDED.website ELSE developers.website END, \
+                        updated_at = NOW() \
+                     RETURNING email, name, avatar_url, website",
+                )
+                .persistent(false)
+                .bind(email_clean.as_ref())
+                .bind(name_value.as_str())
+                .bind(avatar_value.as_deref())
+                .bind(website_value.as_deref())
+                .bind(name_update)
+                .bind(avatar_update)
+                .bind(website_update)
+                .fetch_one(pool)
+                .await?;
 
-            let email_clean = strip_nul_str(email);
-            let name_value = name.unwrap_or_else(|| email_clean.to_string());
-            let name_value = strip_nul_str(&name_value).into_owned();
-            let avatar_value = avatar_url.flatten().map(|v| strip_nul_str(&v).into_owned());
-            let website_value = website.flatten().map(|v| strip_nul_str(&v).into_owned());
+                Ok::<_, anyhow::Error>(map_developer_row(row))
+            }
+            .await;
 
-            let row = sqlx::query_as::<_, DeveloperRow>(
-                "INSERT INTO developers (email, name, avatar_url, website) \
-                 VALUES ($1, $2, $3, $4) \
-                 ON CONFLICT (email) DO UPDATE SET \
-                    name = CASE WHEN $5 THEN EXCLUDED.name ELSE developers.name END, \
-                    avatar_url = CASE WHEN $6 THEN EXCLUDED.avatar_url ELSE developers.avatar_url END, \
-                    website = CASE WHEN $7 THEN EXCLUDED.website ELSE developers.website END, \
-                    updated_at = NOW() \
-                 RETURNING email, name, avatar_url, website",
-            )
-            .persistent(false)
-            .bind(email_clean.as_ref())
-            .bind(name_value.as_str())
-            .bind(avatar_value.as_deref())
-            .bind(website_value.as_deref())
-            .bind(name_update)
-            .bind(avatar_update)
-            .bind(website_update)
-            .fetch_one(pool)
-            .await?;
-
-            return Ok(map_developer_row(row));
+            match attempt {
+                Ok(dev) => return Ok(dev),
+                Err(e) if is_retryable_db_error(&e) && self.supabase.is_some() => {}
+                Err(e) => return Err(e),
+            }
         }
 
         let supabase = self
@@ -557,9 +623,7 @@ impl Database {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No database configured"))?;
 
-        let email_clean = strip_nul_str(email);
-        let name_update = name.is_some();
-        let name_value_raw = name.as_deref().unwrap_or(email_clean.as_ref()).to_string();
+        let name_value_raw = name_value.as_str().to_string();
         let name_value = strip_nul_str(&name_value_raw).into_owned();
 
         let mut payload = serde_json::Map::<String, serde_json::Value>::new();
@@ -651,101 +715,142 @@ impl Database {
 
     pub async fn get_products(&self, params: QueryParams) -> Result<Vec<Product>> {
         if let Some(pool) = &self.postgres {
-            let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
-                "SELECT \
-                    p.id::text as id, \
-                    p.name, \
-                    p.slogan, \
-                    p.description, \
-                    p.website, \
-                    p.logo_url, \
-                    p.category, \
-                    COALESCE(p.tags, ARRAY[]::text[]) as tags, \
-                    p.maker_name, \
-                    p.maker_email, \
-                    p.maker_website, \
-                    p.language, \
-                    p.status::text as status, \
-                    p.created_at, \
-                    p.updated_at, \
-                    COALESCE(l.likes, 0)::bigint as likes, \
-                    COALESCE(f.favorites, 0)::bigint as favorites \
-                 FROM products p \
-                 LEFT JOIN (SELECT product_id, COUNT(*)::bigint as likes FROM product_likes GROUP BY product_id) l ON l.product_id = p.id \
-                 LEFT JOIN (SELECT product_id, COUNT(*)::bigint as favorites FROM product_favorites GROUP BY product_id) f ON f.product_id = p.id",
-            );
+            for attempt in 0..2 {
+                let attempt_result: Result<Vec<Product>> = async {
+                    let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+                        "SELECT \
+                            p.id::text as id, \
+                            p.name, \
+                            p.slogan, \
+                            p.description, \
+                            p.website, \
+                            p.logo_url, \
+                            p.category, \
+                            COALESCE(p.tags, ARRAY[]::text[]) as tags, \
+                            p.maker_name, \
+                            p.maker_email, \
+                            p.maker_website, \
+                            p.language, \
+                            p.status::text as status, \
+                            p.created_at, \
+                            p.updated_at, \
+                            (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = p.id) as likes, \
+                            (SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = p.id) as favorites \
+                         FROM products p",
+                    );
 
-            let mut has_where = false;
-            if let Some(category) = &params.category {
-                qb.push(if has_where { " AND " } else { " WHERE " });
-                has_where = true;
-                qb.push("p.category = ");
-                qb.push_bind(category);
-            }
+                    qb.push(" WHERE 1=1");
+                    if let Some(category) = &params.category {
+                        qb.push(" AND ");
+                        qb.push("p.category = ");
+                        qb.push_bind(category);
+                    }
 
-            if let Some(language) = &params.language {
-                qb.push(if has_where { " AND " } else { " WHERE " });
-                has_where = true;
-                qb.push("p.language = ");
-                qb.push_bind(language);
-            }
+                    if let Some(language) = &params.language {
+                        qb.push(" AND ");
+                        qb.push("p.language = ");
+                        qb.push_bind(language);
+                    }
 
-            if let Some(status) = &params.status {
-                qb.push(if has_where { " AND " } else { " WHERE " });
-                has_where = true;
-                if dev_include_pending_in_approved() && status == "approved" {
-                    qb.push("p.status::text IN ('approved','pending')");
-                } else {
-                    qb.push("p.status::text = ");
-                    qb.push_bind(status);
+                    if let Some(status) = &params.status {
+                        qb.push(" AND ");
+                        if dev_include_pending_in_approved() && status == "approved" {
+                            qb.push("p.status::text IN ('approved','pending')");
+                        } else {
+                            qb.push("p.status::text = ");
+                            qb.push_bind(status);
+                        }
+                    }
+
+                    if let Some(search) = &params.search {
+                        let q = format!("%{}%", search);
+                        qb.push(" AND ");
+                        qb.push("(p.name ILIKE ");
+                        qb.push_bind(q.clone());
+                        qb.push(" OR p.slogan ILIKE ");
+                        qb.push_bind(q.clone());
+                        qb.push(" OR p.description ILIKE ");
+                        qb.push_bind(q.clone());
+                        qb.push(" OR p.maker_name ILIKE ");
+                        qb.push_bind(q.clone());
+                        qb.push(" OR p.maker_email ILIKE ");
+                        qb.push_bind(q);
+                        qb.push(")");
+                    }
+
+                    if let Some(tags) = &params.tags {
+                        let tag = tags.split(',').next().unwrap_or(tags).trim();
+                        if !tag.is_empty() {
+                            qb.push(" AND ");
+                            qb.push("p.tags @> ARRAY[");
+                            qb.push_bind(tag);
+                            qb.push("]::text[]");
+                        }
+                    }
+
+                    let sort_by = params
+                        .sort
+                        .as_deref()
+                        .unwrap_or("created_at")
+                        .trim()
+                        .to_ascii_lowercase();
+                    let sort_dir = params
+                        .dir
+                        .as_deref()
+                        .unwrap_or("desc")
+                        .trim()
+                        .to_ascii_lowercase();
+                    let asc = sort_dir == "asc" || sort_dir == "ascending";
+
+                    qb.push(" ORDER BY ");
+                    if sort_by.as_str() == "likes" {
+                        qb.push("likes");
+                    } else if sort_by.as_str() == "favorites" {
+                        qb.push("favorites");
+                    } else if sort_by.as_str() == "popularity"
+                        || sort_by.as_str() == "score"
+                        || sort_by.as_str() == "featured"
+                    {
+                        qb.push("(likes + favorites)");
+                    } else {
+                        qb.push("p.created_at");
+                    }
+                    if asc {
+                        qb.push(" ASC");
+                    } else {
+                        qb.push(" DESC");
+                    }
+                    qb.push(", p.created_at DESC, p.id ASC");
+
+                    if let Some(limit) = params.limit {
+                        qb.push(" LIMIT ");
+                        qb.push_bind(limit);
+                    }
+
+                    if let Some(offset) = params.offset {
+                        qb.push(" OFFSET ");
+                        qb.push_bind(offset);
+                    }
+
+                    let rows = qb
+                        .build_query_as::<ProductRow>()
+                        .persistent(false)
+                        .fetch_all(pool)
+                        .await?;
+                    Ok(rows.into_iter().map(map_product_row).collect())
+                }
+                .await;
+
+                match attempt_result {
+                    Ok(list) => return Ok(list),
+                    Err(e) => {
+                        if attempt == 0 && is_retryable_db_error(&e) {
+                            continue;
+                        }
+                        return Err(e);
+                    }
                 }
             }
-
-            if let Some(tags) = &params.tags {
-                let tag = tags.split(',').next().unwrap_or(tags).trim();
-                if !tag.is_empty() {
-                    qb.push(if has_where { " AND " } else { " WHERE " });
-                    has_where = true;
-                    qb.push("p.tags @> ARRAY[");
-                    qb.push_bind(tag);
-                    qb.push("]::text[]");
-                }
-            }
-
-            if let Some(search) = &params.search {
-                let q = format!("%{}%", search);
-                qb.push(if has_where { " AND " } else { " WHERE " });
-                qb.push("(p.name ILIKE ");
-                qb.push_bind(q.clone());
-                qb.push(" OR p.slogan ILIKE ");
-                qb.push_bind(q.clone());
-                qb.push(" OR p.description ILIKE ");
-                qb.push_bind(q.clone());
-                qb.push(" OR p.maker_name ILIKE ");
-                qb.push_bind(q.clone());
-                qb.push(" OR p.maker_email ILIKE ");
-                qb.push_bind(q);
-                qb.push(")");
-            }
-
-            qb.push(" ORDER BY p.created_at DESC");
-
-            if let Some(limit) = params.limit {
-                qb.push(" LIMIT ");
-                qb.push_bind(limit);
-            }
-
-            if let Some(offset) = params.offset {
-                qb.push(" OFFSET ");
-                qb.push_bind(offset);
-            }
-
-            let rows = qb
-                .build_query_as::<ProductRow>()
-                .persistent(false)
-                .fetch_all(pool)
-                .await?;
-            return Ok(rows.into_iter().map(map_product_row).collect());
         }
 
         let supabase = self
@@ -794,7 +899,30 @@ impl Database {
                 qp.append_pair("offset", &offset.to_string());
             }
 
-            qp.append_pair("order", "created_at.desc");
+            let sort_by = params
+                .sort
+                .as_deref()
+                .unwrap_or("created_at")
+                .trim()
+                .to_ascii_lowercase();
+            let sort_dir = params
+                .dir
+                .as_deref()
+                .unwrap_or("desc")
+                .trim()
+                .to_ascii_lowercase();
+            let asc = sort_dir == "asc" || sort_dir == "ascending";
+
+            let order_value = if sort_by == "created_at" {
+                if asc {
+                    "created_at.asc"
+                } else {
+                    "created_at.desc"
+                }
+            } else {
+                "created_at.desc"
+            };
+            qp.append_pair("order", order_value);
         }
 
         let response = supabase
@@ -830,6 +958,123 @@ impl Database {
 
         let products: Vec<Product> = response.json().await?;
         Ok(products)
+    }
+
+    pub async fn get_products_by_ids(&self, ids: &[String]) -> Result<Vec<Product>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        if let Some(pool) = &self.postgres {
+            for attempt in 0..2 {
+                let attempt_result: Result<Vec<ProductRow>> = async {
+                    let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
+                        "SELECT \
+                            p.id::text as id, \
+                            p.name, \
+                            p.slogan, \
+                            p.description, \
+                            p.website, \
+                            p.logo_url, \
+                            p.category, \
+                            COALESCE(p.tags, ARRAY[]::text[]) as tags, \
+                            p.maker_name, \
+                            p.maker_email, \
+                            p.maker_website, \
+                            p.language, \
+                            p.status::text as status, \
+                            p.created_at, \
+                            p.updated_at, \
+                            (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = p.id) as likes, \
+                            (SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = p.id) as favorites \
+                         FROM products p \
+                         WHERE p.id::text = ANY(",
+                    );
+                    qb.push_bind(ids);
+                    qb.push(")");
+
+                    Ok(qb
+                        .build_query_as::<ProductRow>()
+                        .persistent(false)
+                        .fetch_all(pool)
+                        .await?)
+                }
+                .await;
+
+                match attempt_result {
+                    Ok(rows) => {
+                        let mut map = std::collections::HashMap::<String, Product>::new();
+                        for row in rows {
+                            let product = map_product_row(row);
+                            map.insert(product.id.clone(), product);
+                        }
+
+                        let mut ordered = Vec::with_capacity(ids.len());
+                        for id in ids {
+                            if let Some(p) = map.remove(id) {
+                                ordered.push(p);
+                            }
+                        }
+                        return Ok(ordered);
+                    }
+                    Err(e) => {
+                        if attempt == 0 && is_retryable_db_error(&e) {
+                            continue;
+                        }
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        let mut ordered = Vec::new();
+        for id in ids {
+            if let Some(p) = self.get_product_by_id(id).await? {
+                ordered.push(p);
+            }
+        }
+        Ok(ordered)
+    }
+
+    pub async fn get_home_module_state(&self, key: &str) -> Result<Option<HomeModuleState>> {
+        if let Some(pool) = &self.postgres {
+            let row = sqlx::query_as::<_, HomeModuleStateRow>(
+                "SELECT key, mode, day_key, remaining_ids, today_ids FROM home_module_state WHERE key = $1 LIMIT 1",
+            )
+            .persistent(false)
+            .bind(key)
+            .fetch_optional(pool)
+            .await?;
+            return Ok(row.map(map_home_module_state_row));
+        }
+
+        Ok(None)
+    }
+
+    pub async fn upsert_home_module_state(&self, state: HomeModuleState) -> Result<()> {
+        if let Some(pool) = &self.postgres {
+            sqlx::query(
+                "INSERT INTO home_module_state (key, mode, day_key, remaining_ids, today_ids) \
+                 VALUES ($1, $2, $3, $4, $5) \
+                 ON CONFLICT (key) DO UPDATE SET \
+                    mode = EXCLUDED.mode, \
+                    day_key = EXCLUDED.day_key, \
+                    remaining_ids = EXCLUDED.remaining_ids, \
+                    today_ids = EXCLUDED.today_ids, \
+                    updated_at = NOW()",
+            )
+            .persistent(false)
+            .bind(&state.key)
+            .bind(&state.mode)
+            .bind(state.day_key)
+            .bind(&state.remaining_ids)
+            .bind(&state.today_ids)
+            .execute(pool)
+            .await?;
+            return Ok(());
+        }
+
+        Ok(())
     }
 
     pub async fn get_favorite_products(
@@ -947,11 +1192,9 @@ impl Database {
                     p.status::text as status, \
                     p.created_at, \
                     p.updated_at, \
-                    COALESCE(l.likes, 0)::bigint as likes, \
-                    COALESCE(f.favorites, 0)::bigint as favorites \
+                    (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = p.id) as likes, \
+                    (SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = p.id) as favorites \
                  FROM products p \
-                 LEFT JOIN (SELECT product_id, COUNT(*)::bigint as likes FROM product_likes GROUP BY product_id) l ON l.product_id = p.id \
-                 LEFT JOIN (SELECT product_id, COUNT(*)::bigint as favorites FROM product_favorites GROUP BY product_id) f ON f.product_id = p.id \
                  WHERE p.id::text = $1 \
                  LIMIT 1",
             )
@@ -1461,6 +1704,7 @@ impl Database {
         let limit = limit.clamp(1, 50);
 
         if let Some(pool) = &self.postgres {
+            let mut tx = pool.begin().await?;
             let rows = sqlx::query_as::<_, DeveloperWithFollowersRow>(
                 "SELECT \
                     d.email, \
@@ -1476,8 +1720,9 @@ impl Database {
             )
             .persistent(false)
             .bind(limit)
-            .fetch_all(pool)
+            .fetch_all(&mut *tx)
             .await?;
+            tx.commit().await?;
 
             return Ok(rows
                 .into_iter()
@@ -1495,6 +1740,7 @@ impl Database {
         let limit = limit.clamp(1, 50);
 
         if let Some(pool) = &self.postgres {
+            let mut tx = pool.begin().await?;
             let rows = sqlx::query_as::<_, DeveloperWithFollowersRow>(
                 "SELECT \
                     d.email, \
@@ -1510,8 +1756,9 @@ impl Database {
             )
             .persistent(false)
             .bind(limit)
-            .fetch_all(pool)
+            .fetch_all(&mut *tx)
             .await?;
+            tx.commit().await?;
 
             return Ok(rows
                 .into_iter()
@@ -1538,6 +1785,7 @@ impl Database {
                 .with_day(1)
                 .unwrap_or(first_day_current_month - chrono::Duration::days(30));
 
+            let mut tx = pool.begin().await?;
             let rows = sqlx::query_as::<_, DeveloperPopularityRow>(
                 "WITH likes AS ( \
                     SELECT p.maker_email as email, COUNT(l.id)::bigint as likes \
@@ -1571,8 +1819,9 @@ impl Database {
             .bind(first_day_last_month)
             .bind(first_day_current_month)
             .bind(limit)
-            .fetch_all(pool)
+            .fetch_all(&mut *tx)
             .await?;
+            tx.commit().await?;
 
             return Ok(rows.into_iter().map(map_developer_popularity_row).collect());
         }
@@ -1819,6 +2068,7 @@ impl Database {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn get_products_count(&self) -> Result<i64> {
         if let Some(pool) = &self.postgres {
             let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*)::bigint FROM products")
