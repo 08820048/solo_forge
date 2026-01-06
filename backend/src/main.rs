@@ -60,12 +60,10 @@ async fn main() -> std::io::Result<()> {
     let db_for_newsletter = db.clone();
     tokio::spawn(async move {
         loop {
-            let enabled = match env::var("NEWSLETTER_ENABLED").ok().as_deref() {
-                Some("0") => false,
-                Some("false") => false,
-                Some("FALSE") => false,
-                _ => true,
-            };
+            let enabled = !matches!(
+                env::var("NEWSLETTER_ENABLED").ok().as_deref(),
+                Some("0") | Some("false") | Some("FALSE")
+            );
             if enabled {
                 match db_for_newsletter.send_weekly_newsletter_if_due().await {
                     Ok(sent) if sent > 0 => {
@@ -149,7 +147,10 @@ async fn main() -> std::io::Result<()> {
                     .service(
                         web::scope("/newsletter")
                             .route("/subscribe", web::post().to(handlers::subscribe_newsletter))
-                            .route("/unsubscribe", web::get().to(handlers::unsubscribe_newsletter)),
+                            .route(
+                                "/unsubscribe",
+                                web::get().to(handlers::unsubscribe_newsletter),
+                            ),
                     )
                     .service(
                         web::scope("/home")
@@ -163,10 +164,50 @@ async fn main() -> std::io::Result<()> {
                             )
                             .route("/featured", web::get().to(handlers::get_home_featured)),
                     )
+                    .service(web::scope("/sponsorship").route(
+                        "/requests",
+                        web::post().to(handlers::create_sponsorship_request),
+                    ))
                     .service(
                         web::scope("/dev")
                             .route("/bootstrap", web::post().to(handlers::dev_bootstrap))
                             .route("/seed", web::post().to(handlers::dev_seed)),
+                    )
+                    .service(
+                        web::scope("/admin")
+                            .route("/categories", web::get().to(handlers::admin_get_categories))
+                            .route(
+                                "/categories",
+                                web::post().to(handlers::admin_upsert_categories),
+                            )
+                            .route(
+                                "/categories/{id}",
+                                web::delete().to(handlers::admin_delete_category),
+                            )
+                            .route(
+                                "/sponsorship/requests",
+                                web::get().to(handlers::admin_list_sponsorship_requests),
+                            )
+                            .route(
+                                "/sponsorship/requests/action",
+                                web::post().to(handlers::admin_sponsorship_request_action),
+                            )
+                            .route(
+                                "/sponsorship/grants",
+                                web::get().to(handlers::admin_list_sponsorship_grants),
+                            )
+                            .route(
+                                "/sponsorship/grants",
+                                web::delete().to(handlers::admin_delete_sponsorship_grant),
+                            )
+                            .route(
+                                "/home-modules/{key}",
+                                web::get().to(handlers::admin_get_home_module_state),
+                            )
+                            .route(
+                                "/home-modules/{key}",
+                                web::put().to(handlers::admin_put_home_module_state),
+                            ),
                     ),
             )
     })

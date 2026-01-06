@@ -202,7 +202,7 @@ export default function LeaderboardPage() {
                 <div className="py-24 text-center text-muted-foreground">{message || t('empty')}</div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 rounded-xl border border-border bg-card/50">
+                  <div className="sf-wash lg:col-span-2 rounded-xl border border-border bg-card/50">
                     <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                       <h2 className="text-sm font-semibold text-foreground">{t('topProducts')}</h2>
                       <span className="text-xs text-muted-foreground">{t('windowLabel', { window: opt.label })}</span>
@@ -233,7 +233,7 @@ export default function LeaderboardPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-border bg-card/50">
+                  <div className="sf-wash rounded-xl border border-border bg-card/50">
                     <div className="px-5 py-4 border-b border-border">
                       <h2 className="text-sm font-semibold text-foreground">{t('topMakers')}</h2>
                     </div>

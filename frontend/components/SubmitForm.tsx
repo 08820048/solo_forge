@@ -52,6 +52,20 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+/**
+ * getAccessToken
+ * 读取 Supabase access_token，用于提交需要鉴权的请求（如更新/删除）。
+ */
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function SubmitForm({
   showHeader = true,
   defaultMakerName,
@@ -254,11 +268,17 @@ export default function SubmitForm({
     };
 
     try {
+      const accessToken = await getAccessToken();
       const endpoint =
         mode === 'update'
           ? `/api/products?id=${encodeURIComponent(String(productId || '').trim())}`
           : '/api/products';
       const method = mode === 'update' ? 'PUT' : 'POST';
+      if (method === 'PUT' && !accessToken) {
+        setIsSubmitting(false);
+        setError(t('error.editLoginRequired'));
+        return;
+      }
       const payload =
         mode === 'update'
           ? {
@@ -278,6 +298,7 @@ export default function SubmitForm({
         headers: {
           'Content-Type': 'application/json',
           'Accept-Language': locale,
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify(payload),
       });

@@ -55,6 +55,18 @@
   --sf-primary-light-foreground: #ffffff;
   --sf-primary-dark: #3b82f6;
   --sf-primary-dark-foreground: #ffffff;
+  --sf-card-wash-light: rgba(37, 99, 235, 0.08);
+  --sf-card-wash-light-border: rgba(37, 99, 235, 0.35);
+  --sf-card-wash-dark: rgba(59, 130, 246, 0.12);
+  --sf-card-wash-dark-border: rgba(59, 130, 246, 0.42);
+  --sf-card-wash-color: var(--sf-card-wash-light);
+  --sf-card-wash-border: var(--sf-card-wash-light-border);
+  --sf-pulse-light: rgba(37, 99, 235, 0.4);
+  --sf-pulse-light-0: rgba(37, 99, 235, 0);
+  --sf-pulse-dark: rgba(59, 130, 246, 0.4);
+  --sf-pulse-dark-0: rgba(59, 130, 246, 0);
+  --sf-pulse-color: var(--sf-pulse-light);
+  --sf-pulse-color-0: var(--sf-pulse-light-0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -97,6 +109,10 @@
   --popover-foreground: oklch(0.985 0 0);
   --primary: var(--sf-primary-dark);
   --primary-foreground: var(--sf-primary-dark-foreground);
+  --sf-card-wash-color: var(--sf-card-wash-dark);
+  --sf-card-wash-border: var(--sf-card-wash-dark-border);
+  --sf-pulse-color: var(--sf-pulse-dark);
+  --sf-pulse-color-0: var(--sf-pulse-dark-0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -222,6 +238,47 @@ body {
   background: radial-gradient(800px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(0, 0, 0, 0.03), transparent 40%);
 }
 
+.sf-wash {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.sf-wash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.9;
+  background: linear-gradient(
+    90deg,
+    var(--sf-card-wash-color) 0%,
+    rgba(0, 0, 0, 0) 72%
+  );
+}
+
+.sf-wash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(90deg, var(--sf-card-wash-border) 0%, rgba(0, 0, 0, 0) 78%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.sf-wash > * {
+  position: relative;
+  z-index: 1;
+}
+
 .sf-switch {
   --false: #E81B1B;
   --true: #009068;
@@ -289,9 +346,9 @@ body {
 }
 
 @keyframes sf-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  0% { box-shadow: 0 0 0 0 var(--sf-pulse-color); }
+  70% { box-shadow: 0 0 0 10px var(--sf-pulse-color-0); }
+  100% { box-shadow: 0 0 0 0 var(--sf-pulse-color-0); }
 }
 
 @keyframes beam {

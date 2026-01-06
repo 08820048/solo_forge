@@ -1,6 +1,7 @@
 use crate::models::{
-    Category, CreateProductRequest, Developer, DeveloperCenterStats, DeveloperPopularity,
-    DeveloperWithFollowers, Product, QueryParams, UpdateProductRequest,
+    Category, CreateProductRequest, CreateSponsorshipGrantFromRequest, CreateSponsorshipRequest,
+    Developer, DeveloperCenterStats, DeveloperPopularity, DeveloperWithFollowers, Product,
+    QueryParams, SponsorshipGrant, SponsorshipRequest, UpdateProductRequest,
 };
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
@@ -72,6 +73,8 @@ struct DeveloperRow {
     name: String,
     avatar_url: Option<String>,
     website: Option<String>,
+    sponsor_role: Option<String>,
+    sponsor_verified: bool,
 }
 
 #[derive(sqlx::FromRow)]
@@ -80,6 +83,8 @@ struct DeveloperWithFollowersRow {
     name: String,
     avatar_url: Option<String>,
     website: Option<String>,
+    sponsor_role: Option<String>,
+    sponsor_verified: bool,
     followers: String,
 }
 
@@ -89,6 +94,8 @@ struct DeveloperPopularityRow {
     name: String,
     avatar_url: Option<String>,
     website: Option<String>,
+    sponsor_role: Option<String>,
+    sponsor_verified: bool,
     likes: i64,
     favorites: i64,
     score: i64,
@@ -112,7 +119,6 @@ struct NewsletterTopProductRow {
     name: String,
     slogan: String,
     website: String,
-    logo_url: Option<String>,
     maker_name: String,
     maker_email: String,
     weekly_likes: i64,
@@ -127,6 +133,40 @@ pub struct HomeModuleStateRow {
     day_key: Option<chrono::NaiveDate>,
     remaining_ids: Vec<String>,
     today_ids: Vec<String>,
+}
+
+#[derive(sqlx::FromRow)]
+struct SponsorshipGrantRow {
+    product_id: String,
+    slot_index: Option<i32>,
+}
+
+#[derive(sqlx::FromRow)]
+struct SponsorshipRequestRow {
+    id: i64,
+    email: String,
+    product_ref: String,
+    placement: String,
+    slot_index: Option<i32>,
+    duration_days: i32,
+    note: Option<String>,
+    status: String,
+    processed_grant_id: Option<i64>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(sqlx::FromRow)]
+struct SponsorshipGrantFullRow {
+    id: i64,
+    product_id: String,
+    placement: String,
+    slot_index: Option<i32>,
+    starts_at: chrono::DateTime<chrono::Utc>,
+    ends_at: chrono::DateTime<chrono::Utc>,
+    source: String,
+    amount_usd_cents: Option<i32>,
+    created_at: chrono::DateTime<chrono::Utc>,
 }
 
 pub struct HomeModuleState {
@@ -144,6 +184,52 @@ fn map_home_module_state_row(row: HomeModuleStateRow) -> HomeModuleState {
         day_key: row.day_key,
         remaining_ids: row.remaining_ids,
         today_ids: row.today_ids,
+    }
+}
+
+fn map_sponsorship_request_row(row: SponsorshipRequestRow) -> SponsorshipRequest {
+    let mut email = row.email;
+    let mut product_ref = row.product_ref;
+    let mut placement = row.placement;
+    let mut status = row.status;
+    let mut note = row.note;
+    strip_nul_in_place(&mut email);
+    strip_nul_in_place(&mut product_ref);
+    strip_nul_in_place(&mut placement);
+    strip_nul_in_place(&mut status);
+    strip_nul_in_place_opt(&mut note);
+    SponsorshipRequest {
+        id: row.id,
+        email,
+        product_ref,
+        placement,
+        slot_index: row.slot_index,
+        duration_days: row.duration_days,
+        note,
+        status,
+        processed_grant_id: row.processed_grant_id,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    }
+}
+
+fn map_sponsorship_grant_full_row(row: SponsorshipGrantFullRow) -> SponsorshipGrant {
+    let mut product_id = row.product_id;
+    let mut placement = row.placement;
+    let mut source = row.source;
+    strip_nul_in_place(&mut product_id);
+    strip_nul_in_place(&mut placement);
+    strip_nul_in_place(&mut source);
+    SponsorshipGrant {
+        id: row.id,
+        product_id,
+        placement,
+        slot_index: row.slot_index,
+        starts_at: row.starts_at,
+        ends_at: row.ends_at,
+        source,
+        amount_usd_cents: row.amount_usd_cents,
+        created_at: row.created_at,
     }
 }
 
@@ -275,13 +361,14 @@ fn build_weekly_newsletter_content(
     frontend_base_url: &str,
     unsubscribe_url: &str,
 ) -> (String, String, String) {
-    let subject = format!(
-        "SoloForge Weekly · 周报 ({})",
-        now.format("%Y-%m-%d")
-    );
+    let subject = format!("SoloForge Weekly · 周报 ({})", now.format("%Y-%m-%d"));
 
     let mut text = String::new();
-    text.push_str(&format!("SoloForge 周报\n时间范围：{} ～ {}\n\n", since.format("%Y-%m-%d"), now.format("%Y-%m-%d")));
+    text.push_str(&format!(
+        "SoloForge 周报\n时间范围：{} ～ {}\n\n",
+        since.format("%Y-%m-%d"),
+        now.format("%Y-%m-%d")
+    ));
     text.push_str("本周最受欢迎 Top 5 产品：\n\n");
 
     let mut html = String::new();
@@ -435,7 +522,7 @@ fn html_escape(raw: &str) -> String {
 }
 
 fn html_attr_escape(raw: &str) -> String {
-    html_escape(raw).replace('\n', " ").replace('\r', " ")
+    html_escape(raw).replace(['\n', '\r'], " ")
 }
 
 async fn send_email_resend(
@@ -583,15 +670,19 @@ fn map_developer_row(row: DeveloperRow) -> Developer {
     let mut name = row.name;
     let mut avatar_url = row.avatar_url;
     let mut website = row.website;
+    let mut sponsor_role = row.sponsor_role;
     strip_nul_in_place(&mut email);
     strip_nul_in_place(&mut name);
     strip_nul_in_place_opt(&mut avatar_url);
     strip_nul_in_place_opt(&mut website);
+    strip_nul_in_place_opt(&mut sponsor_role);
     Developer {
         email,
         name,
         avatar_url,
         website,
+        sponsor_role,
+        sponsor_verified: row.sponsor_verified,
     }
 }
 
@@ -600,15 +691,19 @@ fn map_developer_with_followers_row(row: DeveloperWithFollowersRow) -> Developer
     let mut name = row.name;
     let mut avatar_url = row.avatar_url;
     let mut website = row.website;
+    let mut sponsor_role = row.sponsor_role;
     strip_nul_in_place(&mut email);
     strip_nul_in_place(&mut name);
     strip_nul_in_place_opt(&mut avatar_url);
     strip_nul_in_place_opt(&mut website);
+    strip_nul_in_place_opt(&mut sponsor_role);
     DeveloperWithFollowers {
         email,
         name,
         avatar_url,
         website,
+        sponsor_role,
+        sponsor_verified: row.sponsor_verified,
         followers: row.followers.parse::<i64>().unwrap_or(0),
     }
 }
@@ -618,15 +713,19 @@ fn map_developer_popularity_row(row: DeveloperPopularityRow) -> DeveloperPopular
     let mut name = row.name;
     let mut avatar_url = row.avatar_url;
     let mut website = row.website;
+    let mut sponsor_role = row.sponsor_role;
     strip_nul_in_place(&mut email);
     strip_nul_in_place(&mut name);
     strip_nul_in_place_opt(&mut avatar_url);
     strip_nul_in_place_opt(&mut website);
+    strip_nul_in_place_opt(&mut sponsor_role);
     DeveloperPopularity {
         email,
         name,
         avatar_url,
         website,
+        sponsor_role,
+        sponsor_verified: row.sponsor_verified,
         likes: row.likes,
         favorites: row.favorites,
         score: row.score,
@@ -667,7 +766,10 @@ async fn supabase_count(
         .client
         .get(url)
         .header("apikey", &supabase.supabase_key)
-        .header("Authorization", &format!("Bearer {}", supabase.supabase_key))
+        .header(
+            "Authorization",
+            &format!("Bearer {}", supabase.supabase_key),
+        )
         .header("Accept", "application/json")
         .header("Prefer", "count=exact")
         .send()
@@ -857,7 +959,7 @@ impl Database {
         if let Some(pool) = &self.postgres {
             let email = strip_nul_str(email);
             let row = sqlx::query_as::<_, DeveloperRow>(
-                "SELECT email, name, avatar_url, website \
+                "SELECT email, name, avatar_url, website, sponsor_role, sponsor_verified \
                  FROM developers \
                  WHERE lower(email) = lower($1) \
                  ORDER BY updated_at DESC NULLS LAST \
@@ -879,7 +981,10 @@ impl Database {
         let email = strip_nul_str(email);
         let mut url = Url::parse(&format!("{}/rest/v1/developers", supabase.supabase_url))?;
         url.query_pairs_mut()
-            .append_pair("select", "email,name,avatar_url,website")
+            .append_pair(
+                "select",
+                "email,name,avatar_url,website,sponsor_role,sponsor_verified",
+            )
             .append_pair("email", &format!("eq.{}", email));
 
         let response = supabase
@@ -941,7 +1046,7 @@ impl Database {
                         avatar_url = CASE WHEN $6 THEN EXCLUDED.avatar_url ELSE developers.avatar_url END, \
                         website = CASE WHEN $7 THEN EXCLUDED.website ELSE developers.website END, \
                         updated_at = NOW() \
-                     RETURNING email, name, avatar_url, website",
+                     RETURNING email, name, avatar_url, website, sponsor_role, sponsor_verified",
                 )
                 .persistent(false)
                 .bind(email_clean.as_ref())
@@ -1439,6 +1544,478 @@ impl Database {
         }
 
         Ok(())
+    }
+
+    pub async fn get_first_developer_emails_by_created_at(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<String>> {
+        let limit = limit.clamp(1, 5000);
+        if let Some(pool) = &self.postgres {
+            let rows = sqlx::query_as::<_, NewsletterRecipientRow>(
+                "SELECT email FROM developers ORDER BY created_at ASC, email ASC LIMIT $1",
+            )
+            .persistent(false)
+            .bind(limit)
+            .fetch_all(pool)
+            .await?;
+            return Ok(rows
+                .into_iter()
+                .map(|r| strip_nul_str(&r.email).into_owned())
+                .collect());
+        }
+        Ok(Vec::new())
+    }
+
+    pub async fn get_free_sponsorship_candidate_product_ids(
+        &self,
+        first_n_developers: i64,
+        window_days: i64,
+        now: chrono::DateTime<chrono::Utc>,
+        language: Option<&str>,
+    ) -> Result<Vec<String>> {
+        if let Some(pool) = &self.postgres {
+            let emails = self
+                .get_first_developer_emails_by_created_at(first_n_developers)
+                .await?;
+            if emails.is_empty() {
+                return Ok(Vec::new());
+            }
+
+            let since = now - chrono::Duration::days(window_days.max(1));
+            let status_clause = if dev_include_pending_in_approved() {
+                "p.status::text IN ('approved','pending')"
+            } else {
+                "p.status::text = 'approved'"
+            };
+
+            let rows = if let Some(language) = language {
+                let sql = format!(
+                    "SELECT p.id::text as email \
+                     FROM products p \
+                     WHERE {} AND p.created_at >= $1 AND p.maker_email = ANY($2) AND p.language = $3 \
+                     ORDER BY p.created_at DESC, p.id ASC \
+                     LIMIT 5000",
+                    status_clause
+                );
+                sqlx::query_as::<_, NewsletterRecipientRow>(&sql)
+                    .persistent(false)
+                    .bind(since)
+                    .bind(&emails)
+                    .bind(language)
+                    .fetch_all(pool)
+                    .await?
+            } else {
+                let sql = format!(
+                    "SELECT p.id::text as email \
+                     FROM products p \
+                     WHERE {} AND p.created_at >= $1 AND p.maker_email = ANY($2) \
+                     ORDER BY p.created_at DESC, p.id ASC \
+                     LIMIT 5000",
+                    status_clause
+                );
+                sqlx::query_as::<_, NewsletterRecipientRow>(&sql)
+                    .persistent(false)
+                    .bind(since)
+                    .bind(&emails)
+                    .fetch_all(pool)
+                    .await?
+            };
+
+            return Ok(rows
+                .into_iter()
+                .map(|r| strip_nul_str(&r.email).into_owned())
+                .collect());
+        }
+
+        Ok(Vec::new())
+    }
+
+    pub async fn get_active_sponsorship_grants(
+        &self,
+        placement: &str,
+        now: chrono::DateTime<chrono::Utc>,
+        language: Option<&str>,
+    ) -> Result<Vec<(Option<i32>, String)>> {
+        if let Some(pool) = &self.postgres {
+            let placement = strip_nul_str(placement);
+            let status_clause = if dev_include_pending_in_approved() {
+                "p.status::text IN ('approved','pending')"
+            } else {
+                "p.status::text = 'approved'"
+            };
+
+            let rows = if let Some(language) = language {
+                let sql = format!(
+                    "SELECT s.id, p.id::text as product_id, s.slot_index \
+                     FROM sponsorship_grants s \
+                     JOIN products p ON p.id = s.product_id \
+                     WHERE s.placement = $1 AND s.starts_at <= $2 AND s.ends_at > $2 AND {} AND p.language = $3 \
+                     ORDER BY s.slot_index NULLS LAST, s.created_at ASC, p.created_at DESC, p.id ASC",
+                    status_clause
+                );
+                sqlx::query_as::<_, SponsorshipGrantRow>(&sql)
+                    .persistent(false)
+                    .bind(placement.as_ref())
+                    .bind(now)
+                    .bind(language)
+                    .fetch_all(pool)
+                    .await?
+            } else {
+                let sql = format!(
+                    "SELECT s.id, p.id::text as product_id, s.slot_index \
+                     FROM sponsorship_grants s \
+                     JOIN products p ON p.id = s.product_id \
+                     WHERE s.placement = $1 AND s.starts_at <= $2 AND s.ends_at > $2 AND {} \
+                     ORDER BY s.slot_index NULLS LAST, s.created_at ASC, p.created_at DESC, p.id ASC",
+                    status_clause
+                );
+                sqlx::query_as::<_, SponsorshipGrantRow>(&sql)
+                    .persistent(false)
+                    .bind(placement.as_ref())
+                    .bind(now)
+                    .fetch_all(pool)
+                    .await?
+            };
+
+            return Ok(rows
+                .into_iter()
+                .map(|r| (r.slot_index, strip_nul_str(&r.product_id).into_owned()))
+                .collect());
+        }
+
+        Ok(Vec::new())
+    }
+
+    pub async fn create_sponsorship_request(
+        &self,
+        req: CreateSponsorshipRequest,
+    ) -> Result<SponsorshipRequest> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let email = strip_nul_str(req.email.trim());
+        let product_ref = strip_nul_str(req.product_ref.trim());
+        let placement = strip_nul_str(req.placement.trim());
+        let note = req
+            .note
+            .as_ref()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+
+        let row = sqlx::query_as::<_, SponsorshipRequestRow>(
+            "INSERT INTO sponsorship_requests (email, product_ref, placement, slot_index, duration_days, note) \
+             VALUES ($1, $2, $3, $4, $5, $6) \
+             RETURNING id, email, product_ref, placement, slot_index, duration_days, note, status, processed_grant_id, created_at, updated_at",
+        )
+        .persistent(false)
+        .bind(email.as_ref())
+        .bind(product_ref.as_ref())
+        .bind(placement.as_ref())
+        .bind(req.slot_index)
+        .bind(req.duration_days)
+        .bind(note.as_deref())
+        .fetch_one(pool)
+        .await?;
+
+        Ok(map_sponsorship_request_row(row))
+    }
+
+    pub async fn list_sponsorship_requests(
+        &self,
+        status: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<SponsorshipRequest>> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let limit = limit.clamp(1, 200);
+        let offset = offset.max(0);
+
+        let rows = if let Some(status) = status {
+            let status = strip_nul_str(status.trim());
+            sqlx::query_as::<_, SponsorshipRequestRow>(
+                "SELECT id, email, product_ref, placement, slot_index, duration_days, note, status, processed_grant_id, created_at, updated_at \
+                 FROM sponsorship_requests \
+                 WHERE status = $1 \
+                 ORDER BY created_at DESC, id DESC \
+                 LIMIT $2 OFFSET $3",
+            )
+            .persistent(false)
+            .bind(status.as_ref())
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, SponsorshipRequestRow>(
+                "SELECT id, email, product_ref, placement, slot_index, duration_days, note, status, processed_grant_id, created_at, updated_at \
+                 FROM sponsorship_requests \
+                 ORDER BY created_at DESC, id DESC \
+                 LIMIT $1 OFFSET $2",
+            )
+            .persistent(false)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?
+        };
+
+        Ok(rows.into_iter().map(map_sponsorship_request_row).collect())
+    }
+
+    pub async fn get_sponsorship_request_by_id(
+        &self,
+        id: i64,
+    ) -> Result<Option<SponsorshipRequest>> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let row = sqlx::query_as::<_, SponsorshipRequestRow>(
+            "SELECT id, email, product_ref, placement, slot_index, duration_days, note, status, processed_grant_id, created_at, updated_at \
+             FROM sponsorship_requests \
+             WHERE id = $1",
+        )
+        .persistent(false)
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(row.map(map_sponsorship_request_row))
+    }
+
+    pub async fn reject_sponsorship_request(&self, id: i64, note: Option<&str>) -> Result<bool> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let note = note.map(|v| v.trim()).filter(|v| !v.is_empty());
+        let res = sqlx::query(
+            "UPDATE sponsorship_requests \
+             SET status = 'rejected', note = COALESCE($2, note), updated_at = NOW() \
+             WHERE id = $1 AND status = 'pending'",
+        )
+        .persistent(false)
+        .bind(id)
+        .bind(note)
+        .execute(pool)
+        .await?;
+
+        Ok(res.rows_affected() > 0)
+    }
+
+    pub async fn upsert_developer_sponsor(
+        &self,
+        email: &str,
+        sponsor_role: Option<&str>,
+        sponsor_verified: bool,
+    ) -> Result<bool> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let email_lower = email.trim().to_ascii_lowercase();
+        let email_clean = strip_nul_str(email_lower.as_str());
+        let role = sponsor_role.map(|v| strip_nul_str(v.trim()).into_owned());
+
+        let res = sqlx::query(
+            "INSERT INTO developers (email, name, sponsor_role, sponsor_verified) \
+             VALUES ($1, $2, $3, $4) \
+             ON CONFLICT (email) DO UPDATE SET \
+                sponsor_role = EXCLUDED.sponsor_role, \
+                sponsor_verified = EXCLUDED.sponsor_verified, \
+                updated_at = NOW()",
+        )
+        .persistent(false)
+        .bind(email_clean.as_ref())
+        .bind(email_clean.as_ref())
+        .bind(role.as_deref())
+        .bind(sponsor_verified)
+        .execute(pool)
+        .await?;
+
+        Ok(res.rows_affected() > 0)
+    }
+
+    pub async fn resolve_product_id_by_ref(&self, product_ref: &str) -> Result<Option<String>> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let raw = product_ref.trim();
+        if raw.is_empty() {
+            return Ok(None);
+        }
+
+        if let Ok(uuid) = uuid::Uuid::parse_str(raw) {
+            return Ok(Some(uuid.to_string()));
+        }
+
+        let q = strip_nul_str(raw);
+        let like = format!("%{}%", q);
+
+        if let Some(row) = sqlx::query_as::<_, (String,)>(
+            "SELECT id::text FROM products WHERE website = $1 ORDER BY created_at DESC, id ASC LIMIT 1",
+        )
+        .persistent(false)
+        .bind(q.as_ref())
+        .fetch_optional(pool)
+        .await?
+        {
+            return Ok(Some(strip_nul_str(&row.0).into_owned()));
+        }
+
+        let row = sqlx::query_as::<_, (String,)>(
+            "SELECT id::text FROM products WHERE name ILIKE $1 OR website ILIKE $1 ORDER BY created_at DESC, id ASC LIMIT 1",
+        )
+        .persistent(false)
+        .bind(like)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(row.map(|r| strip_nul_str(&r.0).into_owned()))
+    }
+
+    pub async fn create_sponsorship_grant_from_request(
+        &self,
+        input: CreateSponsorshipGrantFromRequest,
+    ) -> Result<SponsorshipGrant> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let mut tx = pool.begin().await?;
+
+        let requested_start = input.starts_at.unwrap_or_else(chrono::Utc::now);
+        let max_end: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+            "SELECT MAX(ends_at) FROM sponsorship_grants \
+             WHERE placement = $1 AND slot_index IS NOT DISTINCT FROM $2",
+        )
+        .persistent(false)
+        .bind(strip_nul_str(&input.placement).as_ref())
+        .bind(input.slot_index)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let starts_at = match max_end {
+            Some(end) if end > requested_start => end,
+            _ => requested_start,
+        };
+
+        let duration_days = input.duration_days.max(1);
+        let ends_at = starts_at + chrono::Duration::days(duration_days as i64);
+
+        let product_id = strip_nul_str(&input.product_id);
+        let placement = strip_nul_str(&input.placement);
+
+        let grant_row = sqlx::query_as::<_, SponsorshipGrantFullRow>(
+            "INSERT INTO sponsorship_grants (product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents) \
+             VALUES ($1::uuid, $2, $3, $4, $5, 'request', $6) \
+             RETURNING id, product_id::text as product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents, created_at",
+        )
+        .persistent(false)
+        .bind(product_id.as_ref())
+        .bind(placement.as_ref())
+        .bind(input.slot_index)
+        .bind(starts_at)
+        .bind(ends_at)
+        .bind(input.amount_usd_cents)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let updated = sqlx::query(
+            "UPDATE sponsorship_requests \
+             SET status = 'processed', processed_grant_id = $2, updated_at = NOW() \
+             WHERE id = $1 AND status = 'pending'",
+        )
+        .persistent(false)
+        .bind(input.request_id)
+        .bind(grant_row.id)
+        .execute(&mut *tx)
+        .await?;
+
+        if updated.rows_affected() == 0 {
+            tx.rollback().await?;
+            return Err(anyhow::anyhow!("Sponsorship request is not pending"));
+        }
+
+        tx.commit().await?;
+        Ok(map_sponsorship_grant_full_row(grant_row))
+    }
+
+    pub async fn list_sponsorship_grants(
+        &self,
+        placement: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<SponsorshipGrant>> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let limit = limit.clamp(1, 200);
+        let offset = offset.max(0);
+
+        let rows = if let Some(placement) = placement {
+            let placement = strip_nul_str(placement.trim());
+            sqlx::query_as::<_, SponsorshipGrantFullRow>(
+                "SELECT id, product_id::text as product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents, created_at \
+                 FROM sponsorship_grants \
+                 WHERE placement = $1 \
+                 ORDER BY starts_at DESC, id DESC \
+                 LIMIT $2 OFFSET $3",
+            )
+            .persistent(false)
+            .bind(placement.as_ref())
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, SponsorshipGrantFullRow>(
+                "SELECT id, product_id::text as product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents, created_at \
+                 FROM sponsorship_grants \
+                 ORDER BY starts_at DESC, id DESC \
+                 LIMIT $1 OFFSET $2",
+            )
+            .persistent(false)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(pool)
+            .await?
+        };
+
+        Ok(rows
+            .into_iter()
+            .map(map_sponsorship_grant_full_row)
+            .collect())
+    }
+
+    pub async fn delete_sponsorship_grant(&self, id: i64) -> Result<bool> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let res = sqlx::query("DELETE FROM sponsorship_grants WHERE id = $1")
+            .persistent(false)
+            .bind(id)
+            .execute(pool)
+            .await?;
+
+        Ok(res.rows_affected() > 0)
     }
 
     pub async fn get_favorite_products(
@@ -2036,6 +2613,42 @@ impl Database {
         Ok(returned.len())
     }
 
+    pub async fn delete_category(&self, id: &str) -> Result<bool> {
+        if let Some(pool) = &self.postgres {
+            let id = strip_nul_str(id);
+            let res = sqlx::query("DELETE FROM categories WHERE id = $1")
+                .persistent(false)
+                .bind(id.as_ref())
+                .execute(pool)
+                .await?;
+            return Ok(res.rows_affected() > 0);
+        }
+
+        let supabase = self
+            .supabase
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No database configured"))?;
+
+        let url = Url::parse(&format!(
+            "{}/rest/v1/categories?id=eq.{}",
+            supabase.supabase_url,
+            urlencoding::encode(id)
+        ))?;
+
+        let response = supabase
+            .client
+            .delete(url)
+            .header("apikey", &supabase.supabase_key)
+            .header(
+                "Authorization",
+                &format!("Bearer {}", supabase.supabase_key),
+            )
+            .send()
+            .await?;
+
+        Ok(response.status() == 204)
+    }
+
     pub async fn search_developers(&self, query: &str, limit: i64) -> Result<Vec<Developer>> {
         let limit = limit.clamp(1, 50);
 
@@ -2043,7 +2656,7 @@ impl Database {
             let query = strip_nul_str(query);
             let q = format!("%{}%", query);
             let rows = sqlx::query_as::<_, DeveloperRow>(
-                "SELECT email, name, avatar_url, website \
+                "SELECT email, name, avatar_url, website, sponsor_role, sponsor_verified \
                  FROM developers \
                  WHERE name ILIKE $1 OR email ILIKE $1 OR website ILIKE $1 \
                  ORDER BY name ASC \
@@ -2075,10 +2688,12 @@ impl Database {
                     d.name, \
                     d.avatar_url, \
                     d.website, \
+                    d.sponsor_role, \
+                    d.sponsor_verified, \
                     COUNT(f.id)::bigint::text as followers \
                  FROM developers d \
                  LEFT JOIN developer_follows f ON f.developer_email = d.email \
-                 GROUP BY d.email, d.name, d.avatar_url, d.website \
+                 GROUP BY d.email, d.name, d.avatar_url, d.website, d.sponsor_role, d.sponsor_verified \
                  ORDER BY COUNT(f.id) DESC, d.name ASC \
                  LIMIT $1",
             )
@@ -2111,10 +2726,12 @@ impl Database {
                     d.name, \
                     d.avatar_url, \
                     d.website, \
+                    d.sponsor_role, \
+                    d.sponsor_verified, \
                     COUNT(f.id)::bigint::text as followers \
                  FROM developers d \
                  LEFT JOIN developer_follows f ON f.developer_email = d.email \
-                 GROUP BY d.email, d.name, d.avatar_url, d.website, d.created_at \
+                 GROUP BY d.email, d.name, d.avatar_url, d.website, d.sponsor_role, d.sponsor_verified, d.created_at \
                  ORDER BY d.created_at DESC, d.name ASC \
                  LIMIT $1",
             )
@@ -2170,6 +2787,8 @@ impl Database {
                     d.name, \
                     d.avatar_url, \
                     d.website, \
+                    d.sponsor_role, \
+                    d.sponsor_verified, \
                     COALESCE(l.likes, 0)::bigint as likes, \
                     COALESCE(f.favorites, 0)::bigint as favorites, \
                     (COALESCE(l.likes, 0) + COALESCE(f.favorites, 0))::bigint as score \
@@ -2424,7 +3043,7 @@ impl Database {
             return Ok(0);
         }
         let hour = now.hour();
-        if hour < 8 || hour >= 10 {
+        if !(8..10).contains(&hour) {
             return Ok(0);
         }
 
@@ -2527,7 +3146,8 @@ impl Database {
             if to.is_empty() {
                 continue;
             }
-            let token = compute_newsletter_unsubscribe_token(&to, &token_secret).unwrap_or_default();
+            let token =
+                compute_newsletter_unsubscribe_token(&to, &token_secret).unwrap_or_default();
             let unsubscribe_url = if token.trim().is_empty() {
                 let base = normalize_base_url(&public_api_base_url);
                 let email_q = urlencoding::encode(&to);
@@ -2542,8 +3162,8 @@ impl Database {
                 &frontend_base_url,
                 &unsubscribe_url,
             );
-            let res = send_email_resend(&client, &resend_key, &from, &to, &subject, &html, &text)
-                .await;
+            let res =
+                send_email_resend(&client, &resend_key, &from, &to, &subject, &html, &text).await;
             match res {
                 Ok(()) => sent.push(to),
                 Err(e) => log::warn!("Newsletter send failed to={} err={:?}", r.email, e),

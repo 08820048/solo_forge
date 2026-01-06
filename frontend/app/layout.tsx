@@ -40,6 +40,20 @@ export default function RootLayout({
                   var root = document.documentElement;
                   if (isDark) root.classList.add('dark');
                   else root.classList.remove('dark');
+
+                  var varsRaw = localStorage.getItem('sf_theme_vars_v1');
+                  if (varsRaw) {
+                    var vars = JSON.parse(varsRaw);
+                    if (vars && typeof vars === 'object') {
+                      for (var key in vars) {
+                        if (!Object.prototype.hasOwnProperty.call(vars, key)) continue;
+                        if (typeof key !== 'string' || key.indexOf('--sf-') !== 0) continue;
+                        var value = vars[key];
+                        if (typeof value !== 'string') continue;
+                        root.style.setProperty(key, value);
+                      }
+                    }
+                  }
                 } catch (e) {}
               })();
             `,

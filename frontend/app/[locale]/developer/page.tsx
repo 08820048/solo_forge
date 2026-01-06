@@ -45,6 +45,20 @@ type DeveloperCenterStats = {
   total_favorites: number;
 };
 
+/**
+ * getAccessToken
+ * 读取 Supabase access_token，用于执行更新/删除等需要鉴权的操作。
+ */
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function SloganMarkdown({ value }: { value: string }) {
   return (
     <ReactMarkdown
@@ -324,9 +338,14 @@ export default function DeveloperCenterPage() {
     setDeleteLoading(true);
     setDeleteError(null);
     try {
+      const token = await getAccessToken();
+      if (!token) {
+        setDeleteError(locale.toLowerCase().startsWith('zh') ? '请先登录后再删除产品。' : 'Please log in to delete the product.');
+        return;
+      }
       const response = await fetch(`/api/products?id=${encodeURIComponent(deleteTarget.id)}`, {
         method: 'DELETE',
-        headers: { 'Accept-Language': locale },
+        headers: { 'Accept-Language': locale, Authorization: `Bearer ${token}` },
       });
       const json = (await response.json()) as ApiResponse<unknown>;
       if (!response.ok || !json.success) {
@@ -356,11 +375,11 @@ export default function DeveloperCenterPage() {
     return (
       <div className="min-h-screen">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
-          <div className="rounded-2xl border border-border bg-card/50 p-10 text-center">
+          <div className="sf-wash rounded-2xl border border-border bg-card/50 p-10 text-center">
             <h1 className="text-3xl font-bold text-foreground tracking-tight">{t('title')}</h1>
             <p className="mt-3 text-muted-foreground">{t('loginRequired')}</p>
             <div className="mt-8 flex items-center justify-center gap-3">
-              <Button asChild variant="default" className="bg-black text-white hover:bg-black/90">
+              <Button asChild variant="default">
                 <Link href="/">{navT('home')}</Link>
               </Button>
               <Button asChild variant="outline">
@@ -428,7 +447,7 @@ export default function DeveloperCenterPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="default" onClick={() => setTab('submit')} className="bg-black text-white hover:bg-black/90">
+                  <Button variant="default" onClick={() => setTab('submit')}>
                     {t('actions.submit')}
                   </Button>
                   <Button variant="outline" onClick={() => setTab('products')}>
@@ -607,7 +626,7 @@ export default function DeveloperCenterPage() {
           </TabsContent>
 
           <TabsContent value="submit" className="mt-6">
-            <div className="rounded-2xl border border-border bg-card/50 p-6">
+            <div className="sf-wash rounded-2xl border border-border bg-card/50 p-6">
               {editingProduct ? (
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
@@ -632,7 +651,7 @@ export default function DeveloperCenterPage() {
                 defaultMakerEmail={user.email}
                 lockMakerIdentity
                 embedded
-                primaryButtonClassName="bg-black text-white hover:bg-black/90"
+                primaryButtonClassName="bg-primary text-primary-foreground hover:bg-primary/90"
                 mode={editingProduct ? 'update' : 'create'}
                 productId={editingProduct?.id}
                 initialProduct={
@@ -660,7 +679,7 @@ export default function DeveloperCenterPage() {
           </TabsContent>
 
           <TabsContent value="products" className="mt-6">
-            <div className="rounded-2xl border border-border bg-card/50">
+            <div className="sf-wash rounded-2xl border border-border bg-card/50">
               <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold text-foreground">{t('products.title')}</div>
@@ -750,7 +769,7 @@ export default function DeveloperCenterPage() {
           </TabsContent>
 
           <TabsContent value="favorites" className="mt-6">
-            <div className="rounded-2xl border border-border bg-card/50">
+            <div className="sf-wash rounded-2xl border border-border bg-card/50">
               <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold text-foreground">{t('favorites.title')}</div>

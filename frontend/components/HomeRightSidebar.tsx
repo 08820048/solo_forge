@@ -320,7 +320,7 @@ export default function HomeRightSidebar() {
 
   return (
     <div className="lg:sticky lg:top-24 space-y-6">
-      <div className="rounded-xl border border-border bg-card/50">
+      <div className="sf-wash rounded-xl border border-border bg-card/50">
         <div className="px-5 py-4 border-b border-border">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-semibold text-foreground">{tSponsored('title')}</div>
@@ -401,7 +401,7 @@ export default function HomeRightSidebar() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card/50">
+      <div className="sf-wash rounded-xl border border-border bg-card/50">
         <div className="px-5 py-4 border-b border-border">
           <div className="text-sm font-semibold text-foreground">{tRanking('title')}</div>
           <div className="mt-1 text-xs text-muted-foreground">{tRanking('subtitle')}</div>

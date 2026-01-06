@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminEmailAllowlist, requireUser } from '../admin/_auth';
 
 const BACKEND_API_URL = process.env.BACKEND_API_URL || 'http://localhost:8080/api';
 
@@ -52,6 +53,47 @@ async function readJsonSafe<T>(response: Response): Promise<T | null> {
   }
 }
 
+/**
+ * isSameEmail
+ * 规范化邮箱并进行大小写不敏感比较。
+ */
+function isSameEmail(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = String(a || '').trim().toLowerCase();
+  const y = String(b || '').trim().toLowerCase();
+  return Boolean(x) && x === y;
+}
+
+/**
+ * requireOwnerOrAdmin
+ * 校验当前 bearer token 对应用户是否为产品所有者或管理员。
+ */
+async function requireOwnerOrAdmin(request: NextRequest, productId: string, lang: string) {
+  const user = await requireUser(request);
+  const allowlist = getAdminEmailAllowlist();
+  if (allowlist.length > 0 && allowlist.includes(user.email)) return { user, ownerEmail: user.email, admin: true };
+
+  const res = await fetchWithTimeout(`${BACKEND_API_URL}/products/${encodeURIComponent(productId)}`, {
+    method: 'GET',
+    headers: { 'Accept-Language': lang },
+    cache: 'no-store',
+  });
+  const json = await readJsonSafe<{ success?: boolean; data?: unknown; message?: string }>(res);
+  if (res.status === 404) {
+    return { user, ownerEmail: null as string | null, admin: false, notFound: true as const };
+  }
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.message || 'Failed to fetch product');
+  }
+  const data = json.data as { maker_email?: unknown } | null;
+  const ownerEmail = typeof data?.maker_email === 'string' ? data.maker_email : null;
+  if (!ownerEmail || !isSameEmail(ownerEmail, user.email)) {
+    const err = new Error('Forbidden');
+    (err as { code?: string }).code = 'FORBIDDEN';
+    throw err;
+  }
+  return { user, ownerEmail, admin: false };
+}
+
 export async function POST(request: NextRequest) {
   const lang = getLangFromRequest(request);
   try {
@@ -98,6 +140,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, message: 'Missing id' }, { status: 400 });
     }
 
+    const auth = await requireOwnerOrAdmin(request, id, lang);
+    if ((auth as { notFound?: boolean }).notFound) {
+      return NextResponse.json({ success: false, message: 'Product not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const response = await fetchWithTimeout(`${BACKEND_API_URL}/products/${encodeURIComponent(id)}`, {
       method: 'PUT',
@@ -123,6 +170,20 @@ export async function PUT(request: NextRequest) {
     }
     return NextResponse.json(data);
   } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : null;
+    if (code === 'FORBIDDEN') {
+      return NextResponse.json(
+        { success: false, message: lang.toLowerCase().startsWith('zh') ? '无权限更新该产品。' : 'Forbidden' },
+        { status: 403 }
+      );
+    }
+    const msg = error && typeof error === 'object' && 'message' in error ? (error as { message?: unknown }).message : null;
+    if (typeof msg === 'string' && msg.includes('Missing Authorization bearer token')) {
+      return NextResponse.json(
+        { success: false, message: lang.toLowerCase().startsWith('zh') ? '请先登录后再更新产品。' : 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     console.error('Error updating product:', error);
     return NextResponse.json(
       { success: false, message: getBackendUnavailableMessage(lang) },
@@ -138,6 +199,11 @@ export async function DELETE(request: NextRequest) {
     const id = String(searchParams.get('id') || '').trim();
     if (!id) {
       return NextResponse.json({ success: false, message: 'Missing id' }, { status: 400 });
+    }
+
+    const auth = await requireOwnerOrAdmin(request, id, lang);
+    if ((auth as { notFound?: boolean }).notFound) {
+      return NextResponse.json({ success: false, message: 'Product not found' }, { status: 404 });
     }
 
     const response = await fetchWithTimeout(`${BACKEND_API_URL}/products/${encodeURIComponent(id)}`, {
@@ -162,6 +228,20 @@ export async function DELETE(request: NextRequest) {
     }
     return NextResponse.json(data);
   } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : null;
+    if (code === 'FORBIDDEN') {
+      return NextResponse.json(
+        { success: false, message: lang.toLowerCase().startsWith('zh') ? '无权限删除该产品。' : 'Forbidden' },
+        { status: 403 }
+      );
+    }
+    const msg = error && typeof error === 'object' && 'message' in error ? (error as { message?: unknown }).message : null;
+    if (typeof msg === 'string' && msg.includes('Missing Authorization bearer token')) {
+      return NextResponse.json(
+        { success: false, message: lang.toLowerCase().startsWith('zh') ? '请先登录后再删除产品。' : 'Unauthorized' },
+        { status: 401 }
+      );
+    }
     console.error('Error deleting product:', error);
     return NextResponse.json(
       { success: false, message: getBackendUnavailableMessage(lang) },

@@ -1,21 +1,22 @@
 use crate::db::Database;
 use crate::models::{
-    ApiError, ApiResponse, CreateProductRequest, DeveloperCenterStats, EmptyApiResponse, Product,
-    NewsletterSubscribeRequest, ProductApiResponse, ProductsApiResponse, QueryParams,
-    SearchApiResponse, SearchResult, UpdateProductRequest,
+    ApiError, ApiResponse, Category, CreateProductRequest, CreateSponsorshipGrantFromRequest,
+    CreateSponsorshipRequest, DeveloperCenterStats, EmptyApiResponse, NewsletterSubscribeRequest,
+    Product, ProductApiResponse, ProductsApiResponse, QueryParams, SearchApiResponse, SearchResult,
+    SponsorshipRequest, UpdateProductRequest,
 };
 use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use std::collections::hash_map::DefaultHasher;
 use std::env;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
-use sha2::Sha256;
 
 /**
  * is_db_unavailable_error
@@ -111,6 +112,120 @@ fn make_db_degraded_response<T>(
         data: Some(data),
         message: Some(message),
         error: Some(make_db_degraded_error(endpoint, err)),
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateSponsorshipRequestBody {
+    pub email: String,
+    pub product_ref: String,
+    pub placement: String,
+    pub slot_index: Option<i32>,
+    pub duration_days: i32,
+    pub note: Option<String>,
+}
+
+pub async fn create_sponsorship_request(
+    req: HttpRequest,
+    body: web::Json<CreateSponsorshipRequestBody>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let lang = get_language_from_request(&req);
+    let body = body.into_inner();
+
+    let email = body.email.trim().to_string();
+    let product_ref = body.product_ref.trim().to_string();
+    let placement = body.placement.trim().to_string();
+    let duration_days = body.duration_days;
+
+    if email.is_empty() || product_ref.is_empty() || placement.is_empty() || duration_days <= 0 {
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            if lang.starts_with("zh") {
+                "缺少必填字段（邮箱 / 产品 / 展示位置 / 展示时长）".to_string()
+            } else {
+                "Missing required fields (email / product / placement / duration)".to_string()
+            },
+        ));
+    }
+
+    if placement != "home_top" && placement != "home_right" {
+        return HttpResponse::BadRequest()
+            .json(ApiResponse::<()>::error("Invalid placement".to_string()));
+    }
+
+    if placement == "home_top" {
+        match body.slot_index {
+            Some(0 | 1) => {}
+            _ => {
+                return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    if lang.starts_with("zh") {
+                        "顶部赞助位必须指定 slot_index=0(左) 或 1(右)".to_string()
+                    } else {
+                        "home_top requires slot_index 0 (left) or 1 (right)".to_string()
+                    },
+                ))
+            }
+        }
+    }
+
+    if placement == "home_right" {
+        match body.slot_index {
+            Some(0..=2) => {}
+            _ => {
+                return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    if lang.starts_with("zh") {
+                        "右侧赞助位必须指定 slot_index=0/1/2（对应 1/2/3 槽位）".to_string()
+                    } else {
+                        "home_right requires slot_index 0/1/2".to_string()
+                    },
+                ))
+            }
+        }
+    }
+
+    let req_model = CreateSponsorshipRequest {
+        email,
+        product_ref,
+        placement,
+        slot_index: body.slot_index,
+        duration_days: duration_days.clamp(1, 365),
+        note: body
+            .note
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty()),
+    };
+
+    match db.create_sponsorship_request(req_model).await {
+        Ok(created) => HttpResponse::Ok().json(ApiResponse::success(created)),
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/sponsorship/requests",
+                    SponsorshipRequest {
+                        id: 0,
+                        email: "".to_string(),
+                        product_ref: "".to_string(),
+                        placement: "".to_string(),
+                        slot_index: None,
+                        duration_days: 0,
+                        note: None,
+                        status: "pending".to_string(),
+                        processed_grant_id: None,
+                        created_at: Utc::now(),
+                        updated_at: Utc::now(),
+                    },
+                    if lang.starts_with("zh") {
+                        "数据库连接不可用，已降级为接受请求但不写入。".to_string()
+                    } else {
+                        "Database is unavailable. Degraded mode: request accepted but not stored."
+                            .to_string()
+                    },
+                    &e,
+                ));
+            }
+            HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
+        }
     }
 }
 
@@ -1293,6 +1408,14 @@ fn stable_seed_from_day_key(day: chrono::NaiveDate, extra: u64) -> u64 {
     (days << 1) ^ extra.wrapping_mul(1315423911)
 }
 
+fn stable_sponsor_assign_to_top(product_id: &str, day_key: chrono::NaiveDate) -> bool {
+    let seed = stable_seed_from_day_key(day_key, 0xC3A5C85C97CB3127);
+    let mut hasher = DefaultHasher::new();
+    seed.hash(&mut hasher);
+    product_id.hash(&mut hasher);
+    (hasher.finish() & 1) == 0
+}
+
 #[allow(dead_code)]
 fn stable_seed_from_window_key(window_start_ts: i64, extra: u64) -> u64 {
     (window_start_ts as u64) ^ extra.wrapping_mul(2654435761)
@@ -1310,25 +1433,21 @@ pub async fn get_home_sponsored_top(
     let key = "home_sponsored_top";
     let mut ids: Vec<String> = Vec::new();
     if let Ok(Some(state)) = db.get_home_module_state(key).await {
-        if state.day_key == Some(day_key) && state.today_ids.len() == 2 {
+        if (state.mode.as_deref() == Some("manual") || state.day_key == Some(day_key))
+            && state.today_ids.len() == 2
+        {
             ids = state.today_ids;
         }
     }
 
     if ids.is_empty() {
-        let params = QueryParams {
-            category: None,
-            tags: None,
-            language: query.language.clone(),
-            status: Some("approved".to_string()),
-            search: None,
-            sort: Some("popularity".to_string()),
-            dir: Some("desc".to_string()),
-            limit: Some(2),
-            offset: None,
-        };
+        let mut selected: Vec<String> = Vec::new();
+        let mut exclude: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-        let products = match db.get_products(params).await {
+        let paid_grants = match db
+            .get_active_sponsorship_grants("home_top", now, query.language.as_deref())
+            .await
+        {
             Ok(list) => list,
             Err(e) => {
                 if is_db_unavailable_error(&e) {
@@ -1352,16 +1471,121 @@ pub async fn get_home_sponsored_top(
             }
         };
 
-        ids = products.iter().map(|p| p.id.clone()).collect();
-        let _ = db
-            .upsert_home_module_state(crate::db::HomeModuleState {
-                key: key.to_string(),
-                mode: Some("daily".to_string()),
-                day_key: Some(day_key),
-                remaining_ids: Vec::new(),
-                today_ids: ids.clone(),
-            })
-            .await;
+        let paid_ids: Vec<String> = paid_grants.into_iter().map(|(_, id)| id).collect();
+        let seed_paid = stable_seed_from_day_key(day_key, 0x9E3779B97F4A7C15);
+        let paid_pick = stable_pick_ids(&paid_ids, 2, seed_paid ^ 0xA1B2C3D4E5F60718);
+        for id in paid_pick {
+            exclude.insert(id.clone());
+            selected.push(id);
+        }
+
+        if selected.len() < 2 {
+            let free_candidates = match db
+                .get_free_sponsorship_candidate_product_ids(50, 7, now, query.language.as_deref())
+                .await
+            {
+                Ok(list) => list,
+                Err(e) => {
+                    if is_db_unavailable_error(&e) {
+                        let message = if get_language_from_request(&req).starts_with("zh") {
+                            "数据库连接不可用，已降级返回空列表。"
+                        } else {
+                            "Database is unavailable. Returning empty list in degraded mode."
+                        };
+                        return HttpResponse::Ok().json(make_db_degraded_response(
+                            "GET /api/home/sponsored-top",
+                            HomeProductsPayload {
+                                products: Vec::new(),
+                                next_refresh_at: next_refresh.to_rfc3339(),
+                            },
+                            message.to_string(),
+                            &e,
+                        ));
+                    }
+                    return HttpResponse::InternalServerError()
+                        .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+                }
+            };
+
+            let mut free_top: Vec<String> = free_candidates
+                .into_iter()
+                .filter(|id| stable_sponsor_assign_to_top(id, day_key))
+                .filter(|id| !exclude.contains(id))
+                .collect();
+            free_top.sort();
+            free_top.dedup();
+
+            let needed = 2usize.saturating_sub(selected.len());
+            let seed_free = stable_seed_from_day_key(day_key, 0xD6E8FEB86659FD93);
+            let pick = stable_pick_ids(&free_top, needed, seed_free ^ 0x123456789ABCDEF0);
+            for id in pick {
+                exclude.insert(id.clone());
+                selected.push(id);
+            }
+        }
+
+        if selected.len() < 2 {
+            let params = QueryParams {
+                category: None,
+                tags: None,
+                language: query.language.clone(),
+                status: Some("approved".to_string()),
+                search: None,
+                sort: Some("popularity".to_string()),
+                dir: Some("desc".to_string()),
+                limit: Some(50),
+                offset: None,
+            };
+            let fallback = match db.get_products(params).await {
+                Ok(list) => list,
+                Err(e) => {
+                    if is_db_unavailable_error(&e) {
+                        let message = if get_language_from_request(&req).starts_with("zh") {
+                            "数据库连接不可用，已降级返回空列表。"
+                        } else {
+                            "Database is unavailable. Returning empty list in degraded mode."
+                        };
+                        return HttpResponse::Ok().json(make_db_degraded_response(
+                            "GET /api/home/sponsored-top",
+                            HomeProductsPayload {
+                                products: Vec::new(),
+                                next_refresh_at: next_refresh.to_rfc3339(),
+                            },
+                            message.to_string(),
+                            &e,
+                        ));
+                    }
+                    return HttpResponse::InternalServerError()
+                        .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+                }
+            };
+
+            for p in fallback {
+                if selected.len() >= 2 {
+                    break;
+                }
+                if exclude.contains(&p.id) {
+                    continue;
+                }
+                exclude.insert(p.id.clone());
+                selected.push(p.id);
+            }
+        }
+
+        if selected.is_empty() {
+            return HttpResponse::Ok().json(ApiResponse::success(HomeProductsPayload {
+                products: Vec::new(),
+                next_refresh_at: next_refresh.to_rfc3339(),
+            }));
+        }
+
+        let products = match db.get_products_by_ids(&selected).await {
+            Ok(list) => list,
+            Err(e) => {
+                return HttpResponse::InternalServerError()
+                    .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+            }
+        };
 
         return HttpResponse::Ok().json(ApiResponse::success(HomeProductsPayload {
             products,
@@ -1398,50 +1622,134 @@ pub async fn get_home_sponsored_right(
     let mut today_ids: Vec<String> = Vec::new();
 
     if let Ok(Some(state)) = db.get_home_module_state(key).await {
-        if let Some(m) = state.mode {
-            mode = m;
-        }
-        remaining_ids = state.remaining_ids;
-        if state.day_key == Some(day_key) && state.today_ids.len() == 3 {
+        if state.mode.as_deref() == Some("manual") && state.today_ids.len() == 3 {
+            mode = "manual".to_string();
+            remaining_ids = Vec::new();
             today_ids = state.today_ids;
+        } else {
+            if let Some(m) = state.mode {
+                mode = m;
+            }
+            remaining_ids = state.remaining_ids;
+            if state.day_key == Some(day_key) && state.today_ids.len() == 3 {
+                today_ids = state.today_ids;
+            }
         }
     }
 
     if today_ids.is_empty() {
-        if mode == "first100" && remaining_ids.is_empty() {
-            let params = QueryParams {
-                category: None,
-                tags: None,
-                language: query.language.clone(),
-                status: Some("approved".to_string()),
-                search: None,
-                sort: Some("created_at".to_string()),
-                dir: Some("asc".to_string()),
-                limit: Some(100),
-                offset: None,
-            };
-            remaining_ids = match db.get_products(params).await {
-                Ok(list) => list.into_iter().map(|p| p.id).collect(),
-                Err(_) => Vec::new(),
-            };
-            if remaining_ids.is_empty() {
-                mode = "all".to_string();
+        let mut slots: [Option<String>; 3] = [None, None, None];
+        let mut exclude: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        let paid_grants = match db
+            .get_active_sponsorship_grants("home_right", now, query.language.as_deref())
+            .await
+        {
+            Ok(list) => list,
+            Err(e) => {
+                if is_db_unavailable_error(&e) {
+                    let message = if get_language_from_request(&req).starts_with("zh") {
+                        "数据库连接不可用，已降级返回空列表。"
+                    } else {
+                        "Database is unavailable. Returning empty list in degraded mode."
+                    };
+                    return HttpResponse::Ok().json(make_db_degraded_response(
+                        "GET /api/home/sponsored-right",
+                        HomeProductsPayload {
+                            products: Vec::new(),
+                            next_refresh_at: next_refresh.to_rfc3339(),
+                        },
+                        message.to_string(),
+                        &e,
+                    ));
+                }
+                return HttpResponse::InternalServerError()
+                    .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+            }
+        };
+
+        let mut paid_pool: Vec<String> = Vec::new();
+        for (slot_index, id) in paid_grants {
+            if exclude.contains(&id) {
+                continue;
+            }
+            match slot_index {
+                Some(i) if (0..=2).contains(&i) => {
+                    let idx = i as usize;
+                    if slots[idx].is_none() {
+                        exclude.insert(id.clone());
+                        slots[idx] = Some(id);
+                    } else {
+                        paid_pool.push(id);
+                    }
+                }
+                _ => paid_pool.push(id),
             }
         }
 
-        let seed = stable_seed_from_day_key(day_key, 0x9E3779B97F4A7C15);
-        if mode == "first100" && !remaining_ids.is_empty() {
-            let pick = stable_pick_ids(&remaining_ids, 3, seed);
-            let pick_set: std::collections::HashSet<String> = pick.iter().cloned().collect();
-            remaining_ids.retain(|id| !pick_set.contains(id));
-
-            today_ids = pick;
-            if today_ids.len() < 3 {
-                mode = "all".to_string();
+        let seed_paid = stable_seed_from_day_key(day_key, 0x9E3779B97F4A7C15) ^ 0xA7F0C3B2D1E4F5A6;
+        let paid_pool_pick = stable_pick_ids(&paid_pool, 3, seed_paid);
+        let mut paid_pool_iter = paid_pool_pick.into_iter();
+        for slot in &mut slots {
+            if slot.is_none() {
+                if let Some(id) = paid_pool_iter.next() {
+                    if !exclude.contains(&id) {
+                        exclude.insert(id.clone());
+                        *slot = Some(id);
+                    }
+                }
             }
         }
 
-        if mode != "first100" || today_ids.len() < 3 {
+        let free_candidates = match db
+            .get_free_sponsorship_candidate_product_ids(50, 7, now, query.language.as_deref())
+            .await
+        {
+            Ok(list) => list,
+            Err(e) => {
+                if is_db_unavailable_error(&e) {
+                    let message = if get_language_from_request(&req).starts_with("zh") {
+                        "数据库连接不可用，已降级返回空列表。"
+                    } else {
+                        "Database is unavailable. Returning empty list in degraded mode."
+                    };
+                    return HttpResponse::Ok().json(make_db_degraded_response(
+                        "GET /api/home/sponsored-right",
+                        HomeProductsPayload {
+                            products: Vec::new(),
+                            next_refresh_at: next_refresh.to_rfc3339(),
+                        },
+                        message.to_string(),
+                        &e,
+                    ));
+                }
+                return HttpResponse::InternalServerError()
+                    .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+            }
+        };
+
+        let mut free_right: Vec<String> = free_candidates
+            .into_iter()
+            .filter(|id| !stable_sponsor_assign_to_top(id, day_key))
+            .filter(|id| !exclude.contains(id))
+            .collect();
+        free_right.sort();
+        free_right.dedup();
+
+        let seed_free = stable_seed_from_day_key(day_key, 0xD6E8FEB86659FD93) ^ 0x0F1E2D3C4B5A6978;
+        let free_pick = stable_pick_ids(&free_right, 3, seed_free);
+        let mut free_iter = free_pick.into_iter();
+        for slot in &mut slots {
+            if slot.is_none() {
+                if let Some(id) = free_iter.next() {
+                    exclude.insert(id.clone());
+                    *slot = Some(id);
+                }
+            }
+        }
+
+        let mut chosen: Vec<String> = slots.into_iter().flatten().collect();
+        if chosen.len() < 3 {
             let params = QueryParams {
                 category: None,
                 tags: None,
@@ -1450,11 +1758,11 @@ pub async fn get_home_sponsored_right(
                 search: None,
                 sort: Some("created_at".to_string()),
                 dir: Some("desc".to_string()),
-                limit: Some(5000),
+                limit: Some(200),
                 offset: None,
             };
-            let all_ids: Vec<String> = match db.get_products(params).await {
-                Ok(list) => list.into_iter().map(|p| p.id).collect(),
+            let fallback = match db.get_products(params).await {
+                Ok(list) => list,
                 Err(e) => {
                     if is_db_unavailable_error(&e) {
                         let message = if get_language_from_request(&req).starts_with("zh") {
@@ -1477,15 +1785,19 @@ pub async fn get_home_sponsored_right(
                 }
             };
 
-            let existing: std::collections::HashSet<String> = today_ids.iter().cloned().collect();
-            let candidates: Vec<String> = all_ids
-                .into_iter()
-                .filter(|id| !existing.contains(id))
-                .collect();
-            let needed = 3usize.saturating_sub(today_ids.len());
-            let extra = stable_pick_ids(&candidates, needed, seed ^ 0xD1B54A32D192ED03);
-            today_ids.extend(extra);
+            for p in fallback {
+                if chosen.len() >= 3 {
+                    break;
+                }
+                if exclude.contains(&p.id) {
+                    continue;
+                }
+                exclude.insert(p.id.clone());
+                chosen.push(p.id);
+            }
         }
+
+        today_ids = chosen;
 
         let _ = db
             .upsert_home_module_state(crate::db::HomeModuleState {
@@ -1535,7 +1847,10 @@ pub async fn get_home_featured(
     let window_key = window_start_ts.to_string();
     let mut ids: Vec<String> = Vec::new();
     if let Ok(Some(state)) = db.get_home_module_state(key).await {
-        if state.mode.as_deref() == Some(window_key.as_str()) && state.today_ids.len() == 6 {
+        if (state.mode.as_deref() == Some("manual")
+            || state.mode.as_deref() == Some(window_key.as_str()))
+            && state.today_ids.len() == 6
+        {
             ids = state.today_ids;
         }
     }
@@ -1736,6 +2051,459 @@ fn validate_dev_seed_token(req: &HttpRequest) -> Result<(), HttpResponse> {
     }
 
     Ok(())
+}
+
+/**
+ * validate_admin_token
+ * 校验管理端 token，避免开放写接口被滥用。
+ *
+ * - 默认读取 ADMIN_API_TOKEN
+ * - 若未配置，则回退使用 DEV_SEED_TOKEN（方便本地开发）
+ * - 请求头使用 x-admin-token
+ */
+fn validate_admin_token(req: &HttpRequest) -> Result<(), HttpResponse> {
+    let expected = env::var("ADMIN_API_TOKEN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .or_else(|| {
+            env::var("DEV_SEED_TOKEN")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+        });
+
+    let expected = match expected {
+        Some(v) => v,
+        None => {
+            return Err(
+                HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
+                    "ADMIN_API_TOKEN 未配置，且 DEV_SEED_TOKEN 也未配置".to_string(),
+                )),
+            )
+        }
+    };
+
+    let provided = req
+        .headers()
+        .get("x-admin-token")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+
+    if provided != expected {
+        return Err(HttpResponse::Forbidden()
+            .json(ApiResponse::<()>::error("admin token 无效".to_string())));
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminSponsorshipRequestsQuery {
+    pub status: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+pub async fn admin_list_sponsorship_requests(
+    req: HttpRequest,
+    query: web::Query<AdminSponsorshipRequestsQuery>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    let status = query
+        .status
+        .as_deref()
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty());
+    let limit = query.limit.unwrap_or(200);
+    let offset = query.offset.unwrap_or(0);
+
+    match db.list_sponsorship_requests(status, limit, offset).await {
+        Ok(list) => HttpResponse::Ok().json(ApiResponse::success(list)),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminSponsorshipActionBody {
+    pub action: String,
+    pub request_id: i64,
+    pub sponsor_role: Option<String>,
+    pub sponsor_verified: Option<bool>,
+    pub placement: Option<String>,
+    pub slot_index: Option<i32>,
+    pub duration_days: Option<i32>,
+    pub product_id: Option<String>,
+    pub amount_usd_cents: Option<i32>,
+    pub note: Option<String>,
+}
+
+pub async fn admin_sponsorship_request_action(
+    req: HttpRequest,
+    body: web::Json<AdminSponsorshipActionBody>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    let body = body.into_inner();
+    let action = body.action.trim().to_ascii_lowercase();
+    let lang = get_language_from_request(&req);
+
+    if action != "process" && action != "reject" {
+        return HttpResponse::BadRequest()
+            .json(ApiResponse::<()>::error("Invalid action".to_string()));
+    }
+
+    if action == "reject" {
+        let ok = match db
+            .reject_sponsorship_request(body.request_id, body.note.as_deref())
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                return HttpResponse::InternalServerError()
+                    .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
+            }
+        };
+        if !ok {
+            return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                if lang.starts_with("zh") {
+                    "请求不存在或已处理".to_string()
+                } else {
+                    "Request not found or already processed".to_string()
+                },
+            ));
+        }
+        return HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true }));
+    }
+
+    let request = match db.get_sponsorship_request_by_id(body.request_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return HttpResponse::NotFound().json(ApiResponse::<()>::error(
+                "Sponsorship request not found".to_string(),
+            ))
+        }
+        Err(e) => {
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
+        }
+    };
+
+    if request.status != "pending" {
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            "Sponsorship request is not pending".to_string(),
+        ));
+    }
+
+    let placement = body
+        .placement
+        .as_deref()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| request.placement.clone());
+    let slot_index = body.slot_index.or(request.slot_index);
+    let duration_days = body
+        .duration_days
+        .unwrap_or(request.duration_days)
+        .clamp(1, 365);
+
+    if placement != "home_top" && placement != "home_right" {
+        return HttpResponse::BadRequest()
+            .json(ApiResponse::<()>::error("Invalid placement".to_string()));
+    }
+    if placement == "home_top" {
+        match slot_index {
+            Some(0 | 1) => {}
+            _ => {
+                return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    if lang.starts_with("zh") {
+                        "顶部赞助位必须指定 slot_index=0(左) 或 1(右)".to_string()
+                    } else {
+                        "home_top requires slot_index 0 (left) or 1 (right)".to_string()
+                    },
+                ))
+            }
+        }
+    }
+    if placement == "home_right" {
+        match slot_index {
+            Some(0..=2) => {}
+            _ => {
+                return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    if lang.starts_with("zh") {
+                        "右侧赞助位必须指定 slot_index=0/1/2".to_string()
+                    } else {
+                        "home_right requires slot_index 0/1/2".to_string()
+                    },
+                ))
+            }
+        }
+    }
+
+    let product_id = if let Some(v) = body
+        .product_id
+        .as_deref()
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty())
+    {
+        v.to_string()
+    } else {
+        match db.resolve_product_id_by_ref(&request.product_ref).await {
+            Ok(Some(id)) => id,
+            Ok(None) => {
+                return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    if lang.starts_with("zh") {
+                        "无法根据 product_ref 自动匹配产品，请手动填写 product_id".to_string()
+                    } else {
+                        "Cannot resolve product from product_ref. Please set product_id."
+                            .to_string()
+                    },
+                ))
+            }
+            Err(e) => {
+                return HttpResponse::InternalServerError()
+                    .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
+            }
+        }
+    };
+
+    let sponsor_role = body
+        .sponsor_role
+        .as_deref()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "sponsor".to_string());
+    let sponsor_verified = body.sponsor_verified.unwrap_or(true);
+
+    if let Err(e) = db
+        .upsert_developer_sponsor(&request.email, Some(&sponsor_role), sponsor_verified)
+        .await
+    {
+        return HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
+    }
+
+    let input = CreateSponsorshipGrantFromRequest {
+        request_id: request.id,
+        product_id,
+        placement,
+        slot_index,
+        duration_days,
+        amount_usd_cents: body.amount_usd_cents,
+        starts_at: None,
+    };
+
+    match db.create_sponsorship_grant_from_request(input).await {
+        Ok(grant) => HttpResponse::Ok().json(ApiResponse::success(grant)),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminSponsorshipGrantsQuery {
+    pub placement: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+pub async fn admin_list_sponsorship_grants(
+    req: HttpRequest,
+    query: web::Query<AdminSponsorshipGrantsQuery>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    let placement = query
+        .placement
+        .as_deref()
+        .map(|v| v.trim())
+        .filter(|v| !v.is_empty());
+    let limit = query.limit.unwrap_or(200);
+    let offset = query.offset.unwrap_or(0);
+
+    match db.list_sponsorship_grants(placement, limit, offset).await {
+        Ok(list) => HttpResponse::Ok().json(ApiResponse::success(list)),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminDeleteSponsorshipGrantQuery {
+    pub id: i64,
+}
+
+pub async fn admin_delete_sponsorship_grant(
+    req: HttpRequest,
+    query: web::Query<AdminDeleteSponsorshipGrantQuery>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    match db.delete_sponsorship_grant(query.id).await {
+        Ok(ok) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok })),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminUpsertCategoriesRequest {
+    pub categories: Vec<Category>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminUpsertCategoriesResult {
+    pub upserted: usize,
+}
+
+pub async fn admin_get_categories(
+    req: HttpRequest,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    match db.get_categories().await {
+        Ok(categories) => HttpResponse::Ok().json(ApiResponse::success(categories)),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+pub async fn admin_upsert_categories(
+    req: HttpRequest,
+    body: web::Json<AdminUpsertCategoriesRequest>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    match db.upsert_categories(body.into_inner().categories).await {
+        Ok(upserted) => {
+            HttpResponse::Ok().json(ApiResponse::success(AdminUpsertCategoriesResult {
+                upserted,
+            }))
+        }
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminCategoryPath {
+    pub id: String,
+}
+
+pub async fn admin_delete_category(
+    req: HttpRequest,
+    path: web::Path<AdminCategoryPath>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    let id = path.into_inner().id;
+    match db.delete_category(&id).await {
+        Ok(ok) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok })),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminHomeModuleStatePayload {
+    pub key: String,
+    pub mode: Option<String>,
+    pub day_key: Option<String>,
+    pub remaining_ids: Vec<String>,
+    pub today_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminHomeModuleUpdateRequest {
+    pub mode: Option<String>,
+    pub today_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminHomeModulePath {
+    pub key: String,
+}
+
+pub async fn admin_get_home_module_state(
+    req: HttpRequest,
+    path: web::Path<AdminHomeModulePath>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    let key = path.into_inner().key;
+    match db.get_home_module_state(&key).await {
+        Ok(Some(state)) => {
+            HttpResponse::Ok().json(ApiResponse::success(AdminHomeModuleStatePayload {
+                key: state.key,
+                mode: state.mode,
+                day_key: state.day_key.map(|d| d.to_string()),
+                remaining_ids: state.remaining_ids,
+                today_ids: state.today_ids,
+            }))
+        }
+        Ok(None) => HttpResponse::Ok().json(ApiResponse::success(AdminHomeModuleStatePayload {
+            key,
+            mode: None,
+            day_key: None,
+            remaining_ids: Vec::new(),
+            today_ids: Vec::new(),
+        })),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+pub async fn admin_put_home_module_state(
+    req: HttpRequest,
+    path: web::Path<AdminHomeModulePath>,
+    body: web::Json<AdminHomeModuleUpdateRequest>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    let key = path.into_inner().key;
+    let body = body.into_inner();
+    let mode = body.mode.unwrap_or_else(|| "manual".to_string());
+
+    let state = crate::db::HomeModuleState {
+        key: key.clone(),
+        mode: Some(mode),
+        day_key: None,
+        remaining_ids: Vec::new(),
+        today_ids: body.today_ids,
+    };
+
+    match db.upsert_home_module_state(state).await {
+        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true })),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
 }
 
 #[derive(Debug, Serialize, ToSchema)]

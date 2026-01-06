@@ -435,7 +435,7 @@ export default function FeedbackPage() {
                       type="button"
                       onClick={onSubmit}
                       disabled={submitting}
-                      className="bg-foreground text-background hover:bg-foreground/90"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
                     >
                       {submitting ? t('form.submitting') : t('form.submit')}
                     </Button>
@@ -544,7 +544,7 @@ export default function FeedbackPage() {
                       type="button"
                       onClick={onSubmit}
                       disabled={submitting}
-                      className="bg-foreground text-background hover:bg-foreground/90"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
                     >
                       {submitting ? t('form.submitting') : t('form.submit')}
                     </Button>

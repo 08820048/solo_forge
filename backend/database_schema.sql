@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS developers (
     name TEXT NOT NULL,
     avatar_url TEXT,
     website TEXT,
+    sponsor_role TEXT,
+    sponsor_verified BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -106,6 +108,33 @@ CREATE TABLE IF NOT EXISTS home_module_state (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Create sponsorship grants table (paid sponsorship entitlements)
+CREATE TABLE IF NOT EXISTS sponsorship_grants (
+    id BIGSERIAL PRIMARY KEY,
+    product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    placement TEXT NOT NULL CHECK (placement IN ('home_top', 'home_right')),
+    slot_index INT,
+    starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ends_at TIMESTAMPTZ NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual',
+    amount_usd_cents INT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sponsorship_requests (
+    id BIGSERIAL PRIMARY KEY,
+    email TEXT NOT NULL,
+    product_ref TEXT NOT NULL,
+    placement TEXT NOT NULL CHECK (placement IN ('home_top', 'home_right')),
+    slot_index INT,
+    duration_days INT NOT NULL,
+    note TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processed', 'rejected')),
+    processed_grant_id BIGINT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
@@ -122,6 +151,12 @@ CREATE INDEX IF NOT EXISTS idx_product_likes_created_at ON product_likes(created
 CREATE INDEX IF NOT EXISTS idx_product_favorites_product_id ON product_favorites(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_favorites_created_at ON product_favorites(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_newsletter_subscriptions_unsubscribed ON newsletter_subscriptions(unsubscribed);
+
+CREATE INDEX IF NOT EXISTS idx_sponsorship_grants_product_id ON sponsorship_grants(product_id);
+CREATE INDEX IF NOT EXISTS idx_sponsorship_grants_placement ON sponsorship_grants(placement);
+CREATE INDEX IF NOT EXISTS idx_sponsorship_grants_active_range ON sponsorship_grants(starts_at, ends_at);
+CREATE INDEX IF NOT EXISTS idx_sponsorship_requests_status ON sponsorship_requests(status);
+CREATE INDEX IF NOT EXISTS idx_sponsorship_requests_created_at ON sponsorship_requests(created_at DESC);
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -148,6 +183,12 @@ CREATE TRIGGER update_home_module_state_updated_at
 DROP TRIGGER IF EXISTS update_newsletter_subscriptions_updated_at ON newsletter_subscriptions;
 CREATE TRIGGER update_newsletter_subscriptions_updated_at
     BEFORE UPDATE ON newsletter_subscriptions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_sponsorship_requests_updated_at ON sponsorship_requests;
+CREATE TRIGGER update_sponsorship_requests_updated_at
+    BEFORE UPDATE ON sponsorship_requests
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 

@@ -169,7 +169,7 @@ export default function Hero() {
   }, [nextRefreshAt]);
 
   return (
-    <section className="rounded-2xl border border-border bg-card/50 overflow-hidden">
+    <section className="sf-wash rounded-2xl border border-border bg-card/50 overflow-hidden">
       <div className="px-6 py-5 border-b border-border">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -201,7 +201,7 @@ export default function Hero() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {products.map((product) => (
-              <div key={product.id} className="rounded-xl border border-border bg-background/40 p-5 relative overflow-hidden">
+              <div key={product.id} className="sf-wash rounded-xl border border-border bg-background/40 p-5 relative overflow-hidden">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0">
                     <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">

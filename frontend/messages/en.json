@@ -3,6 +3,7 @@
     "home": "Home",
     "products": "Products",
     "leaderboard": "Leaderboard",
+    "pricing": "Sponsor",
     "submit": "Submit",
     "feedback": "Feedback",
     "login": "Log in",
@@ -10,6 +11,131 @@
     "developerCenter": "Developer Center",
     "logout": "Log out",
     "about": "About"
+  },
+  "pricing": {
+    "title": "Sponsorship",
+    "subtitle": "Sponsor your product for top exposure on the homepage.",
+    "tiers": {
+      "free": {
+        "title": "Free",
+        "badge": "Limited",
+        "price": "Free",
+        "desc": "Free sponsorship for the first 50 submitted products. Each product gets 7 days of eligibility with daily random placement (top/right).",
+        "benefits": [
+          "Limited to the first 50 submitted products",
+          "While stock lasts",
+          "Up to 7 days of exposure per product",
+          "Random daily placement in homepage top/right sponsored slots"
+        ]
+      },
+      "top": {
+        "title": "Pro · Top",
+        "badge": "Sponsor",
+        "price": "$10 / month",
+        "desc": "Displayed in the top sponsored module on the homepage (highest exposure).",
+        "benefits": [
+          { "text": "Fixed placement in homepage top sponsored slot (left/right)", "available": true },
+          { "text": "Fixed placement in homepage right sponsored slot (1/2/3)", "available": true },
+          { "text": "Unified sponsor identity badge", "available": true },
+          { "text": "Recommended in X (Twitter) posts", "available": true },
+          { "text": "Up to 3 newsletter mentions per month", "available": true }
+        ]
+      },
+      "right": {
+        "title": "Pro · Right",
+        "badge": "Sponsor",
+        "price": "$5 / slot / month",
+        "desc": "Displayed in the right sidebar sponsored module (up to 3 items).",
+        "benefits": [
+          { "text": "Fixed placement in homepage top sponsored slot (left/right)", "available": false },
+          { "text": "Fixed placement in homepage right sponsored slot (1/2/3)", "available": true },
+          { "text": "Unified sponsor identity badge", "available": true },
+          { "text": "Recommended in X (Twitter) posts", "available": false },
+          { "text": "Up to 1 newsletter mention per month", "available": true }
+        ]
+      }
+    },
+    "benefits": {
+      "title": "Benefits",
+      "items": [
+        "Unified sponsor identity badge",
+        "Highest priority exposure in homepage top/right slots",
+        "Recommended in X (Twitter) posts",
+        "Up to 3 newsletter mentions per month"
+      ]
+    },
+      "actions": {
+        "sponsor": "Sponsor on Ko-fi",
+        "iPaid": "I’ve sponsored",
+        "submit": "Submit listing info",
+        "submitNow": "Submit now",
+        "submitting": "Submitting...",
+        "close": "Close"
+      },
+    "instructions": {
+      "title": "Important: include these details in your sponsorship note",
+      "desc": "To help us track and manually list your sponsored placement, please include:",
+      "fields": {
+        "email": "Your login email (used on this site)",
+        "product": "The product to display (name / URL / product ID)",
+        "placement": "Preferred placement (Top / Right)",
+        "slot": "Slot detail (Top: left/right; Right: 1/2/3)",
+        "duration": "Duration (choose or custom)"
+      },
+      "exampleTitle": "Example",
+      "example": "Email: you@example.com\nProduct: https://your-product.com\nPlacement: Top\nSlot: Left\nDuration: 30 days"
+    },
+    "form": {
+      "title": "Sponsorship listing request (recommended)",
+      "desc": "If it’s hard to provide all details on the sponsor platform, submit them here for faster processing.",
+      "email": "Login email",
+      "emailPlaceholder": "you@example.com",
+      "product": "Product to display",
+      "productPlaceholder": "Product name / URL / product ID",
+      "placement": "Placement",
+      "placementTop": "Top",
+      "placementRight": "Right",
+      "topSide": "Top slot side",
+      "topSideLeft": "Left",
+      "topSideRight": "Right",
+      "rightSlot": "Right slot number (top to bottom)",
+      "duration": "Duration",
+      "duration30d": "30 days (1 month)",
+      "duration90d": "90 days (3 months)",
+      "duration180d": "180 days (6 months)",
+      "durationCustom": "Custom (days)",
+      "customDays": "Custom days",
+      "customDaysPlaceholder": "e.g. 45",
+      "note": "Extra notes (optional)",
+      "notePlaceholder": "e.g. Ko-fi order ID, duration, preferred start date",
+      "missingRequired": "Email and product are required.",
+      "submitted": "Submitted. We’ll process it soon.",
+      "submitFailed": "Submit failed. Please try again later."
+    }
+  },
+  "theme": {
+    "title": "Theme",
+    "active": "Active",
+    "presets": {
+      "title": "Presets",
+      "active": "Preset selected",
+      "default": "Default",
+      "blue": "Blue",
+      "purple": "Purple",
+      "green": "Green",
+      "orange": "Orange",
+      "rose": "Rose",
+      "slate": "Slate"
+    },
+    "custom": {
+      "title": "Custom color",
+      "picker": "Color picker",
+      "active": "Custom selected"
+    },
+    "actions": {
+      "apply": "Apply",
+      "reset": "Reset"
+    }
   },
   "auth": {
     "title": "Log in to SoloForge",
@@ -125,6 +251,7 @@
       "logoTooLarge": "Logo is too large. Please pick an image under 5MB.",
       "logoInvalidType": "Invalid file type. Please choose an image file.",
       "logoLoginRequired": "Please log in before uploading a logo. You can still paste a Logo URL.",
+      "editLoginRequired": "Please log in before updating the product.",
       "logoUploadFailed": "Failed to upload logo. Please try again.",
       "tryAgain": "Try Again"
     }

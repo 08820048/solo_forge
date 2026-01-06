@@ -85,7 +85,7 @@ export default function Footer() {
                   type="button"
                   onClick={onSubscribe}
                   disabled={submitting}
-                  className="inline-flex items-center justify-center rounded-md border border-border bg-foreground px-3 py-2 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-60 disabled:cursor-not-allowed font-sans"
+                  className="inline-flex items-center justify-center rounded-md border border-border bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed font-sans"
                 >
                   {submitting ? t('newsletter.submitting') : t('newsletter.submit')}
                 </button>

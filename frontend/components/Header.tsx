@@ -4,7 +4,7 @@ import { Link, useRouter } from '@/i18n/routing';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import Image from 'next/image';
-import { Globe, Sun, Moon, User } from 'lucide-react';
+import { Globe, Sun, Moon, User, Palette } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,109 @@ import {
 import type { Provider } from '@supabase/supabase-js';
 
 type StoredUser = { name?: string; email?: string; avatarUrl?: string };
+
+type ThemeVars = Record<`--sf-${string}`, string>;
+
+const THEME_VARS_KEY = 'sf_theme_vars_v1';
+const THEME_PRESET_KEY = 'sf_theme_preset_v1';
+const THEME_CUSTOM_HEX_KEY = 'sf_theme_custom_hex_v1';
+
+const THEME_PRESETS: Array<{ id: string; labelKey: string; hex?: string }> = [
+  { id: 'default', labelKey: 'presets.default' },
+  { id: 'blue', labelKey: 'presets.blue', hex: '#2563eb' },
+  { id: 'purple', labelKey: 'presets.purple', hex: '#7c3aed' },
+  { id: 'green', labelKey: 'presets.green', hex: '#16a34a' },
+  { id: 'orange', labelKey: 'presets.orange', hex: '#ea580c' },
+  { id: 'rose', labelKey: 'presets.rose', hex: '#e11d48' },
+  { id: 'slate', labelKey: 'presets.slate', hex: '#334155' },
+];
+
+function normalizeHex(input: string): string | null {
+  const raw = (input || '').trim().toLowerCase();
+  if (!raw) return null;
+  const withHash = raw.startsWith('#') ? raw : `#${raw}`;
+  const hex = withHash.slice(1);
+  if (hex.length === 3) {
+    if (!/^[0-9a-f]{3}$/.test(hex)) return null;
+    return `#${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`;
+  }
+  if (hex.length === 6) {
+    if (!/^[0-9a-f]{6}$/.test(hex)) return null;
+    return `#${hex}`;
+  }
+  return null;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const normalized = normalizeHex(hex);
+  if (!normalized) return null;
+  const value = normalized.slice(1);
+  const r = Number.parseInt(value.slice(0, 2), 16);
+  const g = Number.parseInt(value.slice(2, 4), 16);
+  const b = Number.parseInt(value.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+  return { r, g, b };
+}
+
+function rgbToHex(rgb: { r: number; g: number; b: number }): string {
+  const toHex = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  return `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}`;
+}
+
+function mixRgb(a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }, t: number) {
+  const clamped = Math.max(0, Math.min(1, t));
+  return {
+    r: a.r + (b.r - a.r) * clamped,
+    g: a.g + (b.g - a.g) * clamped,
+    b: a.b + (b.b - a.b) * clamped,
+  };
+}
+
+function rgbToRgbaString(rgb: { r: number; g: number; b: number }, alpha: number) {
+  const a = Math.max(0, Math.min(1, alpha));
+  return `rgba(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)}, ${a})`;
+}
+
+function chooseForeground(rgb: { r: number; g: number; b: number }) {
+  const srgbToLinear = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const r = srgbToLinear(rgb.r);
+  const g = srgbToLinear(rgb.g);
+  const b = srgbToLinear(rgb.b);
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.52 ? '#000000' : '#ffffff';
+}
+
+function buildThemeVars(baseHex: string): ThemeVars | null {
+  const baseRgb = hexToRgb(baseHex);
+  if (!baseRgb) return null;
+  const darkRgb = mixRgb(baseRgb, { r: 255, g: 255, b: 255 }, 0.18);
+  const lightHex = rgbToHex(baseRgb);
+  const darkHex = rgbToHex(darkRgb);
+  const lightFg = chooseForeground(baseRgb);
+  const darkFg = chooseForeground(darkRgb);
+
+  return {
+    '--sf-primary-light': lightHex,
+    '--sf-primary-light-foreground': lightFg,
+    '--sf-primary-dark': darkHex,
+    '--sf-primary-dark-foreground': darkFg,
+    '--sf-ring-light': lightHex,
+    '--sf-ring-dark': darkHex,
+    '--sf-accent-light': rgbToRgbaString(baseRgb, 0.08),
+    '--sf-accent-dark': rgbToRgbaString(darkRgb, 0.16),
+    '--sf-card-wash-light': rgbToRgbaString(baseRgb, 0.08),
+    '--sf-card-wash-light-border': rgbToRgbaString(baseRgb, 0.35),
+    '--sf-card-wash-dark': rgbToRgbaString(darkRgb, 0.12),
+    '--sf-card-wash-dark-border': rgbToRgbaString(darkRgb, 0.42),
+    '--sf-pulse-light': rgbToRgbaString(baseRgb, 0.4),
+    '--sf-pulse-light-0': rgbToRgbaString(baseRgb, 0),
+    '--sf-pulse-dark': rgbToRgbaString(darkRgb, 0.4),
+    '--sf-pulse-dark-0': rgbToRgbaString(darkRgb, 0),
+  };
+}
 
 /**
  * readUserFromStorage
@@ -179,9 +282,14 @@ export default function Header() {
   const tNav = useTranslations('nav');
   const tAuth = useTranslations('auth');
   const tCommon = useTranslations('common');
+  const tTheme = useTranslations('theme');
   const locale = useLocale();
   const router = useRouter();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [activeThemeId, setActiveThemeId] = useState<string>('default');
+  const [customHex, setCustomHex] = useState('#2563eb');
+  const [customHexInput, setCustomHexInput] = useState('#2563eb');
   const [user, setUser] = useState<{ name?: string; email?: string; avatarUrl?: string } | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -196,6 +304,67 @@ export default function Header() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const avatarFallback = useMemo(() => getAvatarFallback(user?.name), [user?.name]);
+
+  function applyThemeVarsToRoot(vars: ThemeVars | null) {
+    const root = document.documentElement;
+
+    if (!vars) {
+      const raw = localStorage.getItem(THEME_VARS_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as ThemeVars;
+          if (parsed && typeof parsed === 'object') {
+            Object.keys(parsed).forEach((key) => {
+              if (key.startsWith('--sf-')) root.style.removeProperty(key);
+            });
+          }
+        } catch {}
+      }
+      localStorage.removeItem(THEME_VARS_KEY);
+      localStorage.removeItem(THEME_PRESET_KEY);
+      localStorage.removeItem(THEME_CUSTOM_HEX_KEY);
+      try {
+        window.dispatchEvent(new Event('sf_theme_updated'));
+      } catch {}
+      return;
+    }
+
+    Object.entries(vars).forEach(([key, value]) => {
+      if (!key.startsWith('--sf-')) return;
+      root.style.setProperty(key, value);
+    });
+    localStorage.setItem(THEME_VARS_KEY, JSON.stringify(vars));
+    try {
+      window.dispatchEvent(new Event('sf_theme_updated'));
+    } catch {}
+  }
+
+  function applyPresetTheme(presetId: string, baseHex?: string) {
+    if (presetId === 'default' || !baseHex) {
+      applyThemeVarsToRoot(null);
+      setActiveThemeId('default');
+      return;
+    }
+    const vars = buildThemeVars(baseHex);
+    if (!vars) return;
+    applyThemeVarsToRoot(vars);
+    localStorage.setItem(THEME_PRESET_KEY, presetId);
+    localStorage.removeItem(THEME_CUSTOM_HEX_KEY);
+    setActiveThemeId(presetId);
+  }
+
+  function applyCustomTheme(baseHex: string) {
+    const normalized = normalizeHex(baseHex);
+    if (!normalized) return;
+    const vars = buildThemeVars(normalized);
+    if (!vars) return;
+    applyThemeVarsToRoot(vars);
+    localStorage.setItem(THEME_PRESET_KEY, 'custom');
+    localStorage.setItem(THEME_CUSTOM_HEX_KEY, normalized);
+    setActiveThemeId('custom');
+    setCustomHex(normalized);
+    setCustomHexInput(normalized);
+  }
 
   useEffect(() => {
     // 初始化 spotlight 背景中心点，保持与 ui.html 行为一致
@@ -372,6 +541,63 @@ export default function Header() {
       router.push(nextPath === '/submit' ? '/submit' : '/');
     } catch {}
   }, [isAuthenticated, router]);
+
+  useEffect(() => {
+    try {
+      const presetId = localStorage.getItem(THEME_PRESET_KEY) || 'default';
+      const storedCustom = localStorage.getItem(THEME_CUSTOM_HEX_KEY);
+      const normalizedCustom = storedCustom ? normalizeHex(storedCustom) : null;
+      if (normalizedCustom) {
+        setCustomHex(normalizedCustom);
+        setCustomHexInput(normalizedCustom);
+      }
+      setActiveThemeId(presetId);
+    } catch {}
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === THEME_PRESET_KEY) {
+        setActiveThemeId(e.newValue || 'default');
+        return;
+      }
+
+      if (e.key === THEME_CUSTOM_HEX_KEY) {
+        const normalized = e.newValue ? normalizeHex(e.newValue) : null;
+        if (!normalized) return;
+        setCustomHex(normalized);
+        setCustomHexInput(normalized);
+        return;
+      }
+
+      if (e.key === THEME_VARS_KEY) {
+        const root = document.documentElement;
+        if (!e.newValue) {
+          if (e.oldValue) {
+            try {
+              const parsed = JSON.parse(e.oldValue) as ThemeVars;
+              if (parsed && typeof parsed === 'object') {
+                Object.keys(parsed).forEach((key) => {
+                  if (key.startsWith('--sf-')) root.style.removeProperty(key);
+                });
+              }
+            } catch {}
+          }
+          return;
+        }
+        try {
+          const parsed = JSON.parse(e.newValue) as ThemeVars;
+          if (parsed && typeof parsed === 'object') {
+            Object.entries(parsed).forEach(([key, value]) => {
+              if (!key.startsWith('--sf-') || typeof value !== 'string') return;
+              root.style.setProperty(key, value);
+            });
+          }
+        } catch {}
+      }
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   /**
    * onLogout
@@ -587,6 +813,10 @@ export default function Header() {
             <i className="ri-skip-up-line text-sm" aria-hidden="true" />
             {tNav('leaderboard')}
           </Link>
+          <Link href="/pricing" className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <i className="ri-price-tag-3-line text-sm" aria-hidden="true" />
+            {tNav('pricing')}
+          </Link>
           <button
             type="button"
             onClick={onSubmitClick}
@@ -607,6 +837,109 @@ export default function Header() {
           >
             <i className="ri-search-line text-base" aria-hidden="true" />
           </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setThemeMenuOpen((v) => !v);
+                setUserMenuOpen(false);
+              }}
+              className="rounded-full h-8 px-2 md:px-3 flex items-center justify-center gap-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors border border-transparent"
+              aria-label={tTheme('title')}
+            >
+              <Palette className="size-4" strokeWidth={1.5} />
+              <span className="hidden md:inline text-xs font-medium">{tTheme('title')}</span>
+            </button>
+            {themeMenuOpen ? (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setThemeMenuOpen(false)} />
+                <div className="absolute right-0 mt-2 w-72 z-20 rounded-md shadow-lg border border-border bg-popover text-popover-foreground p-3">
+                  <div className="text-xs font-semibold text-muted-foreground">{tTheme('presets.title')}</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {THEME_PRESETS.map((preset) => {
+                      const isActive = activeThemeId === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            if (preset.id === 'default') applyPresetTheme('default');
+                            else applyPresetTheme(preset.id, preset.hex);
+                            setThemeMenuOpen(false);
+                          }}
+                          className={[
+                            'flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition-colors',
+                            isActive ? 'border-primary/40 bg-accent/30' : 'border-border bg-background/60 hover:bg-accent/20',
+                          ].join(' ')}
+                        >
+                          <span
+                            className="size-4 rounded-full border border-border"
+                            style={{ backgroundColor: preset.hex || 'transparent' }}
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 flex-1 truncate">{tTheme(preset.labelKey)}</span>
+                          {isActive ? <span className="text-primary">{tTheme('active')}</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="my-3 h-px bg-border" />
+
+                  <div className="text-xs font-semibold text-muted-foreground">{tTheme('custom.title')}</div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={customHex}
+                      onChange={(e) => {
+                        const next = normalizeHex(e.target.value);
+                        if (!next) return;
+                        setCustomHex(next);
+                        setCustomHexInput(next);
+                        applyCustomTheme(next);
+                      }}
+                      className="h-9 w-10 rounded-md border border-border bg-background"
+                      aria-label={tTheme('custom.picker')}
+                    />
+                    <Input
+                      value={customHexInput}
+                      onChange={(e) => setCustomHexInput(e.target.value)}
+                      placeholder="#2563eb"
+                      className="h-9"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-9 px-3"
+                      onClick={() => {
+                        applyCustomTheme(customHexInput);
+                        setThemeMenuOpen(false);
+                      }}
+                    >
+                      {tTheme('actions.apply')}
+                    </Button>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyThemeVarsToRoot(null);
+                        setActiveThemeId('default');
+                        setThemeMenuOpen(false);
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {tTheme('actions.reset')}
+                    </button>
+                    <span className="text-[11px] text-muted-foreground">
+                      {activeThemeId === 'custom' ? tTheme('custom.active') : tTheme('presets.active')}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
           <button
             onClick={(e) => toggleTheme(e)}
             className="rounded-full w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
@@ -615,6 +948,12 @@ export default function Header() {
             <Sun className="hidden dark:block" size={16} strokeWidth={1.5} />
             <Moon className="block dark:hidden" size={16} strokeWidth={1.5} />
           </button>
+          <Link
+            href="/pricing"
+            className="md:hidden text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {tNav('pricing')}
+          </Link>
           <button
             type="button"
             onClick={onSubmitClick}
@@ -625,7 +964,10 @@ export default function Header() {
           {user ? (
             <div className="relative">
               <button
-                onClick={() => setUserMenuOpen((v) => !v)}
+                onClick={() => {
+                  setUserMenuOpen((v) => !v);
+                  setThemeMenuOpen(false);
+                }}
                 className="rounded-full w-8 h-8 flex items-center justify-center overflow-hidden border border-border bg-background/70"
                 aria-label="User menu"
               >
@@ -1069,7 +1411,7 @@ function AuthDialog({
                     className="absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-background shadow flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"
                     aria-label={tAuth('continueWith', { provider: 'X' })}
                   >
-                    <i className="ri-twitter-x-line text-[18px] text-blue-600" aria-hidden="true" />
+                    <i className="ri-twitter-x-line text-[18px] text-primary" aria-hidden="true" />
                   </button>
                 </div>
               </div>
@@ -1092,7 +1434,7 @@ function AuthDialog({
                     type="button"
                     onClick={() => setMode('signIn')}
                     className={`h-9 rounded-md text-sm font-medium transition-colors ${
-                      mode === 'signIn' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                      mode === 'signIn' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                     }`}
                     disabled={loading}
                   >
@@ -1102,7 +1444,7 @@ function AuthDialog({
                     type="button"
                     onClick={() => setMode('signUp')}
                     className={`h-9 rounded-md text-sm font-medium transition-colors ${
-                      mode === 'signUp' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                      mode === 'signUp' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                     }`}
                     disabled={loading}
                   >
@@ -1171,13 +1513,13 @@ function AuthDialog({
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="peer h-4 w-4 appearance-none rounded border border-border bg-background/60 shadow-sm transition-colors checked:bg-foreground checked:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
+                      className="peer h-4 w-4 appearance-none rounded border border-border bg-background/60 shadow-sm transition-colors checked:bg-primary checked:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
                       aria-label="记住我"
                     />
                     <svg
                       viewBox="0 0 20 20"
                       fill="none"
-                      className="pointer-events-none absolute h-3.5 w-3.5 opacity-0 peer-checked:opacity-100 text-background"
+                      className="pointer-events-none absolute h-3.5 w-3.5 opacity-0 peer-checked:opacity-100 text-primary-foreground"
                       aria-hidden="true"
                     >
                       <path
@@ -1200,7 +1542,7 @@ function AuthDialog({
                 <Button
                   type="submit"
                   disabled={loading || !enabled || !email || !password}
-                  className="w-full h-11 rounded-lg bg-foreground hover:bg-foreground/90 text-background"
+                  className="w-full h-11 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   {loading ? tAuth('loading') : mode === 'signUp' ? tAuth('signUp') : tAuth('signIn')}
                 </Button>

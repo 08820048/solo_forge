@@ -592,7 +592,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
               className={[
                 'rounded-md border px-3 py-1.5 text-xs transition-colors',
                 recentDir === 'desc'
-                  ? 'border-foreground/20 bg-foreground text-background'
+                  ? 'border-primary/20 bg-primary text-primary-foreground'
                   : 'border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-accent',
               ].join(' ')}
             >
@@ -604,7 +604,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
               className={[
                 'rounded-md border px-3 py-1.5 text-xs transition-colors',
                 recentDir === 'asc'
-                  ? 'border-foreground/20 bg-foreground text-background'
+                  ? 'border-primary/20 bg-primary text-primary-foreground'
                   : 'border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-accent',
               ].join(' ')}
             >
@@ -620,7 +620,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
         </div>
 
         {loading ? (
-          <div className="rounded-xl border border-border bg-card/50">
+          <div className="sf-wash rounded-xl border border-border bg-card/50">
             <div className="px-5 py-4 border-b border-border">
               <div className="h-4 w-32 bg-muted rounded" />
             </div>
@@ -645,7 +645,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
         ) : products.length === 0 ? (
           <div className="py-20 text-center text-muted-foreground">{listMessage || t('empty')}</div>
         ) : (
-          <div className="rounded-xl border border-border bg-card/50">
+          <div className="sf-wash rounded-xl border border-border bg-card/50">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">{t('title')}</h3>
               <span className="text-xs text-muted-foreground">{t('subtitle')}</span>
@@ -779,7 +779,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
   return (
     <div>
       <div className="mb-12 space-y-6">
-        <div className="rounded-xl border border-border bg-card/50 px-5 py-4">
+        <div className="sf-wash rounded-xl border border-border bg-card/50 px-5 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="text-sm font-semibold text-foreground">{devT('title')}</div>
             <div className="text-xs text-muted-foreground">{devT('subtitle')}</div>
@@ -878,7 +878,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading
           ? Array.from({ length: 6 }).map((_, idx) => (
-              <div key={idx} className="h-[260px] rounded-xl border border-border bg-card" />
+              <div key={idx} className="sf-wash h-[260px] rounded-xl border border-border bg-card" />
             ))
           : products.length === 0
             ? (

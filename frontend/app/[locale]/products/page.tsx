@@ -186,7 +186,7 @@ export default function ProductsPage() {
                   className={[
                     'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
                     selectedCategory === opt.id
-                      ? 'border-foreground/20 bg-foreground text-background'
+                      ? 'border-primary/20 bg-primary text-primary-foreground'
                       : 'border-border bg-background/60 backdrop-blur text-muted-foreground hover:bg-accent hover:text-foreground',
                   ].join(' ')}
                 >

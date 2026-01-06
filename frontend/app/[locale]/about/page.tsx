@@ -24,7 +24,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
           {t('slogan')}
         </p>
 
-        <div className="rounded-xl border border-border bg-card text-card-foreground p-8">
+        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8">
           <h2 className="text-2xl font-bold text-foreground mb-4">Our Mission</h2>
           <p className="text-muted-foreground leading-relaxed mb-4">
             SoloForge is dedicated to showcasing the incredible work of independent developers from around the world. 
@@ -38,7 +38,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
           </p>
         </div>
 
-        <div className="rounded-xl border border-border bg-card text-card-foreground p-8">
+        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8">
           <h2 className="text-2xl font-bold text-foreground mb-4">Why SoloForge?</h2>
           <ul className="space-y-3 text-muted-foreground">
             <li className="flex items-start">
@@ -64,7 +64,7 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
           </ul>
         </div>
 
-        <div className="rounded-xl border border-border bg-card text-card-foreground p-8">
+        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8">
           <h2 className="text-2xl font-bold text-foreground mb-4">Get Involved</h2>
           <p className="text-muted-foreground leading-relaxed mb-4">
             Whether you&apos;re a developer looking to showcase your product or a user searching for innovative tools, 
@@ -73,13 +73,13 @@ export default async function AboutPage({ params }: { params: Promise<{ locale: 
           <div className="flex flex-col sm:flex-row gap-4">
             <Link
               href="/submit"
-              className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               Submit Your Product
             </Link>
             <Link
               href="/products"
-              className="inline-flex items-center justify-center px-6 py-3 border-2 border-blue-600 text-base font-medium rounded-md text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30 transition-colors"
+              className="inline-flex items-center justify-center px-6 py-3 border-2 border-primary text-base font-medium rounded-md text-primary hover:bg-accent hover:text-accent-foreground transition-colors"
             >
               Browse Products
             </Link>
