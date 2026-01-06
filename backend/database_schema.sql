@@ -86,6 +86,16 @@ CREATE TABLE IF NOT EXISTS product_favorites (
     UNIQUE (product_id, user_id)
 );
 
+-- Create newsletter subscriptions table
+CREATE TABLE IF NOT EXISTS newsletter_subscriptions (
+    email TEXT PRIMARY KEY,
+    unsubscribed BOOLEAN NOT NULL DEFAULT FALSE,
+    last_sent_week TEXT,
+    last_sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Create home module state table (used for sponsor rotations)
 CREATE TABLE IF NOT EXISTS home_module_state (
     key TEXT PRIMARY KEY,
@@ -111,6 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_product_likes_product_id ON product_likes(product
 CREATE INDEX IF NOT EXISTS idx_product_likes_created_at ON product_likes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_product_favorites_product_id ON product_favorites(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_favorites_created_at ON product_favorites(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_newsletter_subscriptions_unsubscribed ON newsletter_subscriptions(unsubscribed);
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -131,6 +142,12 @@ CREATE TRIGGER update_products_updated_at
 DROP TRIGGER IF EXISTS update_home_module_state_updated_at ON home_module_state;
 CREATE TRIGGER update_home_module_state_updated_at
     BEFORE UPDATE ON home_module_state
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_newsletter_subscriptions_updated_at ON newsletter_subscriptions;
+CREATE TRIGGER update_newsletter_subscriptions_updated_at
+    BEFORE UPDATE ON newsletter_subscriptions
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 

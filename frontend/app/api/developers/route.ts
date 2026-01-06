@@ -25,6 +25,29 @@ export async function GET(request: NextRequest) {
     const limit = searchParams.get('limit');
 
     if (email) {
+      if (kind === 'center_stats') {
+        const response = await fetch(`${BACKEND_API_URL}/developers/${encodeURIComponent(email)}/center-stats`, {
+          headers: {
+            'Accept-Language': request.headers.get('Accept-Language') || 'en',
+          },
+          cache: 'no-store',
+        });
+
+        const data = await readJsonSafe<ApiResponse<unknown>>(response);
+        if (!response.ok) {
+          return NextResponse.json(
+            { success: false, message: data?.message || 'Failed to fetch developer stats' },
+            { status: response.status }
+          );
+        }
+
+        if (!data) {
+          return NextResponse.json({ success: false, message: 'Invalid response from backend' }, { status: 502 });
+        }
+
+        return NextResponse.json(data);
+      }
+
       const response = await fetch(`${BACKEND_API_URL}/developers/${encodeURIComponent(email)}`, {
         headers: {
           'Accept-Language': request.headers.get('Accept-Language') || 'en',

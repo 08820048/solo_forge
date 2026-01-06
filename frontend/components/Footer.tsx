@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import NextLink from 'next/link';
 import { Link as I18nLink } from '@/i18n/routing';
@@ -9,12 +10,55 @@ export default function Footer() {
   const t = useTranslations('footer');
   const tNav = useTranslations('nav');
   const currentYear = new Date().getFullYear();
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sf_user');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { email?: string } | null;
+      const storedEmail = (parsed?.email || '').trim();
+      if (storedEmail) {
+        setEmail(storedEmail);
+      }
+    } catch {
+    }
+  }, []);
+
+  async function onSubscribe() {
+    setMessage(null);
+    const value = email.trim();
+    if (!value) {
+      setMessage(t('newsletter.missingEmail'));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: value }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { success?: boolean; message?: string } | undefined;
+      if (!response.ok || !data?.success) {
+        setMessage(data?.message || t('newsletter.failed'));
+        return;
+      }
+      setMessage(t('newsletter.success'));
+    } catch {
+      setMessage(t('newsletter.failed'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <footer className="bg-background text-muted-foreground border-t border-border">
       <div className="mx-4 sm:mx-6 lg:mx-8 xl:mx-[290px] py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Brand */}
+          {/* Brand + Newsletter */}
           <div className="col-span-1 md:col-span-2">
             <div className="mb-4">
               <div className="inline-flex items-center gap-2 text-xl font-semibold text-foreground bg-spotlight">
@@ -24,6 +68,33 @@ export default function Footer() {
               <p className="mt-2 text-sm text-muted-foreground max-w-md font-sans">
                 {t('description')}
               </p>
+            </div>
+            <div className="mt-4 space-y-2 max-w-md">
+              <p className="text-xs text-muted-foreground font-sans">
+                {t('newsletter.description')}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t('newsletter.placeholder')}
+                  className="flex-1 rounded-md border border-border bg-background/80 px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60 font-sans"
+                />
+                <button
+                  type="button"
+                  onClick={onSubscribe}
+                  disabled={submitting}
+                  className="inline-flex items-center justify-center rounded-md border border-border bg-foreground px-3 py-2 text-xs font-medium text-background hover:bg-foreground/90 disabled:opacity-60 disabled:cursor-not-allowed font-sans"
+                >
+                  {submitting ? t('newsletter.submitting') : t('newsletter.submit')}
+                </button>
+              </div>
+              {message ? (
+                <p className="text-xs text-muted-foreground font-sans">
+                  {message}
+                </p>
+              ) : null}
             </div>
           </div>
 

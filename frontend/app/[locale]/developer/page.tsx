@@ -39,6 +39,12 @@ type Product = {
 
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
+type DeveloperCenterStats = {
+  followers: number;
+  total_likes: number;
+  total_favorites: number;
+};
+
 function SloganMarkdown({ value }: { value: string }) {
   return (
     <ReactMarkdown
@@ -112,6 +118,9 @@ export default function DeveloperCenterPage() {
   const [favoriteProducts, setFavoriteProducts] = useState<Product[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(true);
   const [favoritesMessage, setFavoritesMessage] = useState<string | null>(null);
+  const [centerStats, setCenterStats] = useState<DeveloperCenterStats | null>(null);
+  const [centerStatsLoading, setCenterStatsLoading] = useState(false);
+  const [centerStatsMessage, setCenterStatsMessage] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -236,6 +245,50 @@ export default function DeveloperCenterPage() {
     };
   }, [locale, refreshKey, t, user?.email]);
 
+  useEffect(() => {
+    if (!user?.email) {
+      setCenterStats(null);
+      setCenterStatsLoading(false);
+      setCenterStatsMessage(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchCenterStats() {
+      setCenterStatsLoading(true);
+      setCenterStatsMessage(null);
+      try {
+        const response = await fetch(
+          `/api/developers?email=${encodeURIComponent(user.email)}&kind=center_stats`,
+          { headers: { 'Accept-Language': locale } }
+        );
+        const json: ApiResponse<DeveloperCenterStats> = await response.json();
+        if (cancelled) return;
+
+        if (json.success) {
+          setCenterStats(json.data ?? { followers: 0, total_likes: 0, total_favorites: 0 });
+        } else {
+          setCenterStats(null);
+          setCenterStatsMessage(json.message ?? t('networkError'));
+        }
+      } catch {
+        if (!cancelled) {
+          setCenterStats(null);
+          setCenterStatsMessage(t('networkError'));
+        }
+      } finally {
+        if (!cancelled) setCenterStatsLoading(false);
+      }
+    }
+
+    fetchCenterStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locale, refreshKey, t, user?.email]);
+
   const myProducts = useMemo(() => {
     if (!user?.email) return [];
     const email = user.email.toLowerCase();
@@ -263,6 +316,8 @@ export default function DeveloperCenterPage() {
 
     return { total, approved, pending, rejected, topCategories };
   }, [myProducts]);
+
+  const fmt = (value: number | null | undefined) => (typeof value === 'number' ? value.toLocaleString() : '—');
 
   const onConfirmDelete = async () => {
     if (!deleteTarget || deleteLoading) return;
@@ -407,6 +462,27 @@ export default function DeveloperCenterPage() {
                   <div className="mt-1 text-2xl font-bold text-foreground">{stats.rejected}</div>
                 </div>
               </div>
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                  <div className="text-xs text-muted-foreground">{t('stats.followers')}</div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">
+                    {centerStatsLoading && !centerStats ? '…' : fmt(centerStats?.followers)}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                  <div className="text-xs text-muted-foreground">{t('stats.totalLikes')}</div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">
+                    {centerStatsLoading && !centerStats ? '…' : fmt(centerStats?.total_likes)}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                  <div className="text-xs text-muted-foreground">{t('stats.totalFavorites')}</div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">
+                    {centerStatsLoading && !centerStats ? '…' : fmt(centerStats?.total_favorites)}
+                  </div>
+                </div>
+              </div>
+              {centerStatsMessage ? <div className="mt-3 text-xs text-destructive">{centerStatsMessage}</div> : null}
             </CardContent>
           </Card>
         </div>

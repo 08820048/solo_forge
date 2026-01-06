@@ -61,6 +61,11 @@ pub struct UpdateProductRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct NewsletterSubscribeRequest {
+    pub email: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct Category {
     pub id: String,
     pub name_en: String,
@@ -105,6 +110,13 @@ pub struct DeveloperPopularity {
     pub likes: i64,
     pub favorites: i64,
     pub score: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct DeveloperCenterStats {
+    pub followers: i64,
+    pub total_likes: i64,
+    pub total_favorites: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]

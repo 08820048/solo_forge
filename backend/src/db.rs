@@ -1,10 +1,13 @@
 use crate::models::{
-    Category, CreateProductRequest, Developer, DeveloperPopularity, DeveloperWithFollowers,
-    Product, QueryParams, UpdateProductRequest,
+    Category, CreateProductRequest, Developer, DeveloperCenterStats, DeveloperPopularity,
+    DeveloperWithFollowers, Product, QueryParams, UpdateProductRequest,
 };
 use anyhow::Result;
-use chrono::{Datelike, TimeZone};
+use base64::{engine::general_purpose, Engine as _};
+use chrono::{Datelike, TimeZone, Timelike};
+use hmac::{Hmac, Mac};
 use reqwest::{Client, Url};
+use sha2::Sha256;
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
 use sqlx::{Postgres, QueryBuilder};
 use std::borrow::Cow;
@@ -88,6 +91,32 @@ struct DeveloperPopularityRow {
     website: Option<String>,
     likes: i64,
     favorites: i64,
+    score: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct DeveloperCenterStatsRow {
+    followers: i64,
+    total_likes: i64,
+    total_favorites: i64,
+}
+
+#[derive(sqlx::FromRow)]
+struct NewsletterRecipientRow {
+    email: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct NewsletterTopProductRow {
+    id: String,
+    name: String,
+    slogan: String,
+    website: String,
+    logo_url: Option<String>,
+    maker_name: String,
+    maker_email: String,
+    weekly_likes: i64,
+    weekly_favorites: i64,
     score: i64,
 }
 
@@ -183,6 +212,263 @@ fn strip_nul_str(value: &str) -> Cow<'_, str> {
     } else {
         Cow::Borrowed(value)
     }
+}
+
+/**
+ * normalize_base_url
+ * 规范化站点 base url（去掉末尾的 /），便于拼接 path。
+ */
+fn normalize_base_url(raw: &str) -> String {
+    raw.trim().trim_end_matches('/').to_string()
+}
+
+/**
+ * build_product_detail_url
+ * 生成产品详情页链接（前端路由：/products/[slug]，slug 使用产品 id）。
+ */
+fn build_product_detail_url(frontend_base_url: &str, locale: &str, product_id: &str) -> String {
+    let base = normalize_base_url(frontend_base_url);
+    let locale = locale.trim();
+    let slug = urlencoding::encode(product_id);
+    if locale.is_empty() {
+        format!("{}/products/{}", base, slug)
+    } else {
+        format!("{}/{}/products/{}", base, urlencoding::encode(locale), slug)
+    }
+}
+
+/**
+ * compute_newsletter_unsubscribe_token
+ * 计算退订 token（HMAC-SHA256 + URL-safe base64，无 padding）。
+ */
+fn compute_newsletter_unsubscribe_token(email: &str, secret: &str) -> Result<String> {
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|_| anyhow::anyhow!("Invalid NEWSLETTER_TOKEN_SECRET"))?;
+    mac.update(email.as_bytes());
+    let bytes = mac.finalize().into_bytes();
+    Ok(general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+}
+
+/**
+ * build_newsletter_unsubscribe_url
+ * 拼装退订链接（指向后端 /api/newsletter/unsubscribe 接口）。
+ */
+fn build_newsletter_unsubscribe_url(public_api_base_url: &str, email: &str, token: &str) -> String {
+    let base = normalize_base_url(public_api_base_url);
+    let email_q = urlencoding::encode(email);
+    let token_q = urlencoding::encode(token);
+    format!(
+        "{}/api/newsletter/unsubscribe?email={}&token={}",
+        base, email_q, token_q
+    )
+}
+
+/**
+ * build_weekly_newsletter_content
+ * 构建周报邮件内容（中英双语 + 产品详情链接 + 退订链接）。
+ */
+fn build_weekly_newsletter_content(
+    now: chrono::DateTime<chrono::Utc>,
+    since: chrono::DateTime<chrono::Utc>,
+    products: &[NewsletterTopProductRow],
+    frontend_base_url: &str,
+    unsubscribe_url: &str,
+) -> (String, String, String) {
+    let subject = format!(
+        "SoloForge Weekly · 周报 ({})",
+        now.format("%Y-%m-%d")
+    );
+
+    let mut text = String::new();
+    text.push_str(&format!("SoloForge 周报\n时间范围：{} ～ {}\n\n", since.format("%Y-%m-%d"), now.format("%Y-%m-%d")));
+    text.push_str("本周最受欢迎 Top 5 产品：\n\n");
+
+    let mut html = String::new();
+    html.push_str("<div style=\"font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; line-height: 1.6;\">");
+    html.push_str(&format!(
+        "<h2>SoloForge 周报</h2><p>时间范围：{} ～ {}</p><p>本周最受欢迎 Top 5 产品：</p>",
+        since.format("%Y-%m-%d"),
+        now.format("%Y-%m-%d")
+    ));
+    html.push_str("<ol>");
+
+    for (idx, p) in products.iter().enumerate() {
+        let n = idx + 1;
+        let score = p.score;
+        let likes = p.weekly_likes;
+        let favorites = p.weekly_favorites;
+        let website = p.website.trim();
+        let detail_url_zh = build_product_detail_url(frontend_base_url, "zh", &p.id);
+        let detail_url_en = build_product_detail_url(frontend_base_url, "en", &p.id);
+
+        text.push_str(&format!(
+            "{}. {} - {}\n产品详情（中文）：{}\nProduct details (EN): {}\n网站：{}\n本周热度：{}（赞 {} / 收藏 {}）\n作者：{} ({})\n\n",
+            n,
+            p.name,
+            p.slogan,
+            detail_url_zh,
+            detail_url_en,
+            website,
+            score,
+            likes,
+            favorites,
+            p.maker_name,
+            p.maker_email
+        ));
+
+        html.push_str("<li style=\"margin-bottom: 14px;\">");
+        html.push_str(&format!(
+            "<div><strong>{}</strong> - {}</div>",
+            html_escape(&p.name),
+            html_escape(&p.slogan)
+        ));
+        html.push_str(&format!(
+            "<div>详情：<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">中文</a> · <a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">EN</a></div>",
+            html_attr_escape(&detail_url_zh),
+            html_attr_escape(&detail_url_en)
+        ));
+        html.push_str(&format!(
+            "<div>网站：<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">{}</a></div>",
+            html_attr_escape(website),
+            html_escape(website)
+        ));
+        html.push_str(&format!(
+            "<div>本周热度：{}（赞 {} / 收藏 {}）</div>",
+            score, likes, favorites
+        ));
+        html.push_str(&format!(
+            "<div>作者：{}（{}）</div>",
+            html_escape(&p.maker_name),
+            html_escape(&p.maker_email)
+        ));
+        html.push_str("</li>");
+    }
+
+    html.push_str("</ol>");
+    text.push_str(&format!("退订：{}\n\n", unsubscribe_url));
+    text.push_str("---\n");
+    text.push_str(&format!(
+        "SoloForge Weekly\nTime range: {} – {}\n\nTop 5 products this week:\n\n",
+        since.format("%Y-%m-%d"),
+        now.format("%Y-%m-%d")
+    ));
+
+    html.push_str("<hr style=\"border:none;border-top:1px solid #eee;margin:18px 0;\"/>");
+    html.push_str("<h2>SoloForge Weekly</h2>");
+    html.push_str(&format!(
+        "<p>Time range: {} – {}</p><p>Top 5 products this week:</p>",
+        since.format("%Y-%m-%d"),
+        now.format("%Y-%m-%d")
+    ));
+    html.push_str("<ol>");
+
+    for (idx, p) in products.iter().enumerate() {
+        let n = idx + 1;
+        let score = p.score;
+        let likes = p.weekly_likes;
+        let favorites = p.weekly_favorites;
+        let website = p.website.trim();
+        let detail_url_en = build_product_detail_url(frontend_base_url, "en", &p.id);
+
+        text.push_str(&format!(
+            "{}. {} - {}\nDetails: {}\nWebsite: {}\nWeekly score: {} (likes {} / favorites {})\nMaker: {} ({})\n\n",
+            n,
+            p.name,
+            p.slogan,
+            detail_url_en,
+            website,
+            score,
+            likes,
+            favorites,
+            p.maker_name,
+            p.maker_email
+        ));
+
+        html.push_str("<li style=\"margin-bottom: 14px;\">");
+        html.push_str(&format!(
+            "<div><strong>{}</strong> - {}</div>",
+            html_escape(&p.name),
+            html_escape(&p.slogan)
+        ));
+        html.push_str(&format!(
+            "<div>Details: <a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">{}</a></div>",
+            html_attr_escape(&detail_url_en),
+            html_escape(&detail_url_en)
+        ));
+        html.push_str(&format!(
+            "<div>Website: <a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">{}</a></div>",
+            html_attr_escape(website),
+            html_escape(website)
+        ));
+        html.push_str(&format!(
+            "<div>Weekly score: {} (likes {} / favorites {})</div>",
+            score, likes, favorites
+        ));
+        html.push_str(&format!(
+            "<div>Maker: {} ({})</div>",
+            html_escape(&p.maker_name),
+            html_escape(&p.maker_email)
+        ));
+        html.push_str("</li>");
+    }
+
+    html.push_str("</ol>");
+    html.push_str("<p style=\"color:#666;font-size:12px;\">Unsubscribe: ");
+    html.push_str(&format!(
+        "<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">{}</a>",
+        html_attr_escape(unsubscribe_url),
+        html_escape(unsubscribe_url)
+    ));
+    html.push_str("</p>");
+    html.push_str("</div>");
+
+    (subject, html, text)
+}
+
+fn html_escape(raw: &str) -> String {
+    raw.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn html_attr_escape(raw: &str) -> String {
+    html_escape(raw).replace('\n', " ").replace('\r', " ")
+}
+
+async fn send_email_resend(
+    client: &Client,
+    api_key: &str,
+    from: &str,
+    to: &str,
+    subject: &str,
+    html: &str,
+    text: &str,
+) -> Result<()> {
+    let payload = serde_json::json!({
+        "from": from,
+        "to": [to],
+        "subject": subject,
+        "html": html,
+        "text": text
+    });
+
+    let resp = client
+        .post("https://api.resend.com/emails")
+        .bearer_auth(api_key)
+        .json(&payload)
+        .send()
+        .await?;
+
+    if resp.status().is_success() {
+        return Ok(());
+    }
+
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    Err(anyhow::anyhow!("Resend error: {} {}", status, body))
 }
 
 fn sanitize_create_product_request(product: &mut CreateProductRequest) {
@@ -345,6 +631,67 @@ fn map_developer_popularity_row(row: DeveloperPopularityRow) -> DeveloperPopular
         favorites: row.favorites,
         score: row.score,
     }
+}
+
+fn map_developer_center_stats_row(row: DeveloperCenterStatsRow) -> DeveloperCenterStats {
+    DeveloperCenterStats {
+        followers: row.followers,
+        total_likes: row.total_likes,
+        total_favorites: row.total_favorites,
+    }
+}
+
+fn parse_supabase_content_range_total(value: &str) -> Option<i64> {
+    let after_slash = value.rsplit('/').next()?;
+    if after_slash.trim() == "*" {
+        return Some(0);
+    }
+    after_slash.trim().parse::<i64>().ok()
+}
+
+async fn supabase_count(
+    supabase: &SupabaseDatabase,
+    table: &str,
+    query: &[(&str, String)],
+) -> Result<i64> {
+    let mut url = Url::parse(&format!("{}/rest/v1/{}", supabase.supabase_url, table))?;
+    {
+        let mut qp = url.query_pairs_mut();
+        for (k, v) in query {
+            qp.append_pair(k, v);
+        }
+        qp.append_pair("limit", "1");
+    }
+
+    let response = supabase
+        .client
+        .get(url)
+        .header("apikey", &supabase.supabase_key)
+        .header("Authorization", &format!("Bearer {}", supabase.supabase_key))
+        .header("Accept", "application/json")
+        .header("Prefer", "count=exact")
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(anyhow::anyhow!(
+            "Failed to fetch count from {}: {}. Body: {}",
+            table,
+            status,
+            body
+        ));
+    }
+
+    let total = response
+        .headers()
+        .get("content-range")
+        .and_then(|v| v.to_str().ok())
+        .and_then(parse_supabase_content_range_total)
+        .unwrap_or(0);
+
+    Ok(total)
 }
 
 fn split_sql_statements(input: &str) -> Vec<String> {
@@ -717,6 +1064,7 @@ impl Database {
         if let Some(pool) = &self.postgres {
             for attempt in 0..2 {
                 let attempt_result: Result<Vec<Product>> = async {
+                    let mut tx = pool.begin().await?;
                     let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
                         "SELECT \
                             p.id::text as id, \
@@ -804,14 +1152,22 @@ impl Database {
 
                     qb.push(" ORDER BY ");
                     if sort_by.as_str() == "likes" {
-                        qb.push("likes");
+                        qb.push("(SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = p.id)");
                     } else if sort_by.as_str() == "favorites" {
-                        qb.push("favorites");
+                        qb.push(
+                            "(SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = p.id)",
+                        );
                     } else if sort_by.as_str() == "popularity"
                         || sort_by.as_str() == "score"
                         || sort_by.as_str() == "featured"
                     {
-                        qb.push("(likes + favorites)");
+                        qb.push("((");
+                        qb.push("(SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = p.id)");
+                        qb.push(") + (");
+                        qb.push(
+                            "(SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = p.id)",
+                        );
+                        qb.push("))");
                     } else {
                         qb.push("p.created_at");
                     }
@@ -835,8 +1191,9 @@ impl Database {
                     let rows = qb
                         .build_query_as::<ProductRow>()
                         .persistent(false)
-                        .fetch_all(pool)
+                        .fetch_all(&mut *tx)
                         .await?;
+                    tx.commit().await?;
                     Ok(rows.into_iter().map(map_product_row).collect())
                 }
                 .await;
@@ -968,6 +1325,7 @@ impl Database {
         if let Some(pool) = &self.postgres {
             for attempt in 0..2 {
                 let attempt_result: Result<Vec<ProductRow>> = async {
+                    let mut tx = pool.begin().await?;
                     let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(
                         "SELECT \
                             p.id::text as id, \
@@ -993,11 +1351,13 @@ impl Database {
                     qb.push_bind(ids);
                     qb.push(")");
 
-                    Ok(qb
+                    let rows = qb
                         .build_query_as::<ProductRow>()
                         .persistent(false)
-                        .fetch_all(pool)
-                        .await?)
+                        .fetch_all(&mut *tx)
+                        .await?;
+                    tx.commit().await?;
+                    Ok(rows)
                 }
                 .await;
 
@@ -1038,13 +1398,15 @@ impl Database {
 
     pub async fn get_home_module_state(&self, key: &str) -> Result<Option<HomeModuleState>> {
         if let Some(pool) = &self.postgres {
+            let mut tx = pool.begin().await?;
             let row = sqlx::query_as::<_, HomeModuleStateRow>(
                 "SELECT key, mode, day_key, remaining_ids, today_ids FROM home_module_state WHERE key = $1 LIMIT 1",
             )
             .persistent(false)
             .bind(key)
-            .fetch_optional(pool)
+            .fetch_optional(&mut *tx)
             .await?;
+            tx.commit().await?;
             return Ok(row.map(map_home_module_state_row));
         }
 
@@ -1053,6 +1415,7 @@ impl Database {
 
     pub async fn upsert_home_module_state(&self, state: HomeModuleState) -> Result<()> {
         if let Some(pool) = &self.postgres {
+            let mut tx = pool.begin().await?;
             sqlx::query(
                 "INSERT INTO home_module_state (key, mode, day_key, remaining_ids, today_ids) \
                  VALUES ($1, $2, $3, $4, $5) \
@@ -1069,8 +1432,9 @@ impl Database {
             .bind(state.day_key)
             .bind(&state.remaining_ids)
             .bind(&state.today_ids)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
+            tx.commit().await?;
             return Ok(());
         }
 
@@ -1829,6 +2193,67 @@ impl Database {
         Ok(Vec::new())
     }
 
+    pub async fn get_developer_center_stats(&self, email: &str) -> Result<DeveloperCenterStats> {
+        if let Some(pool) = &self.postgres {
+            let email = strip_nul_str(email);
+            let row = sqlx::query_as::<_, DeveloperCenterStatsRow>(
+                "SELECT \
+                    (SELECT COUNT(*)::bigint FROM developer_follows f WHERE lower(f.developer_email) = lower($1)) as followers, \
+                    (SELECT COUNT(*)::bigint FROM product_likes l JOIN products p ON p.id = l.product_id WHERE lower(p.maker_email) = lower($1)) as total_likes, \
+                    (SELECT COUNT(*)::bigint FROM product_favorites f2 JOIN products p2 ON p2.id = f2.product_id WHERE lower(p2.maker_email) = lower($1)) as total_favorites",
+            )
+            .persistent(false)
+            .bind(email.as_ref())
+            .fetch_one(pool)
+            .await?;
+
+            return Ok(map_developer_center_stats_row(row));
+        }
+
+        let supabase = self
+            .supabase
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No database configured"))?;
+
+        let email = strip_nul_str(email).into_owned();
+
+        let followers = supabase_count(
+            supabase,
+            "developer_follows",
+            &[
+                ("select", "id".to_string()),
+                ("developer_email", format!("eq.{}", email)),
+            ],
+        )
+        .await?;
+
+        let total_likes = supabase_count(
+            supabase,
+            "product_likes",
+            &[
+                ("select", "id,products!inner(maker_email)".to_string()),
+                ("products.maker_email", format!("eq.{}", email)),
+            ],
+        )
+        .await?;
+
+        let total_favorites = supabase_count(
+            supabase,
+            "product_favorites",
+            &[
+                ("select", "id,products!inner(maker_email)".to_string()),
+                ("products.maker_email", format!("eq.{}", email)),
+            ],
+        )
+        .await?;
+
+        Ok(DeveloperCenterStats {
+            followers,
+            total_likes,
+            total_favorites,
+        })
+    }
+
     pub async fn follow_developer(&self, email: &str, user_id: &str) -> Result<()> {
         if let Some(pool) = &self.postgres {
             let email = strip_nul_str(email);
@@ -1936,6 +2361,215 @@ impl Database {
         }
 
         Err(anyhow::anyhow!("No database configured"))
+    }
+
+    pub async fn subscribe_newsletter(&self, email: &str) -> Result<()> {
+        let email = strip_nul_str(email);
+        let normalized = email.trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            return Err(anyhow::anyhow!("Missing email"));
+        }
+
+        if let Some(pool) = &self.postgres {
+            sqlx::query(
+                "INSERT INTO newsletter_subscriptions (email, unsubscribed) \
+                 VALUES ($1, FALSE) \
+                 ON CONFLICT (email) DO UPDATE SET \
+                    unsubscribed = FALSE, \
+                    updated_at = NOW()",
+            )
+            .persistent(false)
+            .bind(normalized)
+            .execute(pool)
+            .await?;
+            return Ok(());
+        }
+
+        Err(anyhow::anyhow!("No database configured"))
+    }
+
+    pub async fn unsubscribe_newsletter(&self, email: &str) -> Result<()> {
+        let email = strip_nul_str(email);
+        let normalized = email.trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            return Err(anyhow::anyhow!("Missing email"));
+        }
+
+        if let Some(pool) = &self.postgres {
+            sqlx::query(
+                "INSERT INTO newsletter_subscriptions (email, unsubscribed) \
+                 VALUES ($1, TRUE) \
+                 ON CONFLICT (email) DO UPDATE SET \
+                    unsubscribed = TRUE, \
+                    updated_at = NOW()",
+            )
+            .persistent(false)
+            .bind(normalized)
+            .execute(pool)
+            .await?;
+            return Ok(());
+        }
+
+        Err(anyhow::anyhow!("No database configured"))
+    }
+
+    pub async fn send_weekly_newsletter_if_due(&self) -> Result<usize> {
+        let pool = match &self.postgres {
+            Some(v) => v,
+            None => return Ok(0),
+        };
+
+        let now = chrono::Utc::now();
+        if now.weekday() != chrono::Weekday::Thu {
+            return Ok(0);
+        }
+        let hour = now.hour();
+        if hour < 8 || hour >= 10 {
+            return Ok(0);
+        }
+
+        let resend_key = env::var("RESEND_API_KEY").ok().unwrap_or_default();
+        let from = env::var("NEWSLETTER_FROM").ok().unwrap_or_default();
+        if resend_key.trim().is_empty() || from.trim().is_empty() {
+            log::warn!("Newsletter sender not configured: RESEND_API_KEY/NEWSLETTER_FROM missing");
+            return Ok(0);
+        }
+
+        let iso = now.iso_week();
+        let week_key = format!("{}-W{:02}", iso.year(), iso.week());
+
+        let mut conn = pool.acquire().await?;
+        let lock_key: i64 = 9_876_543_210;
+        let locked = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
+            .persistent(false)
+            .bind(lock_key)
+            .fetch_one(&mut *conn)
+            .await
+            .unwrap_or(false);
+        if !locked {
+            return Ok(0);
+        }
+
+        let since = now - chrono::Duration::days(7);
+        let products = sqlx::query_as::<_, NewsletterTopProductRow>(
+            "WITH likes AS ( \
+                SELECT product_id, COUNT(*)::bigint as likes \
+                FROM product_likes \
+                WHERE created_at >= $1 \
+                GROUP BY product_id \
+             ), favorites AS ( \
+                SELECT product_id, COUNT(*)::bigint as favorites \
+                FROM product_favorites \
+                WHERE created_at >= $1 \
+                GROUP BY product_id \
+             ) \
+             SELECT \
+                p.id::text as id, \
+                p.name, \
+                p.slogan, \
+                p.website, \
+                p.logo_url, \
+                p.maker_name, \
+                p.maker_email, \
+                COALESCE(l.likes, 0)::bigint as weekly_likes, \
+                COALESCE(f.favorites, 0)::bigint as weekly_favorites, \
+                (COALESCE(l.likes, 0) + COALESCE(f.favorites, 0))::bigint as score \
+             FROM products p \
+             LEFT JOIN likes l ON l.product_id = p.id \
+             LEFT JOIN favorites f ON f.product_id = p.id \
+             WHERE p.status = 'approved' \
+             ORDER BY score DESC, p.created_at DESC \
+             LIMIT $2",
+        )
+        .persistent(false)
+        .bind(since)
+        .bind(5i64)
+        .fetch_all(&mut *conn)
+        .await?;
+
+        let recipients = sqlx::query_as::<_, NewsletterRecipientRow>(
+            "SELECT email \
+             FROM newsletter_subscriptions \
+             WHERE unsubscribed = FALSE AND (last_sent_week IS DISTINCT FROM $1) \
+             ORDER BY created_at ASC \
+             LIMIT 1000",
+        )
+        .persistent(false)
+        .bind(&week_key)
+        .fetch_all(&mut *conn)
+        .await?;
+
+        if recipients.is_empty() {
+            let _ = sqlx::query("SELECT pg_advisory_unlock($1)")
+                .persistent(false)
+                .bind(lock_key)
+                .execute(&mut *conn)
+                .await;
+            return Ok(0);
+        }
+
+        let frontend_base_url = env::var("FRONTEND_BASE_URL")
+            .ok()
+            .unwrap_or_else(|| "http://localhost:3000".to_string());
+        let public_api_base_url = env::var("BACKEND_PUBLIC_URL")
+            .ok()
+            .unwrap_or_else(|| "http://localhost:8080".to_string());
+        let token_secret = env::var("NEWSLETTER_TOKEN_SECRET").ok().unwrap_or_default();
+        let client = Client::builder()
+            .timeout(Duration::from_secs(12))
+            .http1_only()
+            .build()
+            .unwrap_or_else(|_| Client::new());
+
+        let mut sent: Vec<String> = Vec::new();
+        for r in recipients {
+            let to = r.email.trim().to_string();
+            if to.is_empty() {
+                continue;
+            }
+            let token = compute_newsletter_unsubscribe_token(&to, &token_secret).unwrap_or_default();
+            let unsubscribe_url = if token.trim().is_empty() {
+                let base = normalize_base_url(&public_api_base_url);
+                let email_q = urlencoding::encode(&to);
+                format!("{}/api/newsletter/unsubscribe?email={}", base, email_q)
+            } else {
+                build_newsletter_unsubscribe_url(&public_api_base_url, &to, &token)
+            };
+            let (subject, html, text) = build_weekly_newsletter_content(
+                now,
+                since,
+                &products,
+                &frontend_base_url,
+                &unsubscribe_url,
+            );
+            let res = send_email_resend(&client, &resend_key, &from, &to, &subject, &html, &text)
+                .await;
+            match res {
+                Ok(()) => sent.push(to),
+                Err(e) => log::warn!("Newsletter send failed to={} err={:?}", r.email, e),
+            }
+        }
+
+        if !sent.is_empty() {
+            sqlx::query(
+                "UPDATE newsletter_subscriptions \
+                 SET last_sent_week = $1, last_sent_at = NOW(), updated_at = NOW() \
+                 WHERE email = ANY($2)",
+            )
+            .persistent(false)
+            .bind(&week_key)
+            .bind(&sent)
+            .execute(&mut *conn)
+            .await?;
+        }
+
+        let _ = sqlx::query("SELECT pg_advisory_unlock($1)")
+            .persistent(false)
+            .bind(lock_key)
+            .execute(&mut *conn)
+            .await;
+
+        Ok(sent.len())
     }
 
     pub async fn seed_engagement(&self, product_ids: &[String]) -> Result<()> {

@@ -34,6 +34,15 @@
   },
   "footer": {
     "description": "SoloForge showcases products crafted by independent developers worldwide, bridging makers and early adopters through a curated platform.",
+    "newsletter": {
+      "description": "Subscribe to the SoloForge weekly brief: every Thursday 08:00–10:00 UTC we send the top 5 most popular products of the week.",
+      "placeholder": "Your email",
+      "submit": "Subscribe",
+      "submitting": "Subscribing...",
+      "missingEmail": "Please enter your email.",
+      "success": "Subscription successful! You’ll receive the weekly brief every Thursday.",
+      "failed": "Subscription failed. Please try again later."
+    },
     "links": {
       "about": "About",
       "contact": "Contact",
@@ -231,7 +240,10 @@
       "total": "Total",
       "pending": "Pending",
       "approved": "Approved",
-      "rejected": "Rejected"
+      "rejected": "Rejected",
+      "followers": "Followers",
+      "totalLikes": "Total likes",
+      "totalFavorites": "Total favorites"
     },
     "overview": {
       "recentTitle": "Recent submissions",

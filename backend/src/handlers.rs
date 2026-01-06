@@ -1,10 +1,13 @@
 use crate::db::Database;
 use crate::models::{
-    ApiError, ApiResponse, CreateProductRequest, EmptyApiResponse, Product, ProductApiResponse,
-    ProductsApiResponse, QueryParams, SearchApiResponse, SearchResult, UpdateProductRequest,
+    ApiError, ApiResponse, CreateProductRequest, DeveloperCenterStats, EmptyApiResponse, Product,
+    NewsletterSubscribeRequest, ProductApiResponse, ProductsApiResponse, QueryParams,
+    SearchApiResponse, SearchResult, UpdateProductRequest,
 };
 use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
+use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::env;
@@ -12,6 +15,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
+use sha2::Sha256;
 
 /**
  * is_db_unavailable_error
@@ -512,6 +516,172 @@ fn is_same_user_email(a: &str, b: &str) -> bool {
     left.eq_ignore_ascii_case(right)
 }
 
+fn is_valid_email_basic(email: &str) -> bool {
+    let e = email.trim();
+    if e.is_empty() || e.len() > 320 {
+        return false;
+    }
+    let at = match e.find('@') {
+        Some(v) => v,
+        None => return false,
+    };
+    if at == 0 || at + 1 >= e.len() {
+        return false;
+    }
+    let domain = &e[at + 1..];
+    domain.contains('.') && !domain.starts_with('.') && !domain.ends_with('.')
+}
+
+/**
+ * verify_newsletter_unsubscribe_token
+ * 校验退订 token（HMAC-SHA256 + URL-safe base64，无 padding）。
+ */
+fn verify_newsletter_unsubscribe_token(email: &str, token: &str, secret: &str) -> bool {
+    if secret.trim().is_empty() {
+        return true;
+    }
+    let token = token.trim();
+    if token.is_empty() {
+        return false;
+    }
+    let sig = match general_purpose::URL_SAFE_NO_PAD.decode(token) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    mac.update(email.as_bytes());
+    mac.verify_slice(&sig).is_ok()
+}
+
+pub async fn subscribe_newsletter(
+    req: HttpRequest,
+    body: web::Json<NewsletterSubscribeRequest>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let raw = body.email.trim().to_string();
+    let email = raw.trim().to_ascii_lowercase();
+    if !is_valid_email_basic(&email) {
+        let lang = get_language_from_request(&req);
+        let msg = if lang.starts_with("zh") {
+            "邮箱格式不正确。"
+        } else {
+            "Invalid email address."
+        };
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(msg.to_string()));
+    }
+
+    match db.subscribe_newsletter(&email).await {
+        Ok(()) => HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true })),
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                let lang = get_language_from_request(&req);
+                let msg = if lang.starts_with("zh") {
+                    "数据库连接不可用，已降级忽略写入。"
+                } else {
+                    "Database is unavailable. Subscription write is skipped in degraded mode."
+                };
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "POST /api/newsletter/subscribe",
+                    OkPayload { ok: false },
+                    msg.to_string(),
+                    &e,
+                ));
+            }
+            HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct NewsletterUnsubscribeQuery {
+    pub email: String,
+    pub token: Option<String>,
+}
+
+/**
+ * unsubscribe_newsletter
+ * 退订周报（用于邮件内退订链接）。
+ */
+pub async fn unsubscribe_newsletter(
+    query: web::Query<NewsletterUnsubscribeQuery>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let email = query.email.trim().to_ascii_lowercase();
+    if !is_valid_email_basic(&email) {
+        let html = r#"<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;">
+<h2>退订失败</h2>
+<p>邮箱格式不正确。</p>
+<hr style="border:none;border-top:1px solid #eee;margin:18px 0;"/>
+<h2>Unsubscribe failed</h2>
+<p>Invalid email address.</p>
+</div>"#;
+        return HttpResponse::BadRequest()
+            .content_type("text/html; charset=utf-8")
+            .body(html);
+    }
+
+    let secret = env::var("NEWSLETTER_TOKEN_SECRET").ok().unwrap_or_default();
+    let token = query.token.as_deref().unwrap_or("");
+    if !verify_newsletter_unsubscribe_token(&email, token, &secret) {
+        let html = r#"<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;">
+<h2>退订失败</h2>
+<p>退订链接无效或已过期。</p>
+<hr style="border:none;border-top:1px solid #eee;margin:18px 0;"/>
+<h2>Unsubscribe failed</h2>
+<p>The unsubscribe link is invalid or expired.</p>
+</div>"#;
+        return HttpResponse::BadRequest()
+            .content_type("text/html; charset=utf-8")
+            .body(html);
+    }
+
+    match db.unsubscribe_newsletter(&email).await {
+        Ok(()) => {
+            let html = r#"<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;">
+<h2>退订成功</h2>
+<p>你已成功退订 SoloForge 周报。</p>
+<hr style="border:none;border-top:1px solid #eee;margin:18px 0;"/>
+<h2>Unsubscribed</h2>
+<p>You have successfully unsubscribed from the SoloForge weekly brief.</p>
+</div>"#;
+            HttpResponse::Ok()
+                .content_type("text/html; charset=utf-8")
+                .body(html)
+        }
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                let html = r#"<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;">
+<h2>退订暂不可用</h2>
+<p>数据库连接不可用，暂时无法完成退订写入，请稍后重试。</p>
+<hr style="border:none;border-top:1px solid #eee;margin:18px 0;"/>
+<h2>Unsubscribe unavailable</h2>
+<p>The database is unavailable. Please try again later.</p>
+</div>"#;
+                return HttpResponse::Ok()
+                    .content_type("text/html; charset=utf-8")
+                    .body(html);
+            }
+            let _ = e;
+            let html = r#"<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;">
+<h2>退订失败</h2>
+<p>服务器错误，请稍后重试。</p>
+<hr style="border:none;border-top:1px solid #eee;margin:18px 0;"/>
+<h2>Unsubscribe failed</h2>
+<p>Server error. Please try again later.</p>
+</div>"#;
+            HttpResponse::InternalServerError()
+                .content_type("text/html; charset=utf-8")
+                .body(html)
+        }
+    }
+}
+
 pub async fn follow_developer(
     path: web::Path<String>,
     body: Option<web::Json<InteractionBody>>,
@@ -565,6 +735,33 @@ pub async fn get_developer_by_email(
             .json(ApiResponse::<()>::error("Developer not found".to_string())),
         Err(e) => HttpResponse::InternalServerError()
             .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+pub async fn get_developer_center_stats(
+    path: web::Path<DeveloperPath>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let email = path.into_inner().email.trim().to_ascii_lowercase();
+
+    match db.get_developer_center_stats(&email).await {
+        Ok(stats) => HttpResponse::Ok().json(ApiResponse::success(stats)),
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/developers/{email}/center-stats",
+                    DeveloperCenterStats {
+                        followers: 0,
+                        total_likes: 0,
+                        total_favorites: 0,
+                    },
+                    "数据库连接不可用，已降级返回空统计。".to_string(),
+                    &e,
+                ));
+            }
+            HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
+        }
     }
 }
 

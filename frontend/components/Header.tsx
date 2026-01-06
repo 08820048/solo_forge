@@ -568,7 +568,7 @@ export default function Header() {
   return (
     <nav className="fixed top-6 z-50 left-3 right-3 sm:left-4 sm:right-4 lg:left-6 lg:right-6 xl:left-8 xl:right-8 2xl:left-10 2xl:right-10">
       <div className="flex justify-center">
-        <div className="w-full max-w-6xl shrink-0 rounded-full border border-border bg-background/70 backdrop-blur-xl shadow-lg shadow-black/5 px-4 md:px-5 h-14 flex items-center justify-between gap-4 md:gap-12 transition-all duration-300">
+        <div className="w-full max-w-4xl shrink-0 rounded-full border border-border bg-background/70 backdrop-blur-xl shadow-lg shadow-black/5 px-4 md:px-5 h-14 flex items-center justify-between gap-4 md:gap-10 transition-all duration-300">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
           <i className="ri-hammer-line text-foreground text-lg" aria-hidden="true" />

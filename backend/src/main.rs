@@ -10,6 +10,7 @@ use actix_web::{middleware::Logger, web, App, HttpServer};
 use dotenv::dotenv;
 use std::env;
 use std::sync::Arc;
+use std::time::Duration;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -56,6 +57,27 @@ async fn main() -> std::io::Result<()> {
     log::info!("Starting SoloForge API server at http://{}", bind_address);
 
     let db = Arc::new(Database::new());
+    let db_for_newsletter = db.clone();
+    tokio::spawn(async move {
+        loop {
+            let enabled = match env::var("NEWSLETTER_ENABLED").ok().as_deref() {
+                Some("0") => false,
+                Some("false") => false,
+                Some("FALSE") => false,
+                _ => true,
+            };
+            if enabled {
+                match db_for_newsletter.send_weekly_newsletter_if_due().await {
+                    Ok(sent) if sent > 0 => {
+                        log::info!("Newsletter sent count={}", sent);
+                    }
+                    Ok(_) => {}
+                    Err(e) => log::warn!("Newsletter task failed err={:?}", e),
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        }
+    });
 
     HttpServer::new(move || {
         let cors = Cors::default()
@@ -96,6 +118,10 @@ async fn main() -> std::io::Result<()> {
                                 "/popularity-last-month",
                                 web::get().to(handlers::get_developer_popularity_last_month),
                             )
+                            .route(
+                                "/{email}/center-stats",
+                                web::get().to(handlers::get_developer_center_stats),
+                            )
                             .route("/{email}", web::get().to(handlers::get_developer_by_email))
                             .route(
                                 "/{email}",
@@ -120,6 +146,11 @@ async fn main() -> std::io::Result<()> {
                             .route("", web::get().to(handlers::get_leaderboard)),
                     )
                     .service(web::scope("/search").route("", web::get().to(handlers::search)))
+                    .service(
+                        web::scope("/newsletter")
+                            .route("/subscribe", web::post().to(handlers::subscribe_newsletter))
+                            .route("/unsubscribe", web::get().to(handlers::unsubscribe_newsletter)),
+                    )
                     .service(
                         web::scope("/home")
                             .route(

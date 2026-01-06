@@ -124,10 +124,21 @@ export default async function ProductDetailPage({
                 )}
               </div>
               <div className="flex-1">
-                <h1 className="text-4xl font-bold text-foreground mb-2">
-                  {product.name}
-                </h1>
-                <div className="text-xl text-muted-foreground mb-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <h1 className="text-4xl font-bold text-foreground">
+                    {product.name}
+                  </h1>
+                  <a
+                    href={product.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors sm:mt-2"
+                  >
+                    <span>{t('website')}</span>
+                    <span aria-hidden="true">→</span>
+                  </a>
+                </div>
+                <div className="text-xl text-muted-foreground mb-4 mt-2">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
@@ -172,14 +183,6 @@ export default async function ProductDetailPage({
                     {String(product.slogan || '')}
                   </ReactMarkdown>
                 </div>
-                <a
-                  href={product.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-black hover:bg-black/90 transition-colors"
-                >
-                  {t('website')} →
-                </a>
               </div>
             </div>
           </div>

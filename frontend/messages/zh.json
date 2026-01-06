@@ -34,6 +34,15 @@
   },
   "footer": {
     "description": "SoloForge 致力于展示全球独立开发者打造的优秀产品，连接创作者与早期用户，形成精选的发现平台。",
+    "newsletter": {
+      "description": "订阅 SoloForge 周报：每周四 08:00-10:00（UTC）发送本周最受欢迎的前 5 个产品。",
+      "placeholder": "你的邮箱",
+      "submit": "订阅",
+      "submitting": "订阅中...",
+      "missingEmail": "请输入邮箱。",
+      "success": "订阅成功！你将在每周四收到周报。",
+      "failed": "订阅失败，请稍后再试。"
+    },
     "links": {
       "about": "关于我们",
       "contact": "联系我们",
@@ -231,7 +240,10 @@
       "total": "总数",
       "pending": "审核中",
       "approved": "已通过",
-      "rejected": "未通过"
+      "rejected": "未通过",
+      "followers": "粉丝数",
+      "totalLikes": "总点赞",
+      "totalFavorites": "总收藏"
     },
     "overview": {
       "recentTitle": "最近提交",

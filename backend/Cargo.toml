@@ -23,3 +23,7 @@ anyhow = "1.0"
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono", "uuid", "macros"] }
 utoipa = { version = "5", features = ["actix_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { version = "9", features = ["actix-web", "vendored"] }
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+urlencoding = "2.1"
