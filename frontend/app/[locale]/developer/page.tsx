@@ -34,6 +34,7 @@ type Product = {
   maker_website?: string | null;
   language: string;
   status: ProductStatus;
+  rejection_reason?: string | null;
   created_at: string;
 };
 
@@ -548,7 +549,7 @@ export default function DeveloperCenterPage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 min-w-0">
                               <Link
-                                href={{ pathname: '/products/[slug]', params: { slug: p.id } }}
+                                href={{ pathname: '/developer/products/[id]', params: { id: p.id } }}
                                 className="text-foreground font-medium truncate hover:underline"
                               >
                                 {p.name}
@@ -558,6 +559,12 @@ export default function DeveloperCenterPage() {
                             <div className="mt-1 text-sm text-muted-foreground line-clamp-1">
                               <SloganMarkdown value={p.slogan} />
                             </div>
+                            {p.status === 'rejected' && p.rejection_reason ? (
+                              <div className="mt-1 text-xs text-destructive break-words">
+                                {locale.toLowerCase().startsWith('zh') ? '拒绝原因：' : 'Rejection: '}
+                                {p.rejection_reason}
+                              </div>
+                            ) : null}
                             <div className="mt-2 text-xs text-muted-foreground">
                               {categoryT(p.category)} · {formatDate(p.created_at, locale)}
                             </div>
@@ -715,7 +722,7 @@ export default function DeveloperCenterPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <Link
-                            href={{ pathname: '/products/[slug]', params: { slug: p.id } }}
+                            href={{ pathname: '/developer/products/[id]', params: { id: p.id } }}
                             className="text-foreground font-medium truncate hover:underline"
                           >
                             {p.name}
@@ -725,6 +732,12 @@ export default function DeveloperCenterPage() {
                         <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
                           <SloganMarkdown value={p.slogan} />
                         </div>
+                        {p.status === 'rejected' && p.rejection_reason ? (
+                          <div className="mt-2 text-xs text-destructive break-words">
+                            {locale.toLowerCase().startsWith('zh') ? '拒绝原因：' : 'Rejection: '}
+                            {p.rejection_reason}
+                          </div>
+                        ) : null}
                         <div className="mt-2 text-xs text-muted-foreground">
                           {categoryT(p.category)} · {t('products.createdAt', { date: formatDate(p.created_at, locale) })}
                         </div>
@@ -755,7 +768,7 @@ export default function DeveloperCenterPage() {
                           {t('actions.viewWebsite')}
                         </a>
                         <Link
-                          href={{ pathname: '/products/[slug]', params: { slug: p.id } }}
+                          href={{ pathname: '/developer/products/[id]', params: { id: p.id } }}
                           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
                           {t('actions.viewDetail')}
@@ -900,6 +913,7 @@ export default function DeveloperCenterPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }

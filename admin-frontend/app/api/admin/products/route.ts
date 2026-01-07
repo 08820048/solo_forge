@@ -54,15 +54,24 @@ export async function POST(request: NextRequest) {
   try {
     await requireAdmin(request);
 
-    const body = (await request.json().catch(() => null)) as { id?: string; status?: string } | null;
+    const body = (await request.json().catch(() => null)) as
+      | { id?: string; status?: string; rejection_reason?: string | null }
+      | null;
     const id = String(body?.id || '').trim();
     const status = String(body?.status || '').trim().toLowerCase();
+    const rejectionReason = body?.rejection_reason == null ? null : String(body.rejection_reason);
 
     if (!id) {
       return NextResponse.json<ApiResponse<null>>({ success: false, message: 'Missing id' }, { status: 400 });
     }
     if (!status || !['pending', 'approved', 'rejected'].includes(status)) {
       return NextResponse.json<ApiResponse<null>>({ success: false, message: 'Invalid status' }, { status: 400 });
+    }
+    if (status === 'rejected') {
+      const v = String(rejectionReason ?? '').trim();
+      if (!v) {
+        return NextResponse.json<ApiResponse<null>>({ success: false, message: 'Missing rejection_reason' }, { status: 400 });
+      }
     }
 
     const response = await fetch(`${BACKEND_API_URL}/products/${encodeURIComponent(id)}`, {
@@ -71,7 +80,11 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
         'Accept-Language': request.headers.get('Accept-Language') || 'zh',
       },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(
+        status === 'rejected'
+          ? { status, rejection_reason: String(rejectionReason ?? '').trim() }
+          : { status }
+      ),
       cache: 'no-store',
     });
 
@@ -128,4 +141,3 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json<ApiResponse<null>>({ success: false, message }, { status });
   }
 }
-

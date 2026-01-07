@@ -9,12 +9,14 @@ use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{Duration, Utc};
 use hmac::{Hmac, Mac};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::collections::hash_map::DefaultHasher;
 use std::env;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+use std::time::Duration as StdDuration;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
@@ -371,13 +373,29 @@ pub async fn search(
     )
 )]
 pub async fn get_product_by_id(
+    req: HttpRequest,
     path: web::Path<String>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let id = path.into_inner();
 
     match db.get_product_by_id(&id).await {
-        Ok(Some(product)) => HttpResponse::Ok().json(ApiResponse::success(product)),
+        Ok(Some(product)) => {
+            let is_admin = validate_admin_token(&req).is_ok();
+            if matches!(product.status, crate::models::ProductStatus::Approved) || is_admin {
+                return HttpResponse::Ok().json(ApiResponse::success(product));
+            }
+
+            if let Some(token) = extract_bearer_token(&req) {
+                if let Some(email) = resolve_supabase_email_from_bearer(&token).await {
+                    if is_same_user_email(&product.maker_email, &email) {
+                        return HttpResponse::Ok().json(ApiResponse::success(product));
+                    }
+                }
+            }
+
+            HttpResponse::NotFound().json(ApiResponse::<()>::error("Product not found".to_string()))
+        }
         Ok(None) => {
             HttpResponse::NotFound().json(ApiResponse::<()>::error("Product not found".to_string()))
         }
@@ -433,8 +451,31 @@ pub async fn update_product(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let id = path.into_inner();
+    let mut updates = update_data.into_inner();
 
-    match db.update_product(&id, update_data.into_inner()).await {
+    if let Some(status) = updates.status.clone() {
+        match status {
+            crate::models::ProductStatus::Rejected => {
+                let reason = updates
+                    .rejection_reason
+                    .as_deref()
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                if reason.is_empty() {
+                    return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                        "Missing rejection_reason".to_string(),
+                    ));
+                }
+                updates.rejection_reason = Some(reason);
+            }
+            _ => {
+                updates.rejection_reason = Some(String::new());
+            }
+        }
+    }
+
+    match db.update_product(&id, updates).await {
         Ok(Some(product)) => HttpResponse::Ok().json(ApiResponse::success(product)),
         Ok(None) => {
             HttpResponse::NotFound().json(ApiResponse::<()>::error("Product not found".to_string()))
@@ -2096,6 +2137,64 @@ fn validate_admin_token(req: &HttpRequest) -> Result<(), HttpResponse> {
     Ok(())
 }
 
+#[derive(Debug, Deserialize)]
+struct SupabaseAuthUser {
+    email: Option<String>,
+}
+
+fn extract_bearer_token(req: &HttpRequest) -> Option<String> {
+    let header = req
+        .headers()
+        .get("authorization")
+        .and_then(|h| h.to_str().ok())?
+        .trim();
+    if header.is_empty() {
+        return None;
+    }
+    let mut parts = header.split_whitespace();
+    let scheme = parts.next().unwrap_or("");
+    let token = parts.next().unwrap_or("");
+    if !scheme.eq_ignore_ascii_case("bearer") || token.trim().is_empty() {
+        return None;
+    }
+    Some(token.trim().to_string())
+}
+
+async fn resolve_supabase_email_from_bearer(token: &str) -> Option<String> {
+    let supabase_url = env::var("SUPABASE_URL").ok()?;
+    let supabase_key = env::var("SUPABASE_KEY").ok()?;
+    if supabase_url.trim().is_empty() || supabase_key.trim().is_empty() {
+        return None;
+    }
+
+    let client = Client::builder()
+        .timeout(StdDuration::from_secs(6))
+        .connect_timeout(StdDuration::from_secs(3))
+        .http1_only()
+        .build()
+        .ok()?;
+
+    let url = format!("{}/auth/v1/user", supabase_url.trim_end_matches('/'));
+    let resp = client
+        .get(url)
+        .header("apikey", supabase_key)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .ok()?;
+
+    if !resp.status().is_success() {
+        return None;
+    }
+
+    let user = resp.json::<SupabaseAuthUser>().await.ok()?;
+    user.email
+        .as_deref()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct AdminSponsorshipRequestsQuery {
     pub status: Option<String>,
@@ -2717,6 +2816,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
                     category: None,
                     tags: None,
                     status: Some(crate::models::ProductStatus::Approved),
+                    rejection_reason: None,
                 };
 
                 match db.update_product(&id, updates).await {

@@ -13,6 +13,7 @@ use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
 use sqlx::{Postgres, QueryBuilder};
 use std::borrow::Cow;
 use std::env;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -42,6 +43,7 @@ struct ProductRow {
     maker_website: Option<String>,
     language: String,
     status: String,
+    rejection_reason: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
     likes: i64,
@@ -262,10 +264,10 @@ fn serialize_product_status(status: &crate::models::ProductStatus) -> &'static s
  * 开发环境下将 approved 视为 (approved | pending)，用于在 RLS 限制下展示 seed 数据。
  */
 fn dev_include_pending_in_approved() -> bool {
-    match env::var("DEV_INCLUDE_PENDING_IN_APPROVED") {
-        Ok(v) if v.eq_ignore_ascii_case("1") || v.eq_ignore_ascii_case("true") => true,
-        _ => env::var("DEV_SEED_TOKEN").is_ok(),
-    }
+    matches!(
+        env::var("DEV_INCLUDE_PENDING_IN_APPROVED"),
+        Ok(v) if v.eq_ignore_ascii_case("1") || v.eq_ignore_ascii_case("true")
+    )
 }
 
 fn is_retryable_db_error(err: &anyhow::Error) -> bool {
@@ -278,6 +280,25 @@ fn is_retryable_db_error(err: &anyhow::Error) -> bool {
         || msg.contains("connection timed out")
         || msg.contains("connection refused")
         || msg.contains("error connecting")
+}
+
+fn is_missing_column_error(err: &anyhow::Error, column: &str) -> bool {
+    let msg = format!("{:?}", err).to_ascii_lowercase();
+    msg.contains("column") && msg.contains(column) && msg.contains("does not exist")
+}
+
+static PRODUCTS_REJECTION_REASON_READY: AtomicBool = AtomicBool::new(false);
+
+async fn ensure_products_rejection_reason_column(pool: &PgPool) -> Result<()> {
+    if PRODUCTS_REJECTION_REASON_READY.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+    sqlx::query("ALTER TABLE products ADD COLUMN IF NOT EXISTS rejection_reason TEXT")
+        .persistent(false)
+        .execute(pool)
+        .await?;
+    PRODUCTS_REJECTION_REASON_READY.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 fn strip_nul_in_place(value: &mut String) {
@@ -598,6 +619,9 @@ fn sanitize_update_product_request(updates: &mut UpdateProductRequest) {
             strip_nul_in_place(tag);
         }
     }
+    if let Some(v) = updates.rejection_reason.as_mut() {
+        strip_nul_in_place(v);
+    }
 }
 
 fn sanitize_categories(categories: &mut [Category]) {
@@ -629,6 +653,7 @@ fn map_product_row(row: ProductRow) -> Product {
         maker_website: row.maker_website,
         language: row.language,
         status: parse_product_status(&row.status),
+        rejection_reason: row.rejection_reason,
         created_at: row.created_at,
         updated_at: row.updated_at,
         likes: row.likes,
@@ -958,7 +983,7 @@ impl Database {
     pub async fn get_developer_by_email(&self, email: &str) -> Result<Option<Developer>> {
         if let Some(pool) = &self.postgres {
             let email = strip_nul_str(email);
-            let row = sqlx::query_as::<_, DeveloperRow>(
+            let attempt = sqlx::query_as::<_, DeveloperRow>(
                 "SELECT email, name, avatar_url, website, sponsor_role, sponsor_verified \
                  FROM developers \
                  WHERE lower(email) = lower($1) \
@@ -968,9 +993,17 @@ impl Database {
             .persistent(false)
             .bind(email.as_ref())
             .fetch_optional(pool)
-            .await?;
+            .await;
 
-            return Ok(row.map(map_developer_row));
+            match attempt {
+                Ok(row) => return Ok(row.map(map_developer_row)),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if !(is_retryable_db_error(&e) && self.supabase.is_some()) {
+                        return Err(e);
+                    }
+                }
+            }
         }
 
         let supabase = match &self.supabase {
@@ -1167,6 +1200,7 @@ impl Database {
 
     pub async fn get_products(&self, params: QueryParams) -> Result<Vec<Product>> {
         if let Some(pool) = &self.postgres {
+            let mut last_err: Option<anyhow::Error> = None;
             for attempt in 0..2 {
                 let attempt_result: Result<Vec<Product>> = async {
                     let mut tx = pool.begin().await?;
@@ -1185,6 +1219,7 @@ impl Database {
                             p.maker_website, \
                             p.language, \
                             p.status::text as status, \
+                            p.rejection_reason, \
                             p.created_at, \
                             p.updated_at, \
                             (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = p.id) as likes, \
@@ -1306,11 +1341,31 @@ impl Database {
                 match attempt_result {
                     Ok(list) => return Ok(list),
                     Err(e) => {
-                        if attempt == 0 && is_retryable_db_error(&e) {
+                        if is_missing_column_error(&e, "rejection_reason")
+                            && !PRODUCTS_REJECTION_REASON_READY.load(Ordering::Relaxed)
+                        {
+                            if ensure_products_rejection_reason_column(pool).await.is_ok() {
+                                continue;
+                            }
+                        }
+                        last_err = Some(e);
+                        let Some(ref err) = last_err else {
+                            continue;
+                        };
+                        if is_retryable_db_error(err) && self.supabase.is_some() {
+                            break;
+                        }
+                        if attempt == 0 && is_retryable_db_error(err) {
                             continue;
                         }
-                        return Err(e);
+                        return Err(last_err.unwrap());
                     }
+                }
+            }
+
+            if let Some(e) = last_err {
+                if !(is_retryable_db_error(&e) && self.supabase.is_some()) {
+                    return Err(e);
                 }
             }
         }
@@ -1428,6 +1483,7 @@ impl Database {
         }
 
         if let Some(pool) = &self.postgres {
+            let mut last_err: Option<anyhow::Error> = None;
             for attempt in 0..2 {
                 let attempt_result: Result<Vec<ProductRow>> = async {
                     let mut tx = pool.begin().await?;
@@ -1446,6 +1502,7 @@ impl Database {
                             p.maker_website, \
                             p.language, \
                             p.status::text as status, \
+                            p.rejection_reason, \
                             p.created_at, \
                             p.updated_at, \
                             (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = p.id) as likes, \
@@ -1483,11 +1540,31 @@ impl Database {
                         return Ok(ordered);
                     }
                     Err(e) => {
-                        if attempt == 0 && is_retryable_db_error(&e) {
+                        if is_missing_column_error(&e, "rejection_reason")
+                            && !PRODUCTS_REJECTION_REASON_READY.load(Ordering::Relaxed)
+                        {
+                            if ensure_products_rejection_reason_column(pool).await.is_ok() {
+                                continue;
+                            }
+                        }
+                        last_err = Some(e);
+                        let Some(ref err) = last_err else {
+                            continue;
+                        };
+                        if is_retryable_db_error(err) && self.supabase.is_some() {
+                            break;
+                        }
+                        if attempt == 0 && is_retryable_db_error(err) {
                             continue;
                         }
-                        return Err(e);
+                        return Err(last_err.unwrap());
                     }
+                }
+            }
+
+            if let Some(e) = last_err {
+                if !(is_retryable_db_error(&e) && self.supabase.is_some()) {
+                    return Err(e);
                 }
             }
         }
@@ -2049,6 +2126,7 @@ impl Database {
                         p.maker_website, \
                         p.language, \
                         p.status::text as status, \
+                        p.rejection_reason, \
                         p.created_at, \
                         p.updated_at, \
                         COALESCE(pl.likes, 0)::bigint as likes, \
@@ -2063,13 +2141,38 @@ impl Database {
                     status_clause
                 );
 
-                sqlx::query_as::<_, ProductRow>(&sql)
-                    .persistent(false)
-                    .bind(user_id)
-                    .bind(language)
-                    .bind(limit)
-                    .fetch_all(pool)
-                    .await?
+                {
+                    let attempt = sqlx::query_as::<_, ProductRow>(&sql)
+                        .persistent(false)
+                        .bind(user_id)
+                        .bind(language)
+                        .bind(limit)
+                        .fetch_all(pool)
+                        .await;
+                    match attempt {
+                        Ok(rows) => rows,
+                        Err(e) => {
+                            let e: anyhow::Error = e.into();
+                            if is_missing_column_error(&e, "rejection_reason")
+                                && !PRODUCTS_REJECTION_REASON_READY.load(Ordering::Relaxed)
+                            {
+                                if ensure_products_rejection_reason_column(pool).await.is_ok() {
+                                    sqlx::query_as::<_, ProductRow>(&sql)
+                                        .persistent(false)
+                                        .bind(user_id)
+                                        .bind(language)
+                                        .bind(limit)
+                                        .fetch_all(pool)
+                                        .await?
+                                } else {
+                                    return Err(e);
+                                }
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
             } else {
                 let sql = format!(
                     "SELECT \
@@ -2086,6 +2189,7 @@ impl Database {
                         p.maker_website, \
                         p.language, \
                         p.status::text as status, \
+                        p.rejection_reason, \
                         p.created_at, \
                         p.updated_at, \
                         COALESCE(pl.likes, 0)::bigint as likes, \
@@ -2100,12 +2204,36 @@ impl Database {
                     status_clause
                 );
 
-                sqlx::query_as::<_, ProductRow>(&sql)
-                    .persistent(false)
-                    .bind(user_id)
-                    .bind(limit)
-                    .fetch_all(pool)
-                    .await?
+                {
+                    let attempt = sqlx::query_as::<_, ProductRow>(&sql)
+                        .persistent(false)
+                        .bind(user_id)
+                        .bind(limit)
+                        .fetch_all(pool)
+                        .await;
+                    match attempt {
+                        Ok(rows) => rows,
+                        Err(e) => {
+                            let e: anyhow::Error = e.into();
+                            if is_missing_column_error(&e, "rejection_reason")
+                                && !PRODUCTS_REJECTION_REASON_READY.load(Ordering::Relaxed)
+                            {
+                                if ensure_products_rejection_reason_column(pool).await.is_ok() {
+                                    sqlx::query_as::<_, ProductRow>(&sql)
+                                        .persistent(false)
+                                        .bind(user_id)
+                                        .bind(limit)
+                                        .fetch_all(pool)
+                                        .await?
+                                } else {
+                                    return Err(e);
+                                }
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
             };
 
             return Ok(rows.into_iter().map(map_product_row).collect());
@@ -2116,7 +2244,7 @@ impl Database {
 
     pub async fn get_product_by_id(&self, id: &str) -> Result<Option<Product>> {
         if let Some(pool) = &self.postgres {
-            let row = sqlx::query_as::<_, ProductRow>(
+            let attempt = sqlx::query_as::<_, ProductRow>(
                 "SELECT \
                     p.id::text as id, \
                     p.name, \
@@ -2131,6 +2259,7 @@ impl Database {
                     p.maker_website, \
                     p.language, \
                     p.status::text as status, \
+                    p.rejection_reason, \
                     p.created_at, \
                     p.updated_at, \
                     (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = p.id) as likes, \
@@ -2142,8 +2271,52 @@ impl Database {
             .persistent(false)
             .bind(id)
             .fetch_optional(pool)
-            .await?;
-            return Ok(row.map(map_product_row));
+            .await;
+
+            match attempt {
+                Ok(row) => return Ok(row.map(map_product_row)),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_column_error(&e, "rejection_reason")
+                        && !PRODUCTS_REJECTION_REASON_READY.load(Ordering::Relaxed)
+                    {
+                        if ensure_products_rejection_reason_column(pool).await.is_ok() {
+                            let row = sqlx::query_as::<_, ProductRow>(
+                                "SELECT \
+                                    p.id::text as id, \
+                                    p.name, \
+                                    p.slogan, \
+                                    p.description, \
+                                    p.website, \
+                                    p.logo_url, \
+                                    p.category, \
+                                    COALESCE(p.tags, ARRAY[]::text[]) as tags, \
+                                    p.maker_name, \
+                                    p.maker_email, \
+                                    p.maker_website, \
+                                    p.language, \
+                                    p.status::text as status, \
+                                    p.rejection_reason, \
+                                    p.created_at, \
+                                    p.updated_at, \
+                                    (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = p.id) as likes, \
+                                    (SELECT COUNT(*)::bigint FROM product_favorites f WHERE f.product_id = p.id) as favorites \
+                                 FROM products p \
+                                 WHERE p.id::text = $1 \
+                                 LIMIT 1",
+                            )
+                            .persistent(false)
+                            .bind(id)
+                            .fetch_optional(pool)
+                            .await?;
+                            return Ok(row.map(map_product_row));
+                        }
+                    }
+                    if !(is_retryable_db_error(&e) && self.supabase.is_some()) {
+                        return Err(e);
+                    }
+                }
+            }
         }
 
         let supabase = self
@@ -2208,6 +2381,7 @@ impl Database {
                     maker_website, \
                     language, \
                     status::text as status, \
+                    rejection_reason, \
                     created_at, \
                     updated_at, \
                     0::bigint as likes, \
@@ -2290,6 +2464,7 @@ impl Database {
                 && updates.category.is_none()
                 && updates.tags.is_none()
                 && updates.status.is_none()
+                && updates.rejection_reason.is_none()
             {
                 return self.get_product_by_id(id).await;
             }
@@ -2343,6 +2518,15 @@ impl Database {
                 qb.push("status = ");
                 qb.push_bind(serialize_product_status(status));
             }
+            if let Some(reason) = &updates.rejection_reason {
+                push_comma(&mut qb, &mut first);
+                if reason.trim().is_empty() {
+                    qb.push("rejection_reason = NULL");
+                } else {
+                    qb.push("rejection_reason = ");
+                    qb.push_bind(reason);
+                }
+            }
 
             push_comma(&mut qb, &mut first);
             qb.push("updated_at = now()");
@@ -2365,6 +2549,7 @@ impl Database {
                     maker_website, \
                     language, \
                     status::text as status, \
+                    rejection_reason, \
                     created_at, \
                     updated_at, \
                     (SELECT COUNT(*)::bigint FROM product_likes l WHERE l.product_id = products.id) as likes, \
@@ -2388,6 +2573,15 @@ impl Database {
         url.query_pairs_mut()
             .append_pair("id", &format!("eq.{}", id));
 
+        let mut payload = serde_json::to_value(&updates)?;
+        if let serde_json::Value::Object(ref mut map) = payload {
+            if let Some(reason) = &updates.rejection_reason {
+                if reason.trim().is_empty() {
+                    map.insert("rejection_reason".to_string(), serde_json::Value::Null);
+                }
+            }
+        }
+
         let response = supabase
             .client
             .patch(url)
@@ -2398,7 +2592,7 @@ impl Database {
             )
             .header("Accept", "application/json")
             .header("Prefer", "return=representation")
-            .json(&updates)
+            .json(&payload)
             .send()
             .await?;
 
@@ -2655,7 +2849,7 @@ impl Database {
         if let Some(pool) = &self.postgres {
             let query = strip_nul_str(query);
             let q = format!("%{}%", query);
-            let rows = sqlx::query_as::<_, DeveloperRow>(
+            let attempt = sqlx::query_as::<_, DeveloperRow>(
                 "SELECT email, name, avatar_url, website, sponsor_role, sponsor_verified \
                  FROM developers \
                  WHERE name ILIKE $1 OR email ILIKE $1 OR website ILIKE $1 \
@@ -2663,12 +2857,35 @@ impl Database {
                  LIMIT $2",
             )
             .persistent(false)
-            .bind(q)
+            .bind(q.as_str())
             .bind(limit)
             .fetch_all(pool)
-            .await?;
+            .await;
 
-            return Ok(rows.into_iter().map(map_developer_row).collect());
+            match attempt {
+                Ok(rows) => return Ok(rows.into_iter().map(map_developer_row).collect()),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_column_error(&e, "sponsor_role")
+                        || is_missing_column_error(&e, "sponsor_verified")
+                    {
+                        let rows = sqlx::query_as::<_, DeveloperRow>(
+                            "SELECT email, name, avatar_url, website, NULL::text as sponsor_role, FALSE as sponsor_verified \
+                             FROM developers \
+                             WHERE name ILIKE $1 OR email ILIKE $1 OR website ILIKE $1 \
+                             ORDER BY name ASC \
+                             LIMIT $2",
+                        )
+                        .persistent(false)
+                        .bind(q.as_str())
+                        .bind(limit)
+                        .fetch_all(pool)
+                        .await?;
+                        return Ok(rows.into_iter().map(map_developer_row).collect());
+                    }
+                    return Err(e);
+                }
+            }
         }
 
         Ok(Vec::new())
@@ -2682,7 +2899,7 @@ impl Database {
 
         if let Some(pool) = &self.postgres {
             let mut tx = pool.begin().await?;
-            let rows = sqlx::query_as::<_, DeveloperWithFollowersRow>(
+            let attempt = sqlx::query_as::<_, DeveloperWithFollowersRow>(
                 "SELECT \
                     d.email, \
                     d.name, \
@@ -2700,13 +2917,51 @@ impl Database {
             .persistent(false)
             .bind(limit)
             .fetch_all(&mut *tx)
-            .await?;
-            tx.commit().await?;
+            .await;
 
-            return Ok(rows
-                .into_iter()
-                .map(map_developer_with_followers_row)
-                .collect());
+            match attempt {
+                Ok(rows) => {
+                    tx.commit().await?;
+                    return Ok(rows
+                        .into_iter()
+                        .map(map_developer_with_followers_row)
+                        .collect());
+                }
+                Err(e) => {
+                    let _ = tx.rollback().await;
+                    let e: anyhow::Error = e.into();
+                    if is_missing_column_error(&e, "sponsor_role")
+                        || is_missing_column_error(&e, "sponsor_verified")
+                    {
+                        let mut tx = pool.begin().await?;
+                        let rows = sqlx::query_as::<_, DeveloperWithFollowersRow>(
+                            "SELECT \
+                                d.email, \
+                                d.name, \
+                                d.avatar_url, \
+                                d.website, \
+                                NULL::text as sponsor_role, \
+                                FALSE as sponsor_verified, \
+                                COUNT(f.id)::bigint::text as followers \
+                             FROM developers d \
+                             LEFT JOIN developer_follows f ON f.developer_email = d.email \
+                             GROUP BY d.email, d.name, d.avatar_url, d.website \
+                             ORDER BY COUNT(f.id) DESC, d.name ASC \
+                             LIMIT $1",
+                        )
+                        .persistent(false)
+                        .bind(limit)
+                        .fetch_all(&mut *tx)
+                        .await?;
+                        tx.commit().await?;
+                        return Ok(rows
+                            .into_iter()
+                            .map(map_developer_with_followers_row)
+                            .collect());
+                    }
+                    return Err(e);
+                }
+            }
         }
 
         Ok(Vec::new())
@@ -2720,7 +2975,7 @@ impl Database {
 
         if let Some(pool) = &self.postgres {
             let mut tx = pool.begin().await?;
-            let rows = sqlx::query_as::<_, DeveloperWithFollowersRow>(
+            let attempt = sqlx::query_as::<_, DeveloperWithFollowersRow>(
                 "SELECT \
                     d.email, \
                     d.name, \
@@ -2738,13 +2993,51 @@ impl Database {
             .persistent(false)
             .bind(limit)
             .fetch_all(&mut *tx)
-            .await?;
-            tx.commit().await?;
+            .await;
 
-            return Ok(rows
-                .into_iter()
-                .map(map_developer_with_followers_row)
-                .collect());
+            match attempt {
+                Ok(rows) => {
+                    tx.commit().await?;
+                    return Ok(rows
+                        .into_iter()
+                        .map(map_developer_with_followers_row)
+                        .collect());
+                }
+                Err(e) => {
+                    let _ = tx.rollback().await;
+                    let e: anyhow::Error = e.into();
+                    if is_missing_column_error(&e, "sponsor_role")
+                        || is_missing_column_error(&e, "sponsor_verified")
+                    {
+                        let mut tx = pool.begin().await?;
+                        let rows = sqlx::query_as::<_, DeveloperWithFollowersRow>(
+                            "SELECT \
+                                d.email, \
+                                d.name, \
+                                d.avatar_url, \
+                                d.website, \
+                                NULL::text as sponsor_role, \
+                                FALSE as sponsor_verified, \
+                                COUNT(f.id)::bigint::text as followers \
+                             FROM developers d \
+                             LEFT JOIN developer_follows f ON f.developer_email = d.email \
+                             GROUP BY d.email, d.name, d.avatar_url, d.website, d.created_at \
+                             ORDER BY d.created_at DESC, d.name ASC \
+                             LIMIT $1",
+                        )
+                        .persistent(false)
+                        .bind(limit)
+                        .fetch_all(&mut *tx)
+                        .await?;
+                        tx.commit().await?;
+                        return Ok(rows
+                            .into_iter()
+                            .map(map_developer_with_followers_row)
+                            .collect());
+                    }
+                    return Err(e);
+                }
+            }
         }
 
         Ok(Vec::new())
@@ -2767,7 +3060,7 @@ impl Database {
                 .unwrap_or(first_day_current_month - chrono::Duration::days(30));
 
             let mut tx = pool.begin().await?;
-            let rows = sqlx::query_as::<_, DeveloperPopularityRow>(
+            let attempt = sqlx::query_as::<_, DeveloperPopularityRow>(
                 "WITH likes AS ( \
                     SELECT p.maker_email as email, COUNT(l.id)::bigint as likes \
                     FROM products p \
@@ -2803,10 +3096,63 @@ impl Database {
             .bind(first_day_current_month)
             .bind(limit)
             .fetch_all(&mut *tx)
-            .await?;
-            tx.commit().await?;
+            .await;
 
-            return Ok(rows.into_iter().map(map_developer_popularity_row).collect());
+            match attempt {
+                Ok(rows) => {
+                    tx.commit().await?;
+                    return Ok(rows.into_iter().map(map_developer_popularity_row).collect());
+                }
+                Err(e) => {
+                    let _ = tx.rollback().await;
+                    let e: anyhow::Error = e.into();
+                    if is_missing_column_error(&e, "sponsor_role")
+                        || is_missing_column_error(&e, "sponsor_verified")
+                    {
+                        let mut tx = pool.begin().await?;
+                        let rows = sqlx::query_as::<_, DeveloperPopularityRow>(
+                            "WITH likes AS ( \
+                                SELECT p.maker_email as email, COUNT(l.id)::bigint as likes \
+                                FROM products p \
+                                JOIN product_likes l ON l.product_id = p.id \
+                                WHERE l.created_at >= $1 AND l.created_at < $2 \
+                                GROUP BY p.maker_email \
+                             ), \
+                             favorites AS ( \
+                                SELECT p.maker_email as email, COUNT(f.id)::bigint as favorites \
+                                FROM products p \
+                                JOIN product_favorites f ON f.product_id = p.id \
+                                WHERE f.created_at >= $1 AND f.created_at < $2 \
+                                GROUP BY p.maker_email \
+                             ) \
+                             SELECT \
+                                d.email, \
+                                d.name, \
+                                d.avatar_url, \
+                                d.website, \
+                                NULL::text as sponsor_role, \
+                                FALSE as sponsor_verified, \
+                                COALESCE(l.likes, 0)::bigint as likes, \
+                                COALESCE(f.favorites, 0)::bigint as favorites, \
+                                (COALESCE(l.likes, 0) + COALESCE(f.favorites, 0))::bigint as score \
+                             FROM developers d \
+                             LEFT JOIN likes l ON l.email = d.email \
+                             LEFT JOIN favorites f ON f.email = d.email \
+                             ORDER BY score DESC, favorites DESC, likes DESC, d.name ASC \
+                             LIMIT $3",
+                        )
+                        .persistent(false)
+                        .bind(first_day_last_month)
+                        .bind(first_day_current_month)
+                        .bind(limit)
+                        .fetch_all(&mut *tx)
+                        .await?;
+                        tx.commit().await?;
+                        return Ok(rows.into_iter().map(map_developer_popularity_row).collect());
+                    }
+                    return Err(e);
+                }
+            }
         }
 
         Ok(Vec::new())
@@ -3217,8 +3563,11 @@ impl Database {
                 maker_website, \
                 language, \
                 status::text as status, \
+                rejection_reason, \
                 created_at, \
-                updated_at \
+                updated_at, \
+                0::bigint as likes, \
+                0::bigint as favorites \
              FROM products \
              WHERE id::text = ANY($1)",
         )

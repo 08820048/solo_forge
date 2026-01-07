@@ -74,7 +74,10 @@ async function requireOwnerOrAdmin(request: NextRequest, productId: string, lang
 
   const res = await fetchWithTimeout(`${BACKEND_API_URL}/products/${encodeURIComponent(productId)}`, {
     method: 'GET',
-    headers: { 'Accept-Language': lang },
+    headers: {
+      'Accept-Language': lang,
+      Authorization: request.headers.get('Authorization') || '',
+    },
     cache: 'no-store',
   });
   const json = await readJsonSafe<{ success?: boolean; data?: unknown; message?: string }>(res);

@@ -17,6 +17,8 @@ pub struct Product {
     pub maker_website: Option<String>,
     pub language: String,
     pub status: ProductStatus,
+    #[serde(default)]
+    pub rejection_reason: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
@@ -58,6 +60,7 @@ pub struct UpdateProductRequest {
     pub category: Option<String>,
     pub tags: Option<Vec<String>>,
     pub status: Option<ProductStatus>,
+    pub rejection_reason: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
 type ProductStatus = 'pending' | 'approved' | 'rejected';
+type BusyAction = 'approve' | 'reject' | 'delete';
 
 type Product = {
   id: string;
@@ -25,6 +26,7 @@ type Product = {
   created_at: string;
   likes?: number;
   favorites?: number;
+  rejection_reason?: string | null;
 };
 
 /**
@@ -58,12 +60,15 @@ function statusBadge(status: ProductStatus) {
 export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [status, setStatus] = useState<'all' | ProductStatus>('pending');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState<Record<string, BusyAction | undefined>>({});
   const [reloading, setReloading] = useState(false);
+  const [draftReasons, setDraftReasons] = useState<Record<string, string>>({});
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -77,6 +82,7 @@ export default function AdminProductsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setMessage(null);
+    setHint(null);
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -121,31 +127,94 @@ export default function AdminProductsPage() {
    * updateStatus
    * 更新产品审核状态（approved / rejected / pending）。
    */
-  const updateStatus = async (id: string, nextStatus: ProductStatus) => {
+  const updateStatus = async (id: string, nextStatus: ProductStatus): Promise<boolean> => {
     const token = await getAccessToken();
     if (!token) {
       setMessage('未检测到登录会话，请先登录。');
-      return;
+      return false;
     }
-    setBusy((m) => ({ ...m, [id]: true }));
     setMessage(null);
+    setHint(null);
+
+    const action: BusyAction = nextStatus === 'approved' ? 'approve' : 'reject';
+    if (busy[id]) return false;
+
+    let rejection_reason: string | undefined;
+    if (nextStatus === 'rejected') {
+      const raw = draftReasons[id] ?? '';
+      const reason = raw.trim();
+      if (!reason) {
+        setMessage('拒绝原因不能为空，请先填写下方输入框。');
+        return false;
+      }
+      rejection_reason = reason;
+    }
+
+    setBusy((m) => ({ ...m, [id]: action }));
+    setHint(action === 'approve' ? '正在通过该产品...' : '正在拒绝该产品...');
     try {
       const res = await fetch('/api/admin/products', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'zh', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: nextStatus }),
+        body: JSON.stringify(nextStatus === 'rejected' ? { id, status: nextStatus, rejection_reason } : { id, status: nextStatus }),
       });
       const json = (await res.json().catch(() => null)) as ApiResponse<unknown> | null;
       if (!res.ok || !json?.success) {
         setMessage(json?.message || '更新失败。');
-        return;
+        return false;
       }
-      setProducts((list) => list.map((p) => (p.id === id ? { ...p, status: nextStatus } : p)));
+      setProducts((list) =>
+        list.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: nextStatus,
+                rejection_reason: nextStatus === 'rejected' ? (rejection_reason ?? '') : null,
+              }
+            : p,
+        ),
+      );
+      setRejectingId((cur) => (cur === id ? null : cur));
+      return true;
     } catch {
       setMessage('网络错误，请稍后重试。');
+      return false;
     } finally {
-      setBusy((m) => ({ ...m, [id]: false }));
+      setBusy((m) => ({ ...m, [id]: undefined }));
+      setHint(null);
     }
+  };
+
+  /**
+   * startReject
+   * 展开指定产品的拒绝原因输入区。
+   */
+  const startReject = (id: string) => {
+    if (busy[id]) return;
+    setMessage(null);
+    setHint(null);
+    setRejectingId(id);
+    setDraftReasons((m) => {
+      if (Object.prototype.hasOwnProperty.call(m, id)) return m;
+      return { ...m, [id]: '' };
+    });
+  };
+
+  /**
+   * cancelReject
+   * 关闭拒绝原因输入区，不提交变更。
+   */
+  const cancelReject = () => {
+    setRejectingId(null);
+  };
+
+  /**
+   * confirmReject
+   * 提交拒绝，并要求拒绝原因必填。
+   */
+  const confirmReject = async (id: string) => {
+    const ok = await updateStatus(id, 'rejected');
+    if (ok) setRejectingId(null);
   };
 
   /**
@@ -161,8 +230,11 @@ export default function AdminProductsPage() {
       setMessage('未检测到登录会话，请先登录。');
       return;
     }
-    setBusy((m) => ({ ...m, [id]: true }));
     setMessage(null);
+    setHint(null);
+    if (busy[id]) return;
+    setBusy((m) => ({ ...m, [id]: 'delete' }));
+    setHint('正在删除该产品...');
     try {
       const res = await fetch(`/api/admin/products?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
@@ -177,7 +249,8 @@ export default function AdminProductsPage() {
     } catch {
       setMessage('网络错误，请稍后重试。');
     } finally {
-      setBusy((m) => ({ ...m, [id]: false }));
+      setBusy((m) => ({ ...m, [id]: undefined }));
+      setHint(null);
     }
   };
 
@@ -239,6 +312,7 @@ export default function AdminProductsPage() {
         <CardContent>
           {loading ? <div className="py-10 text-sm text-muted-foreground">加载中...</div> : null}
           {!loading && message ? <div className="py-2 text-sm text-destructive">{message}</div> : null}
+          {!loading && hint ? <div className="py-2 text-sm text-muted-foreground">{hint}</div> : null}
 
           {!loading ? (
             <div className="overflow-x-auto">
@@ -254,7 +328,10 @@ export default function AdminProductsPage() {
                 </thead>
                 <tbody>
                   {products.map((p) => {
-                    const disabled = !!busy[p.id];
+                    const current = busy[p.id];
+                    const disabled = !!current;
+                    const showingReject = rejectingId === p.id && p.status !== 'rejected';
+                    const reason = (draftReasons[p.id] ?? '').trim();
                     return (
                       <tr key={p.id} className="border-b border-border/60 align-top">
                         <td className="py-3 pr-6">
@@ -266,25 +343,63 @@ export default function AdminProductsPage() {
                         <td className="py-3 pr-6">{p.language || '—'}</td>
                         <td className="py-3 pr-6">{statusBadge(p.status)}</td>
                         <td className="py-3 text-right">
-                          <div className="flex flex-wrap justify-end gap-2">
-                            {p.status !== 'approved' ? (
-                              <Button size="sm" disabled={disabled} onClick={() => void updateStatus(p.id, 'approved')}>
-                                通过
-                              </Button>
-                            ) : null}
-                            {p.status !== 'rejected' ? (
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="flex flex-wrap justify-end gap-2">
+                              {p.status !== 'approved' ? (
+                                <Button
+                                  size="sm"
+                                  disabled={disabled}
+                                  onClick={() => {
+                                    cancelReject();
+                                    void updateStatus(p.id, 'approved');
+                                  }}
+                                >
+                                  {current === 'approve' ? '通过中...' : '通过'}
+                                </Button>
+                              ) : null}
+                              {p.status !== 'rejected' ? (
+                                <Button size="sm" variant="outline" disabled={disabled} onClick={() => startReject(p.id)}>
+                                  {current === 'reject' ? '拒绝中...' : '拒绝'}
+                                </Button>
+                              ) : null}
                               <Button
                                 size="sm"
                                 variant="outline"
                                 disabled={disabled}
-                                onClick={() => void updateStatus(p.id, 'rejected')}
+                                onClick={() => {
+                                  cancelReject();
+                                  void deleteProduct(p.id);
+                                }}
                               >
-                                拒绝
+                                {current === 'delete' ? '删除中...' : '删除'}
                               </Button>
+                            </div>
+
+                            {showingReject ? (
+                              <div className="w-full max-w-[360px] rounded-lg border border-border bg-background/40 p-3 space-y-2">
+                                <div className="text-xs text-muted-foreground text-left">拒绝原因（必填，开发者中心可见）</div>
+                                <Input
+                                  value={draftReasons[p.id] ?? ''}
+                                  onChange={(e) => setDraftReasons((m) => ({ ...m, [p.id]: e.target.value }))}
+                                  placeholder="例如：描述不完整 / 网站无法访问 / 分类不匹配"
+                                  disabled={disabled}
+                                />
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button size="sm" variant="outline" disabled={disabled} onClick={cancelReject}>
+                                    取消
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    disabled={disabled || !reason}
+                                    onClick={() => {
+                                      void confirmReject(p.id);
+                                    }}
+                                  >
+                                    {current === 'reject' ? '拒绝中...' : '确认拒绝'}
+                                  </Button>
+                                </div>
+                              </div>
                             ) : null}
-                            <Button size="sm" variant="outline" disabled={disabled} onClick={() => void deleteProduct(p.id)}>
-                              删除
-                            </Button>
                           </div>
                         </td>
                       </tr>

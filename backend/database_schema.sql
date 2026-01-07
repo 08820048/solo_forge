@@ -19,9 +19,13 @@ CREATE TABLE IF NOT EXISTS products (
     maker_website TEXT,
     language TEXT NOT NULL DEFAULT 'en' CHECK (language IN ('en', 'zh')),
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    rejection_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE products
+    ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
 
 -- Create categories table
 CREATE TABLE IF NOT EXISTS categories (
