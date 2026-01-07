@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
+import FlipClockCountdown from '@/components/ui/flip-clock-countdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -123,28 +124,12 @@ export default function HomeRightSidebar() {
   const [sponsorList, setSponsorList] = useState<SponsoredProduct[]>([]);
   const [sponsorMessage, setSponsorMessage] = useState<string | null>(null);
   const [nextRefreshAt, setNextRefreshAt] = useState<string | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [rankingLoading, setRankingLoading] = useState(true);
   const [rankingList, setRankingList] = useState<CategoryWithCount[]>([]);
   const [rankingMessage, setRankingMessage] = useState<string | null>(null);
 
   const isZh = useMemo(() => locale.toLowerCase().startsWith('zh'), [locale]);
-
-  const countdown = (() => {
-    if (!nextRefreshAt) return null;
-    const target = Date.parse(nextRefreshAt);
-    if (!Number.isFinite(target)) return null;
-    const diff = Math.max(0, target - nowMs);
-    const totalSeconds = Math.floor(diff / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return { text: `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`, totalSeconds };
-  })();
-  const countdownLabel = countdown?.text ? tSponsored('refreshIn', { time: countdown.text }) : null;
-  const countdownUrgent = (countdown?.totalSeconds ?? Infinity) <= 10 * 60;
 
   useEffect(() => {
     let cancelled = false;
@@ -235,12 +220,6 @@ export default function HomeRightSidebar() {
   }, [locale]);
 
   useEffect(() => {
-    if (!nextRefreshAt) return;
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [nextRefreshAt]);
-
-  useEffect(() => {
     let cancelled = false;
 
     /**
@@ -319,23 +298,13 @@ export default function HomeRightSidebar() {
   }, [locale]);
 
   return (
-    <div className="lg:sticky lg:top-24 space-y-6">
+    <div className="animate-on-scroll lg:sticky lg:top-24 space-y-6">
       <div className="sf-wash rounded-xl border border-border bg-card/50">
         <div className="px-5 py-4 border-b border-border">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm font-semibold text-foreground">{tSponsored('title')}</div>
-            <div className="flex items-center gap-2 shrink-0">
-              {countdownLabel ? (
-                <Badge
-                  className={[
-                    'shadow-md px-3 py-1 text-[11px] font-mono tabular-nums',
-                    countdownUrgent ? 'bg-primary text-primary-foreground ring-2 ring-primary/25' : 'bg-secondary text-secondary-foreground',
-                  ].join(' ')}
-                >
-                  <i className="ri-hourglass-fill" aria-hidden="true" />
-                  <span>{countdownLabel}</span>
-                </Badge>
-              ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="text-sm font-semibold text-foreground whitespace-nowrap">{tSponsored('title')}</div>
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              <FlipClockCountdown target={nextRefreshAt} showDays={false} scale={0.32} className="shrink-0" />
             </div>
           </div>
         </div>

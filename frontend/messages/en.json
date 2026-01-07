@@ -534,6 +534,7 @@
     "featured": {
       "title": "Featured",
       "subtitle": "A quick scan of products worth your attention.",
+      "countdownLabel": "Next featured countdown:",
       "refreshIn": "Next refresh in {time}"
     },
     "recent": {

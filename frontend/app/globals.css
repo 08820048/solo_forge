@@ -367,3 +367,366 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+.sf-flipclock {
+  --sf-flipclock-scale: 1;
+  --sf-flipclock-base-width: 1040px;
+  --sf-flipclock-base-height: 120px;
+  --sf-flipclock-bg: var(--card);
+  --sf-flipclock-fg: var(--primary);
+  display: inline-block;
+  vertical-align: top;
+  width: calc(var(--sf-flipclock-base-width) * var(--sf-flipclock-scale));
+  height: calc(var(--sf-flipclock-base-height) * var(--sf-flipclock-scale));
+}
+
+.sf-flipclock__inner {
+  width: var(--sf-flipclock-base-width);
+  height: var(--sf-flipclock-base-height);
+  transform: scale(var(--sf-flipclock-scale));
+  transform-origin: top left;
+}
+
+.sf-flipclock--inline .flip-clock-wrapper {
+  margin-bottom: 0;
+  flex-wrap: nowrap;
+}
+
+.sf-flipclock--inline .flip-clock-wrapper .flip {
+  margin-bottom: 0;
+}
+
+.sf-flipclock--inline .flip-clock-divider::after {
+  display: none;
+}
+
+.sf-flipclock .flip-clock-wrapper * {
+  box-sizing: border-box;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.sf-flipclock .flip-clock-wrapper {
+  text-align: center;
+  position: relative;
+  width: 100%;
+  margin: 0;
+  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.sf-flipclock .flip-clock-wrapper:before,
+.sf-flipclock .flip-clock-wrapper:after {
+  content: " ";
+  display: table;
+}
+
+.sf-flipclock .flip-clock-wrapper:after {
+  clear: both;
+}
+
+.sf-flipclock .flip-clock-wrapper ul {
+  position: relative;
+  float: unset;
+  margin: 3px;
+  width: 90px;
+  height: 120px;
+  font-size: 36px;
+  font-weight: unset;
+  line-height: unset;
+  border-radius: 10px;
+  background: var(--sf-flipclock-bg);
+  list-style: none;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li {
+  z-index: 1;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  line-height: unset;
+  text-decoration: none !important;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li:first-child {
+  z-index: 2;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li a {
+  display: block;
+  height: 100%;
+  -webkit-perspective: 200px;
+  perspective: 200px;
+  margin: 0 !important;
+  overflow: visible !important;
+  cursor: default !important;
+  text-decoration: none;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li a div {
+  z-index: 1;
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  font-size: 80px;
+  overflow: hidden;
+  outline: 1px solid transparent;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li a div .shadow {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  border-radius: 10px;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li a div.up {
+  -webkit-transform-origin: 50% 100%;
+  transform-origin: 50% 100%;
+  top: 0;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li a div.up:after {
+  display: none;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li a div.down {
+  -webkit-transform-origin: 50% 0;
+  transform-origin: 50% 0;
+  bottom: 0;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li a div div.inn {
+  position: absolute;
+  left: 0;
+  z-index: 1;
+  width: 100%;
+  height: 200%;
+  color: var(--sf-flipclock-fg);
+  text-shadow: 0 0px 0px #000;
+  text-align: unset;
+  background-color: var(--sf-flipclock-bg);
+  border-radius: 10px;
+  font-size: 120px;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li a div.up div.inn {
+  top: 0;
+}
+
+.sf-flipclock .flip-clock-wrapper ul li a div.down div.inn {
+  bottom: 0;
+}
+
+.sf-flipclock .flip-clock-wrapper ul.play li.flip-clock-before {
+  z-index: 3;
+}
+
+.sf-flipclock .flip-clock-wrapper .flip {
+  box-shadow: none;
+  margin-bottom: 80px;
+}
+
+.sf-flipclock .flip-clock-wrapper ul.play li.flip-clock-active {
+  -webkit-animation: sf-flipclock-asd 0.5s 0.5s linear both;
+  animation: sf-flipclock-asd 0.5s 0.5s linear both;
+  z-index: 5;
+}
+
+.sf-flipclock .flip-clock-divider {
+  display: block;
+  float: unset;
+  position: relative;
+  width: 68px;
+  height: 120px;
+}
+
+.sf-flipclock .flip-clock-divider span {
+  display: none;
+}
+
+.sf-flipclock .flip-clock-divider::before {
+  content: ":";
+  color: var(--sf-flipclock-fg);
+  font-size: 120px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-mono);
+}
+
+.sf-flipclock .flip-clock-divider.days::before {
+  display: none;
+}
+
+.sf-flipclock .flip-clock-divider::after {
+  color: var(--sf-flipclock-fg);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  display: block;
+  text-align: center;
+  width: 193px;
+  position: absolute;
+  left: 100%;
+  top: 100%;
+  padding-top: 23px;
+  font-family: var(--font-sans);
+}
+
+.sf-flipclock .flip-clock-divider.days::after {
+  content: "days";
+}
+
+.sf-flipclock .flip-clock-divider.hours::after {
+  content: "hrs";
+}
+
+.sf-flipclock .flip-clock-divider.minutes::after {
+  content: "min";
+}
+
+.sf-flipclock .flip-clock-divider.seconds::after {
+  content: "sec";
+}
+
+@keyframes sf-flipclock-asd {
+  0% { z-index: 2; }
+  20% { z-index: 4; }
+  100% { z-index: 4; }
+}
+
+@-webkit-keyframes sf-flipclock-asd {
+  0% { z-index: 2; }
+  20% { z-index: 4; }
+  100% { z-index: 4; }
+}
+
+.sf-flipclock .flip-clock-wrapper ul.play li.flip-clock-active .down {
+  z-index: 2;
+  -webkit-animation: sf-flipclock-turn 0.5s 0.5s linear both;
+  animation: sf-flipclock-turn 0.5s 0.5s linear both;
+}
+
+@keyframes sf-flipclock-turn {
+  0% { transform: rotateX(90deg); }
+  100% { transform: rotateX(0deg); }
+}
+
+@-webkit-keyframes sf-flipclock-turn {
+  0% { -webkit-transform: rotateX(90deg); }
+  100% { -webkit-transform: rotateX(0deg); }
+}
+
+.sf-flipclock .flip-clock-wrapper ul.play li.flip-clock-before .up {
+  z-index: 2;
+  -webkit-animation: sf-flipclock-turn2 0.5s linear both;
+  animation: sf-flipclock-turn2 0.5s linear both;
+}
+
+@keyframes sf-flipclock-turn2 {
+  0% { transform: rotateX(0deg); }
+  100% { transform: rotateX(-90deg); }
+}
+
+@-webkit-keyframes sf-flipclock-turn2 {
+  0% { -webkit-transform: rotateX(0deg); }
+  100% { -webkit-transform: rotateX(-90deg); }
+}
+
+.sf-flipclock .flip-clock-wrapper ul li.flip-clock-active {
+  z-index: 3;
+}
+
+.sf-flipclock .flip-clock-wrapper ul.play li.flip-clock-before .up .shadow {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 0%, black 100%);
+  -webkit-animation: sf-flipclock-show 0.5s linear both;
+  animation: sf-flipclock-show 0.5s linear both;
+}
+
+.sf-flipclock .flip-clock-wrapper ul.play li.flip-clock-active .up .shadow {
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 0%, black 100%);
+  -webkit-animation: sf-flipclock-hide 0.5s 0.3s linear both;
+  animation: sf-flipclock-hide 0.5s 0.3s linear both;
+}
+
+.sf-flipclock .flip-clock-wrapper ul.play li.flip-clock-before .down .shadow {
+  background: linear-gradient(to bottom, black 0%, rgba(0, 0, 0, 0.1) 100%);
+  -webkit-animation: sf-flipclock-show 0.5s linear both;
+  animation: sf-flipclock-show 0.5s linear both;
+}
+
+.sf-flipclock .flip-clock-wrapper ul.play li.flip-clock-active .down .shadow {
+  background: linear-gradient(to bottom, black 0%, rgba(0, 0, 0, 0.1) 100%);
+  -webkit-animation: sf-flipclock-hide 0.5s 0.2s linear both;
+  animation: sf-flipclock-hide 0.5s 0.2s linear both;
+}
+
+@keyframes sf-flipclock-show {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes sf-flipclock-hide {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@-webkit-keyframes sf-flipclock-show {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@-webkit-keyframes sf-flipclock-hide {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (max-width: 1200px) {
+  .sf-flipclock .flip-clock-wrapper {
+    max-width: 470px;
+    margin-right: 10px;
+  }
+
+  .sf-flipclock .flip-clock-divider.days {
+    width: 10px;
+  }
+
+  .sf-flipclock .flip-clock-divider.minutes {
+    width: 10px;
+  }
+
+  .sf-flipclock .flip-clock-divider.minutes::before {
+    display: none;
+  }
+}
+
+@media (max-width: 576px) {
+  .sf-flipclock .flip-clock-wrapper {
+    max-width: 210px;
+    margin-right: 10px;
+  }
+
+  .sf-flipclock .flip-clock-divider {
+    width: 10px;
+  }
+
+  .sf-flipclock .flip-clock-divider::before {
+    display: none;
+  }
+}

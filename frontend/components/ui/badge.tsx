@@ -43,4 +43,29 @@ function Badge({
   )
 }
 
-export { Badge, badgeVariants }
+function CountdownBadge({
+  label,
+  urgent = false,
+  className,
+  ...props
+}: Omit<React.ComponentProps<typeof Badge>, "children" | "variant"> & {
+  label: string
+  urgent?: boolean
+}) {
+  return (
+    <Badge
+      variant={urgent ? "default" : "secondary"}
+      className={cn(
+        "px-3 py-1 text-[11px] font-mono tabular-nums shadow-sm",
+        urgent ? "ring-2 ring-ring/25" : "bg-accent text-accent-foreground",
+        className
+      )}
+      {...props}
+    >
+      <i className="ri-hourglass-fill" aria-hidden="true" />
+      <span>{label}</span>
+    </Badge>
+  )
+}
+
+export { Badge, CountdownBadge, badgeVariants }

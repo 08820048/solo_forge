@@ -580,6 +580,20 @@ export default function Header() {
         setCustomHexInput(normalizedCustom);
       }
       setActiveThemeId(presetId);
+
+      const rawVars = localStorage.getItem(THEME_VARS_KEY);
+      if (rawVars) {
+        const root = document.documentElement;
+        try {
+          const parsed = JSON.parse(rawVars) as ThemeVars;
+          if (parsed && typeof parsed === 'object') {
+            Object.entries(parsed).forEach(([key, value]) => {
+              if (!key.startsWith('--sf-') || typeof value !== 'string') return;
+              root.style.setProperty(key, value);
+            });
+          }
+        } catch {}
+      }
     } catch {}
 
     const onStorage = (e: StorageEvent) => {

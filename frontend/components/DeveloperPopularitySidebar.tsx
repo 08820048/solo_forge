@@ -337,7 +337,7 @@ export default function DeveloperPopularitySidebar() {
   };
 
   return (
-    <div className="lg:sticky lg:top-24">
+    <div className="animate-on-scroll lg:sticky lg:top-24">
       <div className="space-y-6">
         <div className="sf-wash rounded-xl border border-border bg-card/50">
           <div className="px-5 py-4 border-b border-border">

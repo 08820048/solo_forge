@@ -534,6 +534,7 @@
     "featured": {
       "title": "精选产品",
       "subtitle": "快速浏览值得关注的作品。",
+      "countdownLabel": "下一轮精选倒计时：",
       "refreshIn": "下次刷新 {time}"
     },
     "recent": {

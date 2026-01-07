@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { useEffect, useState } from 'react';
 import { useLocale } from 'next-intl';
+import FlipClockCountdown from '@/components/ui/flip-clock-countdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -64,22 +65,6 @@ export default function Hero() {
   const [products, setProducts] = useState<SponsoredProduct[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [nextRefreshAt, setNextRefreshAt] = useState<string | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-
-  const countdown = (() => {
-    if (!nextRefreshAt) return null;
-    const target = Date.parse(nextRefreshAt);
-    if (!Number.isFinite(target)) return null;
-    const diff = Math.max(0, target - nowMs);
-    const totalSeconds = Math.floor(diff / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return { text: `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`, totalSeconds };
-  })();
-  const countdownLabel = countdown?.text ? t('refreshIn', { time: countdown.text }) : null;
-  const countdownUrgent = (countdown?.totalSeconds ?? Infinity) <= 10 * 60;
 
   useEffect(() => {
     let cancelled = false;
@@ -162,12 +147,6 @@ export default function Hero() {
     };
   }, [locale]);
 
-  useEffect(() => {
-    if (!nextRefreshAt) return;
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [nextRefreshAt]);
-
   return (
     <section className="sf-wash rounded-2xl border border-border bg-card/50 overflow-hidden">
       <div className="px-6 py-5 border-b border-border">
@@ -177,29 +156,40 @@ export default function Hero() {
               <div className="text-sm font-semibold text-foreground">{t('title')}</div>
             </div>
           </div>
-          {countdownLabel ? (
-            <Badge
-              className={[
-                'shadow-md px-3 py-1 text-[11px] font-mono tabular-nums',
-                countdownUrgent ? 'bg-primary text-primary-foreground ring-2 ring-primary/25' : 'bg-secondary text-secondary-foreground',
-              ].join(' ')}
-            >
-              <i className="ri-hourglass-fill" aria-hidden="true" />
-              <span>{countdownLabel}</span>
-            </Badge>
-          ) : null}
+          <FlipClockCountdown target={nextRefreshAt} showDays={false} scale={0.34} className="shrink-0 origin-top-right" />
         </div>
       </div>
 
       <div className="p-6">
         {loading ? (
-          <div className="py-10 text-sm text-muted-foreground">{t('loading')}</div>
+          <div className="space-y-3 animate-in fade-in-0 duration-300">
+            {Array.from({ length: 2 }).map((_, idx) => (
+              <div
+                key={idx}
+                className="rounded-xl border border-border bg-background/40 p-5 animate-pulse"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <div className="w-12 h-12 shrink-0 rounded-lg bg-muted" />
+                    <div className="min-w-0 flex-1">
+                      <div className="h-4 w-1/2 rounded bg-muted" />
+                      <div className="mt-2 h-3 w-full rounded bg-muted" />
+                      <div className="mt-2 h-3 w-4/5 rounded bg-muted" />
+                      <div className="mt-3 h-3 w-1/3 rounded bg-muted" />
+                    </div>
+                  </div>
+                  <div className="w-9 h-9 shrink-0 rounded-md bg-muted" />
+                </div>
+              </div>
+            ))}
+            <div className="pt-1 text-center text-xs text-muted-foreground">{t('loading')}</div>
+          </div>
         ) : products.length === 0 ? (
-          <div className="py-10">
+          <div className="py-10 animate-in fade-in-0 duration-300">
             <div className="text-sm text-muted-foreground">{message || t('empty')}</div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
             {products.map((product) => (
               <div key={product.id} className="sf-wash rounded-xl border border-border bg-background/40 p-5 relative overflow-hidden">
                 <div className="flex items-start justify-between gap-4">

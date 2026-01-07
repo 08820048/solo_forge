@@ -47,7 +47,7 @@ export default function InteractionEffects() {
           el.classList.add('animate');
         }
       });
-    }, { threshold: 0.05, rootMargin: '0px 0px -10% 0px' });
+    }, { threshold: 0.01, rootMargin: '0px 0px -10% 0px' });
 
     const observed = new WeakSet<Element>();
 

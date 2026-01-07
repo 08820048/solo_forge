@@ -5,6 +5,7 @@ import { Link } from '@/i18n/routing';
 import { useEffect, useState } from 'react';
 import ProductCard from './ProductCard';
 import { Badge } from '@/components/ui/badge';
+import FlipClockCountdown from '@/components/ui/flip-clock-countdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -219,21 +220,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
   const [likeIds, setLikeIds] = useState<string[]>(() => readLikesFromStorage());
   const [developersVersion, setDevelopersVersion] = useState(0);
   const [nextRefreshAt, setNextRefreshAt] = useState<string | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [recentDir, setRecentDir] = useState<'desc' | 'asc'>('desc');
-
-  const countdown = (() => {
-    if (!nextRefreshAt) return null;
-    const target = Date.parse(nextRefreshAt);
-    if (!Number.isFinite(target)) return null;
-    const diff = Math.max(0, target - nowMs);
-    const totalSeconds = Math.floor(diff / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-  })();
 
   useEffect(() => {
     let cancelled = false;
@@ -406,13 +393,6 @@ export default function ProductGrid({ section }: ProductGridProps) {
       cancelled = true;
     };
   }, [locale, recentDir, section]);
-
-  useEffect(() => {
-    if (section !== 'featured') return;
-    if (!nextRefreshAt) return;
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [nextRefreshAt, section]);
 
   useEffect(() => {
     const onUpdate = () => setFavoriteIds(readFavoritesFromStorage());
@@ -858,15 +838,15 @@ export default function ProductGrid({ section }: ProductGridProps) {
             <h2 className="text-3xl font-bold text-foreground tracking-tight">{t('title')}</h2>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-muted-foreground">
               <span>{t('subtitle')}</span>
-              {countdown ? (
-                <Badge className="shadow-sm">
-                  <i className="ri-hourglass-fill" aria-hidden="true" />
-                  <span>{t('refreshIn', { time: countdown })}</span>
-                </Badge>
-              ) : null}
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-3">
+          <div className="hidden sm:flex items-end gap-3">
+            {section === 'featured' ? (
+              <div className="flex items-end gap-2">
+                <span className="text-xs leading-none text-muted-foreground pb-1">{t('countdownLabel')}</span>
+                <FlipClockCountdown target={nextRefreshAt} showDays={false} scale={0.28} className="shrink-0 origin-top-right" />
+              </div>
+            ) : null}
             <Link
               href="/products"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
