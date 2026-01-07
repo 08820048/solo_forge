@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_API_URL = process.env.BACKEND_API_URL || 'http://localhost:8080/api';
+function getBackendApiUrl(): string {
+  const raw = (process.env.BACKEND_API_URL || 'http://localhost:8080/api').trim();
+  const normalized = raw.replace(/\/+$/, '');
+  if (!normalized) return 'http://localhost:8080/api';
+  if (normalized.endsWith('/api')) return normalized;
+  return `${normalized}/api`;
+}
+
+const BACKEND_API_URL = getBackendApiUrl();
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -24,7 +32,9 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'application/json',
         'Accept-Language': request.headers.get('Accept-Language') || 'en',
+        'User-Agent': request.headers.get('User-Agent') || request.headers.get('user-agent') || 'Mozilla/5.0',
       },
       body: JSON.stringify({ email }),
     });
@@ -46,4 +56,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: 'Network error. Please try again later.' }, { status: 500 });
   }
 }
-

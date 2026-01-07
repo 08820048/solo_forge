@@ -36,16 +36,42 @@ export default function Footer() {
     }
     setSubmitting(true);
     try {
-      const response = await fetch('/api/newsletter', {
+      const payload = JSON.stringify({ email: value });
+
+      const proxyResponse = await fetch('/api/newsletter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: value }),
+        body: payload,
       });
-      const data = (await response.json().catch(() => ({}))) as { success?: boolean; message?: string } | undefined;
-      if (!response.ok || !data?.success) {
-        setMessage(data?.message || t('newsletter.failed'));
+
+      const proxyData = (await proxyResponse.json().catch(() => ({}))) as { success?: boolean; message?: string } | undefined;
+      if (proxyResponse.ok && proxyData?.success) {
+        setMessage(t('newsletter.success'));
         return;
       }
+
+      const shouldFallback =
+        proxyResponse.status === 403 ||
+        proxyResponse.status === 502 ||
+        proxyResponse.status === 503;
+
+      if (!shouldFallback) {
+        setMessage(proxyData?.message || t('newsletter.failed'));
+        return;
+      }
+
+      const directResponse = await fetch('https://api.soloforge.dev/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      });
+
+      const directData = (await directResponse.json().catch(() => ({}))) as { success?: boolean; message?: string } | undefined;
+      if (!directResponse.ok || !directData?.success) {
+        setMessage(directData?.message || proxyData?.message || t('newsletter.failed'));
+        return;
+      }
+
       setMessage(t('newsletter.success'));
     } catch {
       setMessage(t('newsletter.failed'));
