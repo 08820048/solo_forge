@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import NextLink from 'next/link';
+import Image from 'next/image';
 import { Link as I18nLink } from '@/i18n/routing';
 import LanguageSwitcher from './LanguageSwitcher';
 
@@ -88,7 +89,7 @@ export default function Footer() {
           <div className="col-span-1 md:col-span-2">
             <div className="mb-4">
               <div className="inline-flex items-center gap-2 text-xl font-semibold text-foreground bg-spotlight">
-                <i className="ri-hammer-line text-foreground text-xl" aria-hidden="true" />
+                <Image src="/docs/logo.png" alt="SoloForge" width={22} height={22} className="rounded-sm" />
                 <span>SoloForge</span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground max-w-md font-sans">

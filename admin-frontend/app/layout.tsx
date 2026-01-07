@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SoloForge Admin",
   description: "SoloForge 管理后台",
+  icons: {
+    icon: '/docs/logo.png',
+    apple: '/docs/logo.png',
+  },
 };
 
 export default function RootLayout({

@@ -840,7 +840,14 @@ export default function Header() {
         <div className="w-full max-w-4xl shrink-0 rounded-full border border-border bg-background/70 backdrop-blur-xl shadow-lg shadow-black/5 px-4 md:px-5 h-14 flex items-center justify-between gap-4 md:gap-10 transition-all duration-300">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
-          <i className="ri-hammer-line text-foreground text-lg" aria-hidden="true" />
+          <Image
+            src="/docs/logo.png"
+            alt="SoloForge"
+            width={20}
+            height={20}
+            className="rounded-sm"
+            priority
+          />
           <span className="text-sm font-medium tracking-tight text-foreground">
             SoloForge
           </span>
@@ -888,11 +895,10 @@ export default function Header() {
                 setThemeMenuOpen((v) => !v);
                 setUserMenuOpen(false);
               }}
-              className="rounded-full h-8 px-2 md:px-3 flex items-center justify-center gap-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors border border-transparent"
+              className="rounded-full w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors border border-transparent"
               aria-label={tTheme('title')}
             >
               <Palette className="size-4" strokeWidth={1.5} />
-              <span className="hidden md:inline text-xs font-medium">{tTheme('title')}</span>
             </button>
             {themeMenuMounted ? (
               <>
