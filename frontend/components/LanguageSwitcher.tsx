@@ -2,7 +2,7 @@
 
 import { useLocale } from 'next-intl';
 import { useRouter, usePathname } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
 /**
  * LanguageSwitcher
@@ -15,6 +15,8 @@ export default function LanguageSwitcher() {
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
   const [isOpen, setIsOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const menuAnimationMs = 200;
 
   const languages = [
     { code: 'en', name: 'English' },
@@ -50,10 +52,19 @@ export default function LanguageSwitcher() {
     });
   }
 
+  useEffect(() => {
+    if (isOpen || !isMounted) return;
+    const timer = window.setTimeout(() => setIsMounted(false), menuAnimationMs);
+    return () => window.clearTimeout(timer);
+  }, [isMounted, isOpen, menuAnimationMs]);
+
   return (
     <div className="relative">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setIsMounted(true);
+          setIsOpen(!isOpen);
+        }}
         className="flex items-center space-x-2 px-3 py-2 text-xs font-medium rounded-full text-muted-foreground hover:text-foreground border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-colors"
         disabled={isPending}
       >
@@ -68,13 +79,17 @@ export default function LanguageSwitcher() {
         </svg>
       </button>
 
-      {isOpen && (
+      {isMounted && (
         <>
           <div
-            className="fixed inset-0 z-10"
+            data-state={isOpen ? 'open' : 'closed'}
+            className="fixed inset-0 z-10 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=closed]:pointer-events-none duration-200"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 mt-2 w-48 bg-popover text-popover-foreground rounded-md shadow-lg py-1 z-20 border border-border">
+          <div
+            data-state={isOpen ? 'open' : 'closed'}
+            className="absolute right-0 mt-2 w-48 bg-popover text-popover-foreground rounded-md shadow-lg py-1 z-20 border border-border origin-top-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=closed]:pointer-events-none duration-200"
+          >
             {languages.map((lang) => (
               <button
                 key={lang.code}

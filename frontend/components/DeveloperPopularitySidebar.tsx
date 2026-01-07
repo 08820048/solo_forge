@@ -349,11 +349,33 @@ export default function DeveloperPopularitySidebar() {
 
           <div className="px-5 py-4">
             {topLoading ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">{tTop('loading')}</div>
+              <div className="space-y-3 animate-in fade-in-0 duration-300">
+                {Array.from({ length: 3 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3 animate-pulse"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="h-4 w-8 rounded bg-muted" />
+                      <div className="mt-3 flex items-center gap-2">
+                        <div className="w-9 h-9 rounded-full bg-muted" />
+                        <div className="min-w-0 flex-1">
+                          <div className="h-4 w-2/3 rounded bg-muted" />
+                          <div className="mt-2 h-3 w-1/2 rounded bg-muted" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="h-7 w-16 rounded bg-muted" />
+                  </div>
+                ))}
+                <div className="pt-1 text-center text-xs text-muted-foreground">{tTop('loading')}</div>
+              </div>
             ) : topList.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">{topMessage || tTop('empty')}</div>
+              <div className="py-8 text-center text-sm text-muted-foreground animate-in fade-in-0 duration-300">
+                {topMessage || tTop('empty')}
+              </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
                 {topList.map((d, idx) => (
                   <div
                     key={d.email}
@@ -442,11 +464,33 @@ export default function DeveloperPopularitySidebar() {
 
           <div className="px-5 py-4">
             {loading ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">{t('loading')}</div>
+              <div className="space-y-3 animate-in fade-in-0 duration-300">
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3 animate-pulse"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="h-4 w-8 rounded bg-muted" />
+                      <div className="mt-3 flex items-center gap-2">
+                        <div className="w-9 h-9 rounded-full bg-muted" />
+                        <div className="min-w-0 flex-1">
+                          <div className="h-4 w-2/3 rounded bg-muted" />
+                          <div className="mt-2 h-3 w-3/4 rounded bg-muted" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="h-6 w-12 rounded bg-muted" />
+                  </div>
+                ))}
+                <div className="pt-1 text-center text-xs text-muted-foreground">{t('loading')}</div>
+              </div>
             ) : list.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">{message || t('empty')}</div>
+              <div className="py-8 text-center text-sm text-muted-foreground animate-in fade-in-0 duration-300">
+                {message || t('empty')}
+              </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
                 {list.map((d, idx) => (
                   <div
                     key={d.email}

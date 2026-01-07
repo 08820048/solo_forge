@@ -376,7 +376,7 @@ export default function DeveloperCenterPage() {
     return (
       <div className="min-h-screen">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
-          <div className="sf-wash rounded-2xl border border-border bg-card/50 p-10 text-center">
+          <div className="sf-wash rounded-2xl border border-border bg-card/50 p-10 text-center animate-on-scroll">
             <h1 className="text-3xl font-bold text-foreground tracking-tight">{t('title')}</h1>
             <p className="mt-3 text-muted-foreground">{t('loginRequired')}</p>
             <div className="mt-8 flex items-center justify-center gap-3">
@@ -402,7 +402,7 @@ export default function DeveloperCenterPage() {
   return (
     <div className="min-h-screen">
       <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 pb-12">
-        <div className="mb-10">
+        <div className="mb-10 animate-on-scroll">
           <div className="flex items-end justify-between gap-6">
             <div>
               <h1 className="text-4xl sm:text-5xl font-bold text-foreground tracking-tight">{t('title')}</h1>
@@ -419,7 +419,7 @@ export default function DeveloperCenterPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 animate-on-scroll">
           <Card className="lg:col-span-2 bg-card/50">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">{t('profile.title')}</CardTitle>

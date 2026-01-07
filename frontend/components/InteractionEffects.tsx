@@ -42,7 +42,9 @@ export default function InteractionEffects() {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
-          entry.target.classList.add('animate');
+          const el = entry.target as HTMLElement;
+          el.dataset.sfAnimated = 'true';
+          el.classList.add('animate');
         }
       });
     }, { threshold: 0.05, rootMargin: '0px 0px -10% 0px' });

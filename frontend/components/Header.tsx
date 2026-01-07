@@ -1,7 +1,7 @@
 'use client';
 
 import { Link, useRouter } from '@/i18n/routing';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import Image from 'next/image';
 import { Globe, Sun, Moon, User, Palette } from 'lucide-react';
@@ -287,6 +287,8 @@ export default function Header() {
   const router = useRouter();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [userMenuMounted, setUserMenuMounted] = useState(false);
+  const [themeMenuMounted, setThemeMenuMounted] = useState(false);
   const [activeThemeId, setActiveThemeId] = useState<string>('default');
   const [customHex, setCustomHex] = useState('#2563eb');
   const [customHexInput, setCustomHexInput] = useState('#2563eb');
@@ -302,8 +304,34 @@ export default function Header() {
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [authEnabled, setAuthEnabled] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const userMenuRootRef = useRef<HTMLDivElement | null>(null);
+  const menuAnimationMs = 200;
 
   const avatarFallback = useMemo(() => getAvatarFallback(user?.name), [user?.name]);
+
+  useEffect(() => {
+    if (userMenuOpen) {
+      setUserMenuMounted(true);
+    }
+  }, [userMenuOpen]);
+
+  useEffect(() => {
+    if (userMenuOpen || !userMenuMounted) return;
+    const timer = window.setTimeout(() => setUserMenuMounted(false), menuAnimationMs);
+    return () => window.clearTimeout(timer);
+  }, [menuAnimationMs, userMenuMounted, userMenuOpen]);
+
+  useEffect(() => {
+    if (themeMenuOpen) {
+      setThemeMenuMounted(true);
+    }
+  }, [themeMenuOpen]);
+
+  useEffect(() => {
+    if (themeMenuOpen || !themeMenuMounted) return;
+    const timer = window.setTimeout(() => setThemeMenuMounted(false), menuAnimationMs);
+    return () => window.clearTimeout(timer);
+  }, [menuAnimationMs, themeMenuMounted, themeMenuOpen]);
 
   function applyThemeVarsToRoot(vars: ThemeVars | null) {
     const root = document.documentElement;
@@ -599,6 +627,21 @@ export default function Header() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
+  useEffect(() => {
+    if (!userMenuOpen) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      const root = userMenuRootRef.current;
+      if (root && root.contains(target)) return;
+      setUserMenuOpen(false);
+    };
+
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => window.removeEventListener('pointerdown', onPointerDown, true);
+  }, [userMenuOpen]);
+
   /**
    * onLogout
    * 清理本地登录信息并关闭用户菜单。
@@ -841,6 +884,7 @@ export default function Header() {
             <button
               type="button"
               onClick={() => {
+                setThemeMenuMounted(true);
                 setThemeMenuOpen((v) => !v);
                 setUserMenuOpen(false);
               }}
@@ -850,10 +894,17 @@ export default function Header() {
               <Palette className="size-4" strokeWidth={1.5} />
               <span className="hidden md:inline text-xs font-medium">{tTheme('title')}</span>
             </button>
-            {themeMenuOpen ? (
+            {themeMenuMounted ? (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setThemeMenuOpen(false)} />
-                <div className="absolute right-0 mt-2 w-72 z-20 rounded-md shadow-lg border border-border bg-popover text-popover-foreground p-3">
+                <div
+                  data-state={themeMenuOpen ? 'open' : 'closed'}
+                  className="fixed inset-0 z-10 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=closed]:pointer-events-none duration-200"
+                  onClick={() => setThemeMenuOpen(false)}
+                />
+                <div
+                  data-state={themeMenuOpen ? 'open' : 'closed'}
+                  className="absolute right-0 mt-2 w-72 z-20 rounded-md shadow-lg border border-border bg-popover text-popover-foreground p-3 origin-top-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=closed]:pointer-events-none duration-200"
+                >
                   <div className="text-xs font-semibold text-muted-foreground">{tTheme('presets.title')}</div>
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     {THEME_PRESETS.map((preset) => {
@@ -962,9 +1013,10 @@ export default function Header() {
             {tNav('submit')}
           </button>
           {user ? (
-            <div className="relative">
+            <div ref={userMenuRootRef} className="relative">
               <button
                 onClick={() => {
+                  setUserMenuMounted(true);
                   setUserMenuOpen((v) => !v);
                   setThemeMenuOpen(false);
                 }}
@@ -985,10 +1037,17 @@ export default function Header() {
                   <span className="text-xs font-semibold text-foreground">{avatarFallback}</span>
                 )}
               </button>
-              {userMenuOpen && (
+              {userMenuMounted && (
                 <>
-                  <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-56 z-20 rounded-md shadow-lg py-1 border border-border bg-popover text-popover-foreground">
+                  <div
+                    data-state={userMenuOpen ? 'open' : 'closed'}
+                    className="fixed inset-0 z-10 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=closed]:pointer-events-none duration-200"
+                    onClick={() => setUserMenuOpen(false)}
+                  />
+                  <div
+                    data-state={userMenuOpen ? 'open' : 'closed'}
+                    className="absolute right-0 mt-2 w-56 z-20 rounded-md shadow-lg py-1 border border-border bg-popover text-popover-foreground origin-top-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 data-[state=closed]:pointer-events-none duration-200"
+                  >
                     <div className="px-4 py-2">
                       <div className="text-sm font-medium truncate">{user.name || 'User'}</div>
                       {user.email ? <div className="text-xs text-muted-foreground truncate">{user.email}</div> : null}
@@ -999,8 +1058,9 @@ export default function Header() {
                         router.push('/profile');
                         setUserMenuOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                      className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
                     >
+                      <i className="ri-user-6-line text-base text-muted-foreground" aria-hidden="true" />
                       {tNav('profile')}
                     </button>
                     <button
@@ -1008,14 +1068,16 @@ export default function Header() {
                         router.push('/developer');
                         setUserMenuOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                      className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
                     >
+                      <i className="ri-dashboard-line text-base text-muted-foreground" aria-hidden="true" />
                       {tNav('developerCenter')}
                     </button>
                     <button
                       onClick={onLogout}
-                      className="w-full text-left px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                      className="w-full flex items-center gap-2 text-left px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
                     >
+                      <i className="ri-logout-box-line text-base text-red-500" aria-hidden="true" />
                       {tNav('logout')}
                     </button>
                   </div>

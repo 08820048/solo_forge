@@ -192,7 +192,7 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
     return (
       <div className="min-h-screen">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
-          <div className="sf-wash rounded-2xl border border-border bg-card/50 p-10 text-center">
+          <div className="sf-wash rounded-2xl border border-border bg-card/50 p-10 text-center animate-on-scroll">
             <h1 className="text-2xl font-bold text-foreground tracking-tight">{tDev('title')}</h1>
             <p className="mt-3 text-muted-foreground">{tDev('loginRequired')}</p>
             <div className="mt-8 flex items-center justify-center gap-3">
@@ -234,16 +234,16 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
         <Card className="bg-card/50">
           <CardContent className="p-6 sm:p-8">
             {loading ? (
-              <div className="py-16 text-center text-muted-foreground">{tDev('loading')}</div>
+              <div className="py-16 text-center text-muted-foreground animate-on-scroll">{tDev('loading')}</div>
             ) : !product ? (
-              <div className="py-10 text-center">
+              <div className="py-10 text-center animate-on-scroll">
                 <div className="text-lg font-semibold text-foreground">
                   {locale.toLowerCase().startsWith('zh') ? '无法打开产品详情' : 'Unable to open product'}
                 </div>
                 <div className="mt-2 text-sm text-muted-foreground">{message || ''}</div>
               </div>
             ) : (
-              <div className="space-y-8">
+              <div className="space-y-8 animate-on-scroll">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 min-w-0">

@@ -342,11 +342,31 @@ export default function HomeRightSidebar() {
 
         <div className="px-5 py-4">
           {sponsorLoading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">{tSponsored('loading')}</div>
+            <div className="space-y-3 animate-in fade-in-0 duration-300">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-xl border border-border bg-background/40 px-4 py-4 animate-pulse"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 shrink-0 rounded-lg bg-muted" />
+                    <div className="min-w-0 flex-1">
+                      <div className="h-4 w-2/3 rounded bg-muted" />
+                      <div className="mt-2 h-3 w-full rounded bg-muted" />
+                      <div className="mt-2 h-3 w-4/5 rounded bg-muted" />
+                    </div>
+                    <div className="w-9 h-9 shrink-0 rounded-md bg-muted" />
+                  </div>
+                </div>
+              ))}
+              <div className="pt-1 text-center text-xs text-muted-foreground">{tSponsored('loading')}</div>
+            </div>
           ) : sponsorList.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">{sponsorMessage || tSponsored('empty')}</div>
+            <div className="py-8 text-center text-sm text-muted-foreground animate-in fade-in-0 duration-300">
+              {sponsorMessage || tSponsored('empty')}
+            </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
               {sponsorList.map((p) => (
                 <div key={p.id} className="rounded-xl border border-border bg-background/40 px-4 py-4">
                   <div className="flex items-start gap-3">
@@ -409,11 +429,32 @@ export default function HomeRightSidebar() {
 
         <div className="px-5 py-4">
           {rankingLoading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">{tRanking('loading')}</div>
+            <div className="space-y-2 animate-in fade-in-0 duration-300">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3 animate-pulse"
+                >
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="w-12 shrink-0 flex items-center">
+                      <div className="h-4 w-6 rounded bg-muted" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="h-4 w-2/3 rounded bg-muted" />
+                      <div className="mt-2 h-3 w-1/2 rounded bg-muted" />
+                    </div>
+                  </div>
+                  <div className="h-6 w-10 rounded bg-muted" />
+                </div>
+              ))}
+              <div className="pt-1 text-center text-xs text-muted-foreground">{tRanking('loading')}</div>
+            </div>
           ) : rankingList.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">{rankingMessage || tRanking('empty')}</div>
+            <div className="py-8 text-center text-sm text-muted-foreground animate-in fade-in-0 duration-300">
+              {rankingMessage || tRanking('empty')}
+            </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
               {rankingList.map((c, idx) => {
                 const name = (isZh ? c.name_zh : c.name_en) || c.name_en || c.name_zh || String(c.id);
                 const iconClass =

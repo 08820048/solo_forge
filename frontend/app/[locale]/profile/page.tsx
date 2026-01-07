@@ -202,7 +202,7 @@ export default function ProfilePage() {
   const avatarPreviewUrl = form.avatarUrl.trim();
 
   return (
-    <div className="max-w-xl mx-auto py-12">
+    <div className="max-w-xl mx-auto py-12 animate-on-scroll">
       <h1 className="text-2xl font-semibold mb-2">{t('title')}</h1>
       <p className="text-sm text-muted-foreground mb-8">{t('subtitle')}</p>
 

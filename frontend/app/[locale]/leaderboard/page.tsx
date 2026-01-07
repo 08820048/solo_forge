@@ -168,7 +168,7 @@ export default function LeaderboardPage() {
   return (
     <div className="min-h-screen">
       <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 pb-12">
-        <div className="mb-10">
+        <div className="mb-10 animate-on-scroll">
           <div className="flex items-end justify-between gap-6">
             <div>
               <h1 className="text-4xl sm:text-5xl font-bold text-foreground tracking-tight">{t('title')}</h1>
@@ -197,11 +197,15 @@ export default function LeaderboardPage() {
           {windowOptions.map((opt) => (
             <TabsContent key={opt.key} value={opt.key} className="mt-6">
               {loading ? (
-                <div className="py-24 text-center text-muted-foreground">{t('loading')}</div>
+                <div className="py-24 text-center text-muted-foreground animate-in fade-in-0 duration-300">
+                  {t('loading')}
+                </div>
               ) : isEmpty ? (
-                <div className="py-24 text-center text-muted-foreground">{message || t('empty')}</div>
+                <div className="py-24 text-center text-muted-foreground animate-in fade-in-0 duration-300">
+                  {message || t('empty')}
+                </div>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
                   <div className="sf-wash lg:col-span-2 rounded-xl border border-border bg-card/50">
                     <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                       <h2 className="text-sm font-semibold text-foreground">{t('topProducts')}</h2>
