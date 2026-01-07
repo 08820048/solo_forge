@@ -22,6 +22,17 @@ function getForwardUserAgent(request: NextRequest): string {
   return request.headers.get('User-Agent') || request.headers.get('user-agent') || 'Mozilla/5.0';
 }
 
+/**
+ * getDirectBackendApiUrl
+ * 生产环境下为浏览器提供直连后端的兜底地址（用于绕过上游代理被拦截的情况）。
+ */
+function getDirectBackendApiUrl(request: NextRequest): string | null {
+  const host = (request.headers.get('host') || '').toLowerCase();
+  if (!host) return null;
+  if (host.includes('localhost') || host.includes('127.0.0.1')) return null;
+  return 'https://api.soloforge.dev/api';
+}
+
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
 export const dynamic = 'force-dynamic';
@@ -65,7 +76,9 @@ export async function POST(request: NextRequest) {
             ? 'unfavorite'
             : 'like';
 
-    const response = await fetch(`${BACKEND_API_URL}/products/${encodeURIComponent(productId)}/${subPath}`, {
+    const backendUrl = `${BACKEND_API_URL}/products/${encodeURIComponent(productId)}/${subPath}`;
+    const payload = JSON.stringify({ user_id: userId });
+    let response = await fetch(backendUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,9 +86,27 @@ export async function POST(request: NextRequest) {
         'Accept-Language': request.headers.get('Accept-Language') || 'en',
         'User-Agent': getForwardUserAgent(request),
       },
-      body: JSON.stringify({ user_id: userId }),
+      body: payload,
       cache: 'no-store',
     });
+
+    if (response.status === 403) {
+      const directBase = getDirectBackendApiUrl(request);
+      if (directBase) {
+        const directUrl = backendUrl.replace(BACKEND_API_URL, directBase);
+        response = await fetch(directUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'Accept-Language': request.headers.get('Accept-Language') || 'en',
+            'User-Agent': getForwardUserAgent(request),
+          },
+          body: payload,
+          cache: 'no-store',
+        });
+      }
+    }
 
     const data = await readJsonSafe<ApiResponse<unknown>>(response);
     if (!response.ok) {

@@ -47,6 +47,17 @@ function getForwardUserAgent(request: NextRequest): string {
   return request.headers.get('User-Agent') || request.headers.get('user-agent') || 'Mozilla/5.0';
 }
 
+/**
+ * getDirectBackendApiUrl
+ * 生产环境下为浏览器提供直连后端的兜底地址（用于绕过上游代理被拦截的情况）。
+ */
+function getDirectBackendApiUrl(request: NextRequest): string | null {
+  const host = (request.headers.get('host') || '').toLowerCase();
+  if (!host) return null;
+  if (host.includes('localhost') || host.includes('127.0.0.1')) return null;
+  return 'https://api.soloforge.dev/api';
+}
+
 function getLangFromRequest(request: NextRequest): string {
   return request.headers.get('Accept-Language') || 'en';
 }
@@ -87,7 +98,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const allowlist = getAdminEmailAllowlist();
     const isAdmin = allowlist.length > 0 && allowlist.includes(user.email);
 
-    const response = await fetchWithTimeout(`${BACKEND_API_URL}/products/${encodeURIComponent(id)}`, {
+    const backendUrl = `${BACKEND_API_URL}/products/${encodeURIComponent(id)}`;
+    let response = await fetchWithTimeout(backendUrl, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
@@ -97,6 +109,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
       cache: 'no-store',
     });
+
+    if (response.status === 403) {
+      const directBase = getDirectBackendApiUrl(request);
+      if (directBase) {
+        const directUrl = backendUrl.replace(BACKEND_API_URL, directBase);
+        response = await fetchWithTimeout(directUrl, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'Accept-Language': lang,
+            'User-Agent': getForwardUserAgent(request),
+            ...(BACKEND_ADMIN_TOKEN ? { 'x-admin-token': BACKEND_ADMIN_TOKEN } : {}),
+          },
+          cache: 'no-store',
+        });
+      }
+    }
 
     const json = await readJsonSafe<ApiResponse<unknown>>(response);
     if (response.status === 404) {

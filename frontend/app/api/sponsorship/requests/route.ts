@@ -22,6 +22,17 @@ function getForwardUserAgent(request: NextRequest): string {
   return request.headers.get('User-Agent') || request.headers.get('user-agent') || 'Mozilla/5.0';
 }
 
+/**
+ * getDirectBackendApiUrl
+ * 生产环境下为浏览器提供直连后端的兜底地址（用于绕过上游代理被拦截的情况）。
+ */
+function getDirectBackendApiUrl(request: NextRequest): string | null {
+  const host = (request.headers.get('host') || '').toLowerCase();
+  if (!host) return null;
+  if (host.includes('localhost') || host.includes('127.0.0.1')) return null;
+  return 'https://api.soloforge.dev/api';
+}
+
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
 export const dynamic = 'force-dynamic';
@@ -79,7 +90,9 @@ async function handlePost(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(`${BACKEND_API_URL}/sponsorship/requests`, {
+    const backendUrl = `${BACKEND_API_URL}/sponsorship/requests`;
+    const bodyJson = JSON.stringify(payload);
+    let response = await fetch(backendUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -87,9 +100,27 @@ async function handlePost(request: NextRequest) {
         'Accept-Language': lang,
         'User-Agent': getForwardUserAgent(request),
       },
-      body: JSON.stringify(payload),
+      body: bodyJson,
       cache: 'no-store',
     });
+
+    if (response.status === 403) {
+      const directBase = getDirectBackendApiUrl(request);
+      if (directBase) {
+        const directUrl = backendUrl.replace(BACKEND_API_URL, directBase);
+        response = await fetch(directUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'Accept-Language': lang,
+            'User-Agent': getForwardUserAgent(request),
+          },
+          body: bodyJson,
+          cache: 'no-store',
+        });
+      }
+    }
 
     const text = await response.text();
     let data: ApiResponse<unknown> | null = null;
