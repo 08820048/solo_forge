@@ -13,6 +13,10 @@ const BACKEND_API_URL = getBackendApiUrl();
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
+/**
+ * readJsonSafe
+ * 安全解析 Response body 为 JSON；非 JSON 或空 body 时返回 null。
+ */
 async function readJsonSafe<T>(response: Response): Promise<T | null> {
   const text = await response.text();
   if (!text.trim()) return null;

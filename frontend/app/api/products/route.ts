@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminEmailAllowlist, requireUser } from '../admin/_auth';
 
-const BACKEND_API_URL = process.env.BACKEND_API_URL || 'http://localhost:8080/api';
+function getBackendApiUrl(): string {
+  const raw = (process.env.BACKEND_API_URL || 'http://localhost:8080/api').trim();
+  const normalized = raw.replace(/\/+$/, '');
+  if (!normalized) return 'http://localhost:8080/api';
+  if (normalized.endsWith('/api')) return normalized;
+  return `${normalized}/api`;
+}
+
+const BACKEND_API_URL = getBackendApiUrl();
+
+function getForwardUserAgent(request: NextRequest): string {
+  return request.headers.get('User-Agent') || request.headers.get('user-agent') || 'Mozilla/5.0';
+}
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -75,7 +87,9 @@ async function requireOwnerOrAdmin(request: NextRequest, productId: string, lang
   const res = await fetchWithTimeout(`${BACKEND_API_URL}/products/${encodeURIComponent(productId)}`, {
     method: 'GET',
     headers: {
+      Accept: 'application/json',
       'Accept-Language': lang,
+      'User-Agent': getForwardUserAgent(request),
       Authorization: request.headers.get('Authorization') || '',
     },
     cache: 'no-store',
@@ -106,7 +120,9 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'application/json',
         'Accept-Language': lang,
+        'User-Agent': getForwardUserAgent(request),
       },
       body: JSON.stringify(body),
       cache: 'no-store',
@@ -153,7 +169,9 @@ export async function PUT(request: NextRequest) {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'application/json',
         'Accept-Language': lang,
+        'User-Agent': getForwardUserAgent(request),
       },
       body: JSON.stringify(body),
       cache: 'no-store',
@@ -212,7 +230,9 @@ export async function DELETE(request: NextRequest) {
     const response = await fetchWithTimeout(`${BACKEND_API_URL}/products/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: {
+        Accept: 'application/json',
         'Accept-Language': lang,
+        'User-Agent': getForwardUserAgent(request),
       },
       cache: 'no-store',
     });
@@ -265,7 +285,9 @@ export async function GET(request: NextRequest) {
 
     const response = await fetchWithTimeout(`${BACKEND_API_URL}/products?${params.toString()}`, {
       headers: {
+        Accept: 'application/json',
         'Accept-Language': lang,
+        'User-Agent': getForwardUserAgent(request),
       },
       cache: 'no-store',
     });

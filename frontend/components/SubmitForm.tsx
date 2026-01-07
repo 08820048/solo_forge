@@ -53,6 +53,28 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 /**
+ * readJsonSafe
+ * 安全解析 Response body 为 JSON；非 JSON 或空 body 时返回 null。
+ */
+async function readJsonSafe<T>(response: Response): Promise<T | null> {
+  const text = await response.text();
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * shouldFallbackToDirectBackend
+ * 判断代理接口是否需要直连后端兜底（通常为被风控拦截或上游不可用）。
+ */
+function shouldFallbackToDirectBackend(status: number): boolean {
+  return status === 403 || status === 502 || status === 503;
+}
+
+/**
  * getAccessToken
  * 读取 Supabase access_token，用于提交需要鉴权的请求（如更新/删除）。
  */
@@ -279,6 +301,11 @@ export default function SubmitForm({
         setError(t('error.editLoginRequired'));
         return;
       }
+      if (method === 'PUT' && !String(productId || '').trim()) {
+        setIsSubmitting(false);
+        setError(locale.toLowerCase().startsWith('zh') ? '缺少产品 ID' : 'Missing product id');
+        return;
+      }
       const payload =
         mode === 'update'
           ? {
@@ -293,26 +320,60 @@ export default function SubmitForm({
             }
           : productData;
 
-      const response = await fetch(endpoint, {
+      const proxyResponse = await fetch(endpoint, {
         method,
         headers: {
           'Content-Type': 'application/json',
+          Accept: 'application/json',
           'Accept-Language': locale,
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
+      const proxyResult = await readJsonSafe<{ success?: boolean; message?: string }>(proxyResponse);
 
-      if (result.success) {
+      if (proxyResponse.ok && proxyResult?.success) {
         setIsSubmitting(false);
         setSubmitted(true);
         onSubmitted?.();
-      } else {
-        setIsSubmitting(false);
-        setError(result.message || 'Submission failed');
+        return;
       }
+
+      if (!shouldFallbackToDirectBackend(proxyResponse.status)) {
+        setIsSubmitting(false);
+        setError(proxyResult?.message || 'Submission failed');
+        return;
+      }
+
+      const backendBase = 'https://api.soloforge.dev/api';
+      const directEndpoint =
+        method === 'PUT'
+          ? `${backendBase}/products/${encodeURIComponent(String(productId || '').trim())}`
+          : `${backendBase}/products`;
+
+      const directResponse = await fetch(directEndpoint, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'Accept-Language': locale,
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const directResult = await readJsonSafe<{ success?: boolean; message?: string }>(directResponse);
+
+      if (directResponse.ok && directResult?.success) {
+        setIsSubmitting(false);
+        setSubmitted(true);
+        onSubmitted?.();
+        return;
+      }
+
+      setIsSubmitting(false);
+      setError(directResult?.message || proxyResult?.message || 'Submission failed');
     } catch {
       setIsSubmitting(false);
       setError('Network error. Please try again later.');

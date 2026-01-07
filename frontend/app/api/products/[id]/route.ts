@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminEmailAllowlist, requireUser } from '../../admin/_auth';
 
-const BACKEND_API_URL = process.env.BACKEND_API_URL || 'http://localhost:8080/api';
+/**
+ * getBackendApiUrl
+ * 读取并规范化后端 API 基地址，确保以 /api 结尾。
+ */
+function getBackendApiUrl(): string {
+  const raw = (process.env.BACKEND_API_URL || 'http://localhost:8080/api').trim();
+  const normalized = raw.replace(/\/+$/, '');
+  if (!normalized) return 'http://localhost:8080/api';
+  if (normalized.endsWith('/api')) return normalized;
+  return `${normalized}/api`;
+}
+
+const BACKEND_API_URL = getBackendApiUrl();
 const BACKEND_ADMIN_TOKEN = (process.env.BACKEND_ADMIN_TOKEN || '').trim();
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +37,14 @@ async function readJsonSafe<T>(response: Response): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * getForwardUserAgent
+ * 将浏览器侧 User-Agent 透传给后端，降低代理请求被风控拦截的概率。
+ */
+function getForwardUserAgent(request: NextRequest): string {
+  return request.headers.get('User-Agent') || request.headers.get('user-agent') || 'Mozilla/5.0';
 }
 
 function getLangFromRequest(request: NextRequest): string {
@@ -70,7 +90,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const response = await fetchWithTimeout(`${BACKEND_API_URL}/products/${encodeURIComponent(id)}`, {
       method: 'GET',
       headers: {
+        Accept: 'application/json',
         'Accept-Language': lang,
+        'User-Agent': getForwardUserAgent(request),
         ...(BACKEND_ADMIN_TOKEN ? { 'x-admin-token': BACKEND_ADMIN_TOKEN } : {}),
       },
       cache: 'no-store',
