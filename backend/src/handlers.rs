@@ -1410,12 +1410,24 @@ pub struct HomeProductsPayload {
     pub next_refresh_at: String,
 }
 
+#[allow(dead_code)]
 fn start_of_next_day_utc(now: chrono::DateTime<Utc>) -> chrono::DateTime<Utc> {
     let today = now.date_naive();
     let next = today
         .succ_opt()
         .unwrap_or_else(|| today + chrono::Duration::days(1));
     chrono::DateTime::<Utc>::from_naive_utc_and_offset(next.and_hms_opt(0, 0, 0).unwrap(), Utc)
+}
+
+fn start_of_next_window_utc(
+    now: chrono::DateTime<Utc>,
+    window_seconds: i64,
+) -> chrono::DateTime<Utc> {
+    let window_seconds = window_seconds.max(1);
+    let current_start_ts = (now.timestamp() / window_seconds) * window_seconds;
+    let next_start_ts = current_start_ts + window_seconds;
+    chrono::DateTime::<Utc>::from_timestamp(next_start_ts, 0)
+        .unwrap_or_else(|| now + chrono::Duration::seconds(window_seconds))
 }
 
 fn stable_pick_ids(ids: &[String], k: usize, seed: u64) -> Vec<String> {
@@ -1449,12 +1461,87 @@ fn stable_seed_from_day_key(day: chrono::NaiveDate, extra: u64) -> u64 {
     (days << 1) ^ extra.wrapping_mul(1315423911)
 }
 
+#[allow(dead_code)]
 fn stable_sponsor_assign_to_top(product_id: &str, day_key: chrono::NaiveDate) -> bool {
     let seed = stable_seed_from_day_key(day_key, 0xC3A5C85C97CB3127);
     let mut hasher = DefaultHasher::new();
     seed.hash(&mut hasher);
     product_id.hash(&mut hasher);
     (hasher.finish() & 1) == 0
+}
+
+async fn get_or_refresh_free_sponsor_queue_ids(
+    db: &Database,
+    now: chrono::DateTime<Utc>,
+    language: Option<&str>,
+) -> anyhow::Result<(Vec<String>, chrono::DateTime<Utc>)> {
+    let window_seconds: i64 = 48 * 60 * 60;
+    let window_start_ts = (now.timestamp() / window_seconds) * window_seconds;
+    let window_key = window_start_ts.to_string();
+    let next_refresh = start_of_next_window_utc(now, window_seconds);
+
+    let state_key = "home_sponsored_free_queue";
+    if let Ok(Some(state)) = db.get_home_module_state(state_key).await {
+        if state.mode.as_deref() == Some("manual") && state.today_ids.len() == 5 {
+            return Ok((state.today_ids, next_refresh));
+        }
+        if state.mode.as_deref() == Some(window_key.as_str()) && state.today_ids.len() == 5 {
+            return Ok((state.today_ids, next_refresh));
+        }
+    }
+
+    let eligible = db
+        .get_first_product_ids_by_created_at(100, language)
+        .await?;
+    if eligible.is_empty() {
+        return Ok((Vec::new(), next_refresh));
+    }
+
+    let mut remaining: Vec<String> = Vec::new();
+    if let Ok(Some(state)) = db.get_home_module_state(state_key).await {
+        if state.mode.as_deref() != Some("manual") {
+            let set: std::collections::HashSet<&String> = eligible.iter().collect();
+            remaining = state
+                .remaining_ids
+                .into_iter()
+                .filter(|id| set.contains(id))
+                .collect();
+        }
+    }
+    if remaining.is_empty() {
+        remaining = eligible.clone();
+    }
+
+    let mut today_ids: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    while today_ids.len() < 5 && !remaining.is_empty() {
+        let id = remaining.remove(0);
+        if seen.insert(id.clone()) {
+            today_ids.push(id);
+        }
+    }
+    if today_ids.len() < 5 {
+        for id in &eligible {
+            if today_ids.len() >= 5 {
+                break;
+            }
+            if seen.insert(id.clone()) {
+                today_ids.push(id.clone());
+            }
+        }
+    }
+
+    let _ = db
+        .upsert_home_module_state(crate::db::HomeModuleState {
+            key: state_key.to_string(),
+            mode: Some(window_key),
+            day_key: None,
+            remaining_ids: remaining,
+            today_ids: today_ids.clone(),
+        })
+        .await;
+
+    Ok((today_ids, next_refresh))
 }
 
 #[allow(dead_code)]
@@ -1468,15 +1555,13 @@ pub async fn get_home_sponsored_top(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let now = Utc::now();
-    let next_refresh = start_of_next_day_utc(now);
+    let next_refresh = start_of_next_window_utc(now, 48 * 60 * 60);
     let day_key = now.date_naive();
 
     let key = "home_sponsored_top";
     let mut ids: Vec<String> = Vec::new();
     if let Ok(Some(state)) = db.get_home_module_state(key).await {
-        if (state.mode.as_deref() == Some("manual") || state.day_key == Some(day_key))
-            && state.today_ids.len() == 2
-        {
+        if state.mode.as_deref() == Some("manual") && state.today_ids.len() == 2 {
             ids = state.today_ids;
         }
     }
@@ -1521,45 +1606,32 @@ pub async fn get_home_sponsored_top(
         }
 
         if selected.len() < 2 {
-            let free_candidates = match db
-                .get_free_sponsorship_candidate_product_ids(50, 7, now, query.language.as_deref())
-                .await
+            let free_today = match get_or_refresh_free_sponsor_queue_ids(
+                db.get_ref().as_ref(),
+                now,
+                query.language.as_deref(),
+            )
+            .await
             {
-                Ok(list) => list,
+                Ok((ids, _)) => ids,
                 Err(e) => {
                     if is_db_unavailable_error(&e) {
-                        let message = if get_language_from_request(&req).starts_with("zh") {
-                            "数据库连接不可用，已降级返回空列表。"
-                        } else {
-                            "Database is unavailable. Returning empty list in degraded mode."
-                        };
-                        return HttpResponse::Ok().json(make_db_degraded_response(
-                            "GET /api/home/sponsored-top",
-                            HomeProductsPayload {
-                                products: Vec::new(),
-                                next_refresh_at: next_refresh.to_rfc3339(),
-                            },
-                            message.to_string(),
-                            &e,
-                        ));
+                        Vec::new()
+                    } else {
+                        return HttpResponse::InternalServerError()
+                            .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
                     }
-                    return HttpResponse::InternalServerError()
-                        .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
                 }
             };
 
-            let mut free_top: Vec<String> = free_candidates
-                .into_iter()
-                .filter(|id| stable_sponsor_assign_to_top(id, day_key))
-                .filter(|id| !exclude.contains(id))
-                .collect();
-            free_top.sort();
-            free_top.dedup();
-
-            let needed = 2usize.saturating_sub(selected.len());
-            let seed_free = stable_seed_from_day_key(day_key, 0xD6E8FEB86659FD93);
-            let pick = stable_pick_ids(&free_top, needed, seed_free ^ 0x123456789ABCDEF0);
-            for id in pick {
+            let free_top = free_today.into_iter().take(2).collect::<Vec<_>>();
+            for id in free_top {
+                if selected.len() >= 2 {
+                    break;
+                }
+                if exclude.contains(&id) {
+                    continue;
+                }
                 exclude.insert(id.clone());
                 selected.push(id);
             }
@@ -1654,27 +1726,15 @@ pub async fn get_home_sponsored_right(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let now = Utc::now();
-    let next_refresh = start_of_next_day_utc(now);
+    let next_refresh = start_of_next_window_utc(now, 48 * 60 * 60);
     let day_key = now.date_naive();
     let key = "home_sponsored_right";
 
-    let mut mode = "first100".to_string();
-    let mut remaining_ids: Vec<String> = Vec::new();
     let mut today_ids: Vec<String> = Vec::new();
 
     if let Ok(Some(state)) = db.get_home_module_state(key).await {
         if state.mode.as_deref() == Some("manual") && state.today_ids.len() == 3 {
-            mode = "manual".to_string();
-            remaining_ids = Vec::new();
             today_ids = state.today_ids;
-        } else {
-            if let Some(m) = state.mode {
-                mode = m;
-            }
-            remaining_ids = state.remaining_ids;
-            if state.day_key == Some(day_key) && state.today_ids.len() == 3 {
-                today_ids = state.today_ids;
-            }
         }
     }
 
@@ -1742,44 +1802,25 @@ pub async fn get_home_sponsored_right(
             }
         }
 
-        let free_candidates = match db
-            .get_free_sponsorship_candidate_product_ids(50, 7, now, query.language.as_deref())
-            .await
+        let free_today = match get_or_refresh_free_sponsor_queue_ids(
+            db.get_ref().as_ref(),
+            now,
+            query.language.as_deref(),
+        )
+        .await
         {
-            Ok(list) => list,
+            Ok((ids, _)) => ids,
             Err(e) => {
                 if is_db_unavailable_error(&e) {
-                    let message = if get_language_from_request(&req).starts_with("zh") {
-                        "数据库连接不可用，已降级返回空列表。"
-                    } else {
-                        "Database is unavailable. Returning empty list in degraded mode."
-                    };
-                    return HttpResponse::Ok().json(make_db_degraded_response(
-                        "GET /api/home/sponsored-right",
-                        HomeProductsPayload {
-                            products: Vec::new(),
-                            next_refresh_at: next_refresh.to_rfc3339(),
-                        },
-                        message.to_string(),
-                        &e,
-                    ));
+                    Vec::new()
+                } else {
+                    return HttpResponse::InternalServerError()
+                        .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
                 }
-                return HttpResponse::InternalServerError()
-                    .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
             }
         };
 
-        let mut free_right: Vec<String> = free_candidates
-            .into_iter()
-            .filter(|id| !stable_sponsor_assign_to_top(id, day_key))
-            .filter(|id| !exclude.contains(id))
-            .collect();
-        free_right.sort();
-        free_right.dedup();
-
-        let seed_free = stable_seed_from_day_key(day_key, 0xD6E8FEB86659FD93) ^ 0x0F1E2D3C4B5A6978;
-        let free_pick = stable_pick_ids(&free_right, 3, seed_free);
-        let mut free_iter = free_pick.into_iter();
+        let mut free_iter = free_today.into_iter().skip(2).take(3);
         for slot in &mut slots {
             if slot.is_none() {
                 if let Some(id) = free_iter.next() {
@@ -1839,16 +1880,6 @@ pub async fn get_home_sponsored_right(
         }
 
         today_ids = chosen;
-
-        let _ = db
-            .upsert_home_module_state(crate::db::HomeModuleState {
-                key: key.to_string(),
-                mode: Some(mode.clone()),
-                day_key: Some(day_key),
-                remaining_ids,
-                today_ids: today_ids.clone(),
-            })
-            .await;
     }
 
     if today_ids.is_empty() {

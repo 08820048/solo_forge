@@ -49,6 +49,14 @@ type Draft = {
   note: string;
 };
 
+type HomeModuleState = {
+  key: string;
+  mode: string | null;
+  day_key: string | null;
+  remaining_ids: string[];
+  today_ids: string[];
+};
+
 /**
  * getAccessToken
  * 从 Supabase Session 中读取 access_token，用于调用 /api/admin/* 受保护接口。
@@ -109,7 +117,7 @@ function statusBadge(status: SponsorshipRequestStatus) {
  * 管理后台：赞助请求处理与赞助队列查看。
  */
 export default function AdminSponsorshipPage() {
-  const [tab, setTab] = useState<'pending' | 'all' | 'grants'>('pending');
+  const [tab, setTab] = useState<'pending' | 'all' | 'grants' | 'free'>('pending');
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -118,6 +126,8 @@ export default function AdminSponsorshipPage() {
 
   const [requests, setRequests] = useState<SponsorshipRequest[]>([]);
   const [grants, setGrants] = useState<SponsorshipGrant[]>([]);
+  const [freeState, setFreeState] = useState<HomeModuleState | null>(null);
+  const [freeDraft, setFreeDraft] = useState<string>('');
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
 
@@ -152,6 +162,22 @@ export default function AdminSponsorshipPage() {
       const token = await getAccessToken();
       if (!token) {
         setMessage('未检测到登录会话，请先登录。');
+        return;
+      }
+
+      if (tab === 'free') {
+        const res = await fetch(`/api/admin/home-modules/${encodeURIComponent('home_sponsored_free_queue')}`, {
+          headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'zh' },
+          cache: 'no-store',
+        });
+        const json = (await res.json().catch(() => null)) as ApiResponse<HomeModuleState> | null;
+        if (!res.ok || !json?.success) {
+          setMessage(json?.message || '加载免费赞助队列失败。');
+          return;
+        }
+        const data = json.data ?? null;
+        setFreeState(data);
+        setFreeDraft((data?.today_ids || []).join('\n'));
         return;
       }
 
@@ -198,7 +224,7 @@ export default function AdminSponsorshipPage() {
   }, [load]);
 
   useEffect(() => {
-    if (tab === 'grants') return;
+    if (tab === 'grants' || tab === 'free') return;
     setDrafts((m) => {
       let next: typeof m | null = null;
       for (const r of requests) {
@@ -228,6 +254,57 @@ export default function AdminSponsorshipPage() {
       return hay.includes(q);
     });
   }, [grants, query]);
+
+  const filteredFree = useMemo(() => {
+    const ids = freeState?.today_ids || [];
+    const q = query.trim().toLowerCase();
+    if (!q) return ids;
+    return ids.filter((id) => id.toLowerCase().includes(q));
+  }, [freeState, query]);
+
+  /**
+   * saveFreeQueue
+   * 更新免费赞助队列的当前窗口展示产品（写入 home_module_state）。
+   */
+  const saveFreeQueue = async () => {
+    const token = await getAccessToken();
+    if (!token) {
+      setMessage('未检测到登录会话，请先登录。');
+      return;
+    }
+
+    const ids = freeDraft
+      .split('\n')
+      .map((v) => v.trim())
+      .filter((v) => !!v);
+    if (ids.length !== 5) {
+      setMessage('免费队列需要填写 5 个 product_id（每行一个）。');
+      return;
+    }
+
+    const key = 'free:save';
+    setBusy((m) => ({ ...m, [key]: true }));
+    setMessage(null);
+    setHint(null);
+    try {
+      const res = await fetch(`/api/admin/home-modules/${encodeURIComponent('home_sponsored_free_queue')}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'zh', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'manual', today_ids: ids }),
+      });
+      const json = (await res.json().catch(() => null)) as ApiResponse<unknown> | null;
+      if (!res.ok || !json?.success) {
+        setMessage(json?.message || '保存失败。');
+        return;
+      }
+      setHint('已更新免费赞助队列（manual 模式）');
+      await load();
+    } catch {
+      setMessage('网络错误，请稍后重试。');
+    } finally {
+      setBusy((m) => ({ ...m, [key]: false }));
+    }
+  };
 
   /**
    * reload
@@ -425,6 +502,9 @@ export default function AdminSponsorshipPage() {
               <Button variant={tab === 'grants' ? 'default' : 'outline'} onClick={() => setTab('grants')} disabled={loading}>
                 赞助队列
               </Button>
+              <Button variant={tab === 'free' ? 'default' : 'outline'} onClick={() => setTab('free')} disabled={loading}>
+                免费队列
+              </Button>
             </div>
             <div className="w-full md:max-w-sm">
               <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索：id / 邮箱 / 产品 / 位置 / 状态" />
@@ -436,7 +516,7 @@ export default function AdminSponsorshipPage() {
           {!loading && message ? <div className="py-2 text-sm text-destructive">{message}</div> : null}
           {!loading && hint ? <div className="py-2 text-sm text-emerald-600 dark:text-emerald-400">{hint}</div> : null}
 
-          {!loading && tab !== 'grants' ? (
+          {!loading && tab !== 'grants' && tab !== 'free' ? (
             <div className="space-y-4">
               {filteredRequests.map((r) => {
                 const draft = drafts[r.id];
@@ -457,7 +537,7 @@ export default function AdminSponsorshipPage() {
                         </div>
                         <div className="text-xs text-muted-foreground break-all">{r.email}</div>
                         <div className="text-xs text-muted-foreground break-all">product_ref: {r.product_ref || '—'}</div>
-                        {r.note ? <div className="text-xs text-muted-foreground break-words">备注：{r.note}</div> : null}
+                        {r.note ? <div className="text-xs text-muted-foreground wrap-break-word">备注：{r.note}</div> : null}
                       </div>
                       <div className="flex flex-wrap gap-2 md:justify-end">
                         {canAct ? (
@@ -612,6 +692,61 @@ export default function AdminSponsorshipPage() {
                   ) : null}
                 </tbody>
               </table>
+            </div>
+          ) : null}
+
+          {!loading && tab === 'free' ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+                <div className="text-sm font-medium">免费赞助队列（48 小时窗口）</div>
+                <div className="text-xs text-muted-foreground break-all">
+                  key: {freeState?.key || 'home_sponsored_free_queue'} {freeState?.mode ? `| mode: ${freeState.mode}` : ''}
+                </div>
+                <div className="text-xs text-muted-foreground break-all">
+                  remaining_ids: {(freeState?.remaining_ids || []).length} 条
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+                <div className="text-sm font-medium">当前窗口展示（5 个，每行一个 product_id）</div>
+                <textarea
+                  className="min-h-[160px] w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  value={freeDraft}
+                  onChange={(e) => setFreeDraft(e.target.value)}
+                  placeholder="一共 5 行，每行一个 UUID"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button disabled={!!busy['free:save']} onClick={() => void saveFreeQueue()}>
+                    {busy['free:save'] ? '保存中...' : '保存为 manual'}
+                  </Button>
+                  <Button variant="outline" disabled={loading || reloading} onClick={() => void reload()}>
+                    {reloading ? '刷新中...' : '刷新'}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-4">
+                <div className="text-sm font-medium mb-2">当前列表</div>
+                {filteredFree.length === 0 ? (
+                  <div className="py-6 text-sm text-muted-foreground">暂无数据</div>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredFree.map((id) => (
+                      <div key={id} className="flex items-center justify-between gap-3">
+                        <div className="text-xs text-muted-foreground break-all">{id}</div>
+                        <a
+                          className={buttonClassName({ variant: 'outline', size: 'sm' })}
+                          href={`/en/products/${encodeURIComponent(id)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          查看产品
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
         </CardContent>

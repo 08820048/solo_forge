@@ -444,16 +444,18 @@
   },
   "productDetail": {
     "maker": "开发者",
-    "website": "访问网站",
+    "website": "访问官网",
     "category": "分类",
     "tags": "标签",
     "createdAt": "收录于",
-    "description": "产品描述"
+    "description": "产品描述",
+    "sponsorBadge": "赞助者"
   },
   "common": {
     "appName": "SoloForge",
     "slogan": "单人开发者锻造的产品宝库",
     "viewMore": "查看更多",
+    "sponsorBadge": "赞助者",
     "search": {
       "title": "全站搜索",
       "placeholder": "搜索产品、开发者...",

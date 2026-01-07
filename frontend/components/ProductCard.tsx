@@ -93,6 +93,8 @@ type DeveloperProfile = {
   email: string;
   name: string;
   avatar_url?: string | null;
+  sponsor_role?: string | null;
+  sponsor_verified?: boolean;
 };
 
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
@@ -152,6 +154,8 @@ interface Product {
   website: string;
   likes: number;
   favorites: number;
+  maker_sponsor_role?: string | null;
+  maker_sponsor_verified?: boolean;
 }
 
 interface ProductCardProps {
@@ -201,6 +205,7 @@ function SloganMarkdown({ value }: { value: string }) {
 
 export default function ProductCard({ product, variant = 'homeFeatured' }: ProductCardProps) {
   const t = useTranslations('categories');
+  const commonT = useTranslations('common');
   const [favorited, setFavorited] = useState(() => readFavoritesFromStorage().includes(product.id));
   const [liked, setLiked] = useState(() => readLikesFromStorage().includes(product.id));
   const [favoriteCount, setFavoriteCount] = useState(() => product.favorites ?? 0);
@@ -229,6 +234,9 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
   const makerDisplayName = (makerProfile?.name || product.maker_name || makerEmail || '').trim();
   const makerAvatarUrl = makerEmail ? getCurrentUserAvatarOverride(makerEmail, makerProfile?.avatar_url ?? null) : null;
   const makerInitial = (makerDisplayName || makerEmail || 'U').trim().slice(0, 1).toUpperCase();
+  const sponsorVerified = Boolean(makerProfile?.sponsor_verified ?? product.maker_sponsor_verified);
+  const sponsorRole = String(makerProfile?.sponsor_role ?? product.maker_sponsor_role ?? '').trim();
+  const sponsorBadgeText = sponsorRole ? `${commonT('sponsorBadge')} · ${sponsorRole}` : commonT('sponsorBadge');
 
   const toggleFavorite = async () => {
     const userEmail = getAuthenticatedUserEmail();
@@ -466,7 +474,14 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
                     makerInitial
                   )}
                 </div>
-                <span className="text-sm text-muted-foreground font-sans truncate">{makerDisplayName || makerEmail}</span>
+                <div className="min-w-0 flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground font-sans truncate">{makerDisplayName || makerEmail}</span>
+                  {sponsorVerified ? (
+                    <Badge variant="secondary" className="shrink-0 h-5 px-1.5 text-[10px]">
+                      {sponsorBadgeText}
+                    </Badge>
+                  ) : null}
+                </div>
               </div>
               <Badge variant="secondary">{t(product.category)}</Badge>
             </div>

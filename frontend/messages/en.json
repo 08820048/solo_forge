@@ -448,12 +448,14 @@
     "category": "Category",
     "tags": "Tags",
     "createdAt": "Added on",
-    "description": "Description"
+    "description": "Description",
+    "sponsorBadge": "Sponsor"
   },
   "common": {
     "appName": "SoloForge",
     "slogan": "The Forge for Solo Makers' Products",
     "viewMore": "View more",
+    "sponsorBadge": "Sponsor",
     "search": {
       "title": "Search",
       "placeholder": "Search products, developers...",

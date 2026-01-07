@@ -15,6 +15,10 @@ pub struct Product {
     pub maker_name: String,
     pub maker_email: String,
     pub maker_website: Option<String>,
+    #[serde(default)]
+    pub maker_sponsor_role: Option<String>,
+    #[serde(default)]
+    pub maker_sponsor_verified: bool,
     pub language: String,
     pub status: ProductStatus,
     #[serde(default)]

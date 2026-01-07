@@ -54,7 +54,14 @@ export default async function ProductDetailPage({
   const categoryT = await getTranslations({ locale, namespace: 'categories' });
 
   let product;
-  let maker = null as null | { email: string; name: string; avatar_url?: string | null; website?: string | null };
+  let maker = null as null | {
+    email: string;
+    name: string;
+    avatar_url?: string | null;
+    website?: string | null;
+    sponsor_role?: string | null;
+    sponsor_verified?: boolean;
+  };
   try {
     // Fetch product data from API
     const response = await fetch(`${process.env.BACKEND_API_URL || 'http://localhost:8080/api'}/products/${slug}`, {
@@ -99,6 +106,9 @@ export default async function ProductDetailPage({
       maker = null;
     }
   }
+  const sponsorVerified = Boolean(maker?.sponsor_verified ?? product?.maker_sponsor_verified);
+  const sponsorRole = String(maker?.sponsor_role ?? product?.maker_sponsor_role ?? '').trim();
+  const sponsorBadgeText = sponsorRole ? `${t('sponsorBadge')} · ${sponsorRole}` : t('sponsorBadge');
 
   return (
     <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 pb-12">
@@ -260,7 +270,14 @@ export default async function ProductDetailPage({
                   )}
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">{product.maker_name}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="font-medium text-foreground truncate">{product.maker_name}</p>
+                    {sponsorVerified ? (
+                      <span className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-[10px] font-medium text-secondary-foreground">
+                        {sponsorBadgeText}
+                      </span>
+                    ) : null}
+                  </div>
                   {(maker?.website || product.maker_website) && (
                     <a
                       href={maker?.website || product.maker_website}
