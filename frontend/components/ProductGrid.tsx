@@ -1,7 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import { Link } from '@/i18n/routing';
+import { Link, useRouter } from '@/i18n/routing';
 import { useEffect, useState } from 'react';
 import ProductCard from './ProductCard';
 import { Badge } from '@/components/ui/badge';
@@ -210,6 +210,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
   const categoryT = useTranslations('categories');
   const devT = useTranslations('home.risingStars');
   const locale = useLocale();
+  const router = useRouter();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -221,6 +222,12 @@ export default function ProductGrid({ section }: ProductGridProps) {
   const [developersVersion, setDevelopersVersion] = useState(0);
   const [nextRefreshAt, setNextRefreshAt] = useState<string | null>(null);
   const [recentDir, setRecentDir] = useState<'desc' | 'asc'>('desc');
+
+  const openMakerProfile = (email: string) => {
+    const normalized = (email || '').trim().toLowerCase();
+    if (!normalized) return;
+    router.push({ pathname: '/makers/[email]', params: { email: normalized } });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -779,52 +786,29 @@ export default function ProductGrid({ section }: ProductGridProps) {
                   className="rounded-lg border border-border bg-background/40 px-3 py-3 hover:bg-accent/30 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    {d.website ? (
-                      <a
-                        href={d.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 min-w-0 flex-1"
-                      >
-                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden text-sm font-semibold text-muted-foreground">
-                          {d.avatar_url ? (
-                            <img
-                              src={d.avatar_url}
-                              alt={d.name || d.email}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            (d.name || d.email).trim().charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
-                          <div className="mt-1 text-xs text-muted-foreground">{devT('followers', { count: d.followers })}</div>
-                        </div>
-                      </a>
-                    ) : (
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden text-sm font-semibold text-muted-foreground">
-                          {d.avatar_url ? (
-                            <img
-                              src={d.avatar_url}
-                              alt={d.name || d.email}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            (d.name || d.email).trim().charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
-                          <div className="mt-1 text-xs text-muted-foreground">{devT('followers', { count: d.followers })}</div>
-                        </div>
+                    <button
+                      type="button"
+                      onClick={() => openMakerProfile(d.email)}
+                      className="flex items-center gap-3 min-w-0 flex-1 text-left hover:opacity-90 transition-opacity"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden text-sm font-semibold text-muted-foreground">
+                        {d.avatar_url ? (
+                          <img
+                            src={d.avatar_url}
+                            alt={d.name || d.email}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          (d.name || d.email).trim().charAt(0).toUpperCase()
+                        )}
                       </div>
-                    )}
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">{devT('followers', { count: d.followers })}</div>
+                      </div>
+                    </button>
                   </div>
                 </div>
                 );

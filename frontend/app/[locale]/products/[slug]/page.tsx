@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Link } from '@/i18n/routing';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -109,6 +110,7 @@ export default async function ProductDetailPage({
   const sponsorVerified = Boolean(maker?.sponsor_verified ?? product?.maker_sponsor_verified);
   const sponsorRole = String(maker?.sponsor_role ?? product?.maker_sponsor_role ?? '').trim();
   const sponsorBadgeText = sponsorRole ? `${t('sponsorBadge')} · ${sponsorRole}` : t('sponsorBadge');
+  const makerEmail = String(maker?.email || product?.maker_email || '').trim().toLowerCase();
 
   return (
     <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 pb-12">
@@ -256,22 +258,51 @@ export default async function ProductDetailPage({
                 {t('maker')}
               </h3>
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center overflow-hidden">
-                  {maker?.avatar_url ? (
-                    <div
-                      className="w-full h-full bg-center bg-cover"
-                      style={{ backgroundImage: `url("${maker.avatar_url}")` }}
-                      aria-label={maker.name || maker.email}
-                    />
-                  ) : (
-                    <span className="text-muted-foreground font-semibold">
-                      {(product.maker_name || product.maker_email || 'U').trim().charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
+                {makerEmail ? (
+                  <Link
+                    href={{ pathname: '/makers/[email]', params: { email: makerEmail } }}
+                    className="w-12 h-12 bg-muted rounded-full flex items-center justify-center overflow-hidden hover:opacity-90 transition-opacity"
+                    aria-label={maker?.name || makerEmail}
+                  >
+                    {maker?.avatar_url ? (
+                      <div
+                        className="w-full h-full bg-center bg-cover"
+                        style={{ backgroundImage: `url("${maker.avatar_url}")` }}
+                        aria-label={maker.name || maker.email}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground font-semibold">
+                        {(product.maker_name || product.maker_email || 'U').trim().charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </Link>
+                ) : (
+                  <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center overflow-hidden">
+                    {maker?.avatar_url ? (
+                      <div
+                        className="w-full h-full bg-center bg-cover"
+                        style={{ backgroundImage: `url("${maker.avatar_url}")` }}
+                        aria-label={maker.name || maker.email}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground font-semibold">
+                        {(product.maker_name || product.maker_email || 'U').trim().charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div>
                   <div className="flex items-center gap-2 min-w-0">
-                    <p className="font-medium text-foreground truncate">{product.maker_name}</p>
+                    {makerEmail ? (
+                      <Link
+                        href={{ pathname: '/makers/[email]', params: { email: makerEmail } }}
+                        className="font-medium text-foreground truncate hover:underline"
+                      >
+                        {product.maker_name}
+                      </Link>
+                    ) : (
+                      <p className="font-medium text-foreground truncate">{product.maker_name}</p>
+                    )}
                     {sponsorVerified ? (
                       <span className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-[10px] font-medium text-secondary-foreground">
                         {sponsorBadgeText}

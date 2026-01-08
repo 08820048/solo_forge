@@ -318,6 +318,7 @@ pub async fn search(
         language: query.language.clone(),
         status: Some("approved".to_string()),
         search: Some(q.to_string()),
+        maker_email: None,
         sort: None,
         dir: None,
         limit: Some(limit),
@@ -618,6 +619,28 @@ pub async fn get_developer_popularity_last_month(
             if is_db_unavailable_error(&e) {
                 return HttpResponse::Ok().json(make_db_degraded_response(
                     "GET /api/developers/popularity-last-month",
+                    Vec::<crate::models::DeveloperPopularity>::new(),
+                    "数据库连接不可用，已降级返回空列表。".to_string(),
+                    &e,
+                ));
+            }
+            HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
+        }
+    }
+}
+
+pub async fn get_developer_popularity_last_week(
+    query: web::Query<DeveloperPopularityQuery>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let limit = query.limit.unwrap_or(10).clamp(1, 50);
+    match db.get_developer_popularity_last_week(limit).await {
+        Ok(list) => HttpResponse::Ok().json(ApiResponse::success(list)),
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/developers/popularity-last-week",
                     Vec::<crate::models::DeveloperPopularity>::new(),
                     "数据库连接不可用，已降级返回空列表。".to_string(),
                     &e,
@@ -1298,6 +1321,8 @@ pub struct LeaderboardQuery {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MakerRank {
     pub maker_name: String,
+    pub maker_email: String,
+    pub avatar_url: Option<String>,
     pub product_count: usize,
 }
 
@@ -1334,6 +1359,7 @@ pub async fn get_leaderboard(
         language: query.language.clone(),
         status: Some("approved".to_string()),
         search: None,
+        maker_email: None,
         sort: None,
         dir: None,
         limit: Some((limit as i64) * 5),
@@ -1380,18 +1406,48 @@ pub async fn get_leaderboard(
 
     let mut maker_counts = std::collections::HashMap::<String, usize>::new();
     for product in &top_products {
-        *maker_counts.entry(product.maker_name.clone()).or_insert(0) += 1;
+        *maker_counts
+            .entry(product.maker_email.trim().to_ascii_lowercase())
+            .or_insert(0) += 1;
     }
 
-    let mut top_makers = maker_counts
+    let mut maker_names = std::collections::HashMap::<String, String>::new();
+    for product in &top_products {
+        let email = product.maker_email.trim().to_ascii_lowercase();
+        if email.is_empty() {
+            continue;
+        }
+        let name = product.maker_name.trim().to_string();
+        if name.is_empty() {
+            continue;
+        }
+        maker_names.entry(email).or_insert(name);
+    }
+
+    let mut maker_items = maker_counts
         .into_iter()
-        .map(|(maker_name, product_count)| MakerRank {
-            maker_name,
-            product_count,
-        })
+        .map(|(maker_email, product_count)| (maker_email, product_count))
         .collect::<Vec<_>>();
-    top_makers.sort_by(|a, b| b.product_count.cmp(&a.product_count));
-    top_makers.truncate(10);
+    maker_items.sort_by(|a, b| b.1.cmp(&a.1));
+    maker_items.truncate(10);
+
+    let mut top_makers = Vec::with_capacity(maker_items.len());
+    for (maker_email, product_count) in maker_items {
+        let maker_name = maker_names
+            .get(&maker_email)
+            .cloned()
+            .unwrap_or_else(|| maker_email.clone());
+        let avatar_url = match db.get_developer_by_email(&maker_email).await {
+            Ok(Some(dev)) => dev.avatar_url,
+            _ => None,
+        };
+        top_makers.push(MakerRank {
+            maker_name,
+            maker_email,
+            avatar_url,
+            product_count,
+        });
+    }
 
     HttpResponse::Ok().json(ApiResponse::success(LeaderboardData {
         top_products,
@@ -1644,6 +1700,7 @@ pub async fn get_home_sponsored_top(
                 language: query.language.clone(),
                 status: Some("approved".to_string()),
                 search: None,
+                maker_email: None,
                 sort: Some("popularity".to_string()),
                 dir: Some("desc".to_string()),
                 limit: Some(50),
@@ -1838,6 +1895,7 @@ pub async fn get_home_sponsored_right(
                 language: query.language.clone(),
                 status: Some("approved".to_string()),
                 search: None,
+                maker_email: None,
                 sort: Some("created_at".to_string()),
                 dir: Some("desc".to_string()),
                 limit: Some(200),
@@ -1934,6 +1992,7 @@ pub async fn get_home_featured(
             language: query.language.clone(),
             status: Some("approved".to_string()),
             search: None,
+            maker_email: None,
             sort: Some("popularity".to_string()),
             dir: Some("desc".to_string()),
             limit: Some(6),

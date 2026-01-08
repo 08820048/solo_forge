@@ -3625,6 +3625,113 @@ impl Database {
         Ok(Vec::new())
     }
 
+    pub async fn get_developer_popularity_last_week(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<DeveloperPopularity>> {
+        let limit = limit.clamp(1, 50);
+
+        if let Some(pool) = &self.postgres {
+            let now = chrono::Utc::now();
+            let since = now - chrono::Duration::days(7);
+
+            let mut tx = pool.begin().await?;
+            let attempt = sqlx::query_as::<_, DeveloperPopularityRow>(
+                "WITH likes AS ( \
+                    SELECT p.maker_email as email, COUNT(l.id)::bigint as likes \
+                    FROM products p \
+                    JOIN product_likes l ON l.product_id = p.id \
+                    WHERE l.created_at >= $1 \
+                    GROUP BY p.maker_email \
+                 ), \
+                 favorites AS ( \
+                    SELECT p.maker_email as email, COUNT(f.id)::bigint as favorites \
+                    FROM products p \
+                    JOIN product_favorites f ON f.product_id = p.id \
+                    WHERE f.created_at >= $1 \
+                    GROUP BY p.maker_email \
+                 ) \
+                 SELECT \
+                    d.email, \
+                    d.name, \
+                    d.avatar_url, \
+                    d.website, \
+                    d.sponsor_role, \
+                    d.sponsor_verified, \
+                    COALESCE(l.likes, 0)::bigint as likes, \
+                    COALESCE(f.favorites, 0)::bigint as favorites, \
+                    (COALESCE(l.likes, 0) + COALESCE(f.favorites, 0))::bigint as score \
+                 FROM developers d \
+                 LEFT JOIN likes l ON l.email = d.email \
+                 LEFT JOIN favorites f ON f.email = d.email \
+                 ORDER BY score DESC, favorites DESC, likes DESC, d.name ASC \
+                 LIMIT $2",
+            )
+            .persistent(false)
+            .bind(since)
+            .bind(limit)
+            .fetch_all(&mut *tx)
+            .await;
+
+            match attempt {
+                Ok(rows) => {
+                    tx.commit().await?;
+                    return Ok(rows.into_iter().map(map_developer_popularity_row).collect());
+                }
+                Err(e) => {
+                    let _ = tx.rollback().await;
+                    let e: anyhow::Error = e.into();
+                    if is_missing_column_error(&e, "sponsor_role")
+                        || is_missing_column_error(&e, "sponsor_verified")
+                    {
+                        let mut tx = pool.begin().await?;
+                        let rows = sqlx::query_as::<_, DeveloperPopularityRow>(
+                            "WITH likes AS ( \
+                                SELECT p.maker_email as email, COUNT(l.id)::bigint as likes \
+                                FROM products p \
+                                JOIN product_likes l ON l.product_id = p.id \
+                                WHERE l.created_at >= $1 \
+                                GROUP BY p.maker_email \
+                             ), \
+                             favorites AS ( \
+                                SELECT p.maker_email as email, COUNT(f.id)::bigint as favorites \
+                                FROM products p \
+                                JOIN product_favorites f ON f.product_id = p.id \
+                                WHERE f.created_at >= $1 \
+                                GROUP BY p.maker_email \
+                             ) \
+                             SELECT \
+                                d.email, \
+                                d.name, \
+                                d.avatar_url, \
+                                d.website, \
+                                NULL::text as sponsor_role, \
+                                FALSE as sponsor_verified, \
+                                COALESCE(l.likes, 0)::bigint as likes, \
+                                COALESCE(f.favorites, 0)::bigint as favorites, \
+                                (COALESCE(l.likes, 0) + COALESCE(f.favorites, 0))::bigint as score \
+                             FROM developers d \
+                             LEFT JOIN likes l ON l.email = d.email \
+                             LEFT JOIN favorites f ON f.email = d.email \
+                             ORDER BY score DESC, favorites DESC, likes DESC, d.name ASC \
+                             LIMIT $2",
+                        )
+                        .persistent(false)
+                        .bind(since)
+                        .bind(limit)
+                        .fetch_all(&mut *tx)
+                        .await?;
+                        tx.commit().await?;
+                        return Ok(rows.into_iter().map(map_developer_popularity_row).collect());
+                    }
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(Vec::new())
+    }
+
     pub async fn get_developer_center_stats(&self, email: &str) -> Result<DeveloperCenterStats> {
         if let Some(pool) = &self.postgres {
             let email = strip_nul_str(email);

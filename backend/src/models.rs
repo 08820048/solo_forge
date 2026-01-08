@@ -182,6 +182,28 @@ pub struct DeveloperCenterStats {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct DeveloperPublicStats {
+    pub followers: i64,
+    pub products: i64,
+    pub favorites: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct DeveloperActivity {
+    pub email: String,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    pub website: Option<String>,
+    pub sponsor_role: Option<String>,
+    pub sponsor_verified: bool,
+    pub likes: i64,
+    pub favorites: i64,
+    pub follows: i64,
+    pub products: i64,
+    pub score: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiError {
     pub code: String,
     pub trace_id: String,
@@ -270,6 +292,7 @@ pub struct QueryParams {
     pub language: Option<String>,
     pub status: Option<String>,
     pub search: Option<String>,
+    pub maker_email: Option<String>,
     pub sort: Option<String>,
     pub dir: Option<String>,
     pub limit: Option<i64>,

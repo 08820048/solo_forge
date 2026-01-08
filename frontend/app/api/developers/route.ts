@@ -141,7 +141,9 @@ export async function GET(request: NextRequest) {
     if (limit) params.set('limit', limit);
 
     const path =
-      kind === 'popularity_last_month'
+      kind === 'popularity_last_week'
+        ? '/developers/popularity-last-week'
+        : kind === 'popularity_last_month'
         ? '/developers/popularity-last-month'
         : kind === 'recent'
           ? '/developers/recent'

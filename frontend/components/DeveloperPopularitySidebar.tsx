@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
+import { useRouter } from '@/i18n/routing';
 
 /**
  * readFollowedDevelopersFromStorage
@@ -139,12 +140,13 @@ function renderRank(rank: number) {
 
 /**
  * DeveloperPopularitySidebar
- * 首页左侧栏：展示「热门开发者 Top 5」与「上月最受欢迎开发者」。
+ * 首页左侧栏：展示「热门开发者 Top 5」与「最近一周最活跃开发者」。
  */
 export default function DeveloperPopularitySidebar() {
   const t = useTranslations('home.developerLeaderboard');
   const tTop = useTranslations('home.topDevelopers');
   const locale = useLocale();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [list, setList] = useState<DeveloperPopularity[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -159,13 +161,13 @@ export default function DeveloperPopularitySidebar() {
 
     /**
      * fetchPopularity
-     * 拉取上月开发者热度榜（按 likes + favorites）。
+     * 拉取最近一周开发者热度榜（按 likes + favorites）。
      */
     async function fetchPopularity() {
       setLoading(true);
       setMessage(null);
       try {
-        const response = await fetch(`/api/developers?kind=popularity_last_month&limit=10`, {
+        const response = await fetch(`/api/developers?kind=popularity_last_week&limit=10`, {
           headers: { 'Accept-Language': locale },
         });
         const json: ApiResponse<DeveloperPopularity[]> = await response.json();
@@ -200,7 +202,7 @@ export default function DeveloperPopularitySidebar() {
       const refetch = async () => {
         try {
           const [popRes, topRes] = await Promise.all([
-            fetch(`/api/developers?kind=popularity_last_month&limit=10`, {
+            fetch(`/api/developers?kind=popularity_last_week&limit=10`, {
               headers: { 'Accept-Language': locale },
             }),
             fetch(`/api/developers?kind=top&limit=5`, {
@@ -336,6 +338,12 @@ export default function DeveloperPopularitySidebar() {
     }
   };
 
+  const openMakerProfile = (email: string) => {
+    const normalized = (email || '').trim().toLowerCase();
+    if (!normalized) return;
+    router.push({ pathname: '/makers/[email]', params: { email: normalized } });
+  };
+
   return (
     <div className="animate-on-scroll lg:sticky lg:top-24">
       <div className="space-y-6">
@@ -383,48 +391,31 @@ export default function DeveloperPopularitySidebar() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center">{renderRank(idx + 1)}</div>
-                      <div className="mt-2 flex items-center gap-2 min-w-0">
-                        {d.website ? (
-                          <a
-                            href={d.website}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground hover:opacity-90 transition-opacity"
-                          >
-                            {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
-                              <img
-                                src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
-                                alt={d.name || d.email}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              (d.name || d.email).trim().charAt(0).toUpperCase()
-                            )}
-                          </a>
-                        ) : (
-                          <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground">
-                            {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
-                              <img
-                                src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
-                                alt={d.name || d.email}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              (d.name || d.email).trim().charAt(0).toUpperCase()
-                            )}
-                          </div>
-                        )}
+                      <button
+                        type="button"
+                        onClick={() => openMakerProfile(d.email)}
+                        className="mt-2 flex items-center gap-2 min-w-0 text-left hover:opacity-90 transition-opacity"
+                      >
+                        <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground">
+                          {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
+                            <img
+                              src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
+                              alt={d.name || d.email}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            (d.name || d.email).trim().charAt(0).toUpperCase()
+                          )}
+                        </div>
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
                           <div className="mt-1 text-[11px] text-muted-foreground whitespace-nowrap">
                             {tTop('followers', { count: d.followers })}
                           </div>
                         </div>
-                      </div>
+                      </button>
                     </div>
                     <button
                       type="button"
@@ -498,41 +489,24 @@ export default function DeveloperPopularitySidebar() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center">{renderRank(idx + 1)}</div>
-                      <div className="mt-2 flex items-center gap-2 min-w-0">
-                        {d.website ? (
-                          <a
-                            href={d.website}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground hover:opacity-90 transition-opacity"
-                          >
-                            {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
-                              <img
-                                src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
-                                alt={d.name || d.email}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              (d.name || d.email).trim().charAt(0).toUpperCase()
-                            )}
-                          </a>
-                        ) : (
-                          <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground">
-                            {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
-                              <img
-                                src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
-                                alt={d.name || d.email}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                              />
-                            ) : (
-                              (d.name || d.email).trim().charAt(0).toUpperCase()
-                            )}
-                          </div>
-                        )}
+                      <button
+                        type="button"
+                        onClick={() => openMakerProfile(d.email)}
+                        className="mt-2 flex items-center gap-2 min-w-0 text-left hover:opacity-90 transition-opacity"
+                      >
+                        <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground">
+                          {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
+                            <img
+                              src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
+                              alt={d.name || d.email}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            (d.name || d.email).trim().charAt(0).toUpperCase()
+                          )}
+                        </div>
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
                           <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground whitespace-nowrap">
@@ -541,7 +515,7 @@ export default function DeveloperPopularitySidebar() {
                             <span>{t('likes', { count: d.likes })}</span>
                           </div>
                         </div>
-                      </div>
+                      </button>
                     </div>
                     <Badge variant="outline" className="shrink-0">
                       <span className="inline-flex items-center gap-1">

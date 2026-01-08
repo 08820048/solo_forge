@@ -117,6 +117,10 @@ async fn main() -> std::io::Result<()> {
                                 web::get().to(handlers::get_developer_popularity_last_month),
                             )
                             .route(
+                                "/popularity-last-week",
+                                web::get().to(handlers::get_developer_popularity_last_week),
+                            )
+                            .route(
                                 "/{email}/center-stats",
                                 web::get().to(handlers::get_developer_center_stats),
                             )

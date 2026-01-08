@@ -1,10 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Link } from '@/i18n/routing';
+import { Link, useRouter } from '@/i18n/routing';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -206,6 +206,7 @@ function SloganMarkdown({ value }: { value: string }) {
 export default function ProductCard({ product, variant = 'homeFeatured' }: ProductCardProps) {
   const t = useTranslations('categories');
   const commonT = useTranslations('common');
+  const router = useRouter();
   const [favorited, setFavorited] = useState(() => readFavoritesFromStorage().includes(product.id));
   const [liked, setLiked] = useState(() => readLikesFromStorage().includes(product.id));
   const [favoriteCount, setFavoriteCount] = useState(() => product.favorites ?? 0);
@@ -237,6 +238,13 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
   const sponsorVerified = Boolean(makerProfile?.sponsor_verified ?? product.maker_sponsor_verified);
   const sponsorRole = String(makerProfile?.sponsor_role ?? product.maker_sponsor_role ?? '').trim();
   const sponsorBadgeText = sponsorRole ? `${commonT('sponsorBadge')} · ${sponsorRole}` : commonT('sponsorBadge');
+
+  const openMakerProfile = (e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!makerEmail) return;
+    router.push({ pathname: '/makers/[email]', params: { email: makerEmail } });
+  };
 
   const toggleFavorite = async () => {
     const userEmail = getAuthenticatedUserEmail();
@@ -460,7 +468,16 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
           {/* Footer */}
           {isProductsList ? (
             <div className="relative z-10 flex items-center justify-between pt-4 border-t border-border">
-              <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={openMakerProfile}
+                disabled={!makerEmail}
+                aria-label={makerDisplayName || makerEmail || 'maker'}
+                className={[
+                  'flex items-center gap-2 min-w-0 text-left',
+                  makerEmail ? 'hover:opacity-90 transition-opacity' : 'opacity-70 cursor-not-allowed',
+                ].join(' ')}
+              >
                 <div className="w-7 h-7 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-[10px] font-semibold text-muted-foreground">
                   {makerAvatarUrl ? (
                     <img
@@ -482,7 +499,7 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
                     </Badge>
                   ) : null}
                 </div>
-              </div>
+              </button>
               <Badge variant="secondary">{t(product.category)}</Badge>
             </div>
           ) : null}

@@ -413,6 +413,32 @@
       "deleting": "删除中..."
     }
   },
+  "makerProfile": {
+    "title": "开发者主页",
+    "subtitle": "查看作品、收藏与数据概览。",
+    "loading": "加载中...",
+    "networkError": "网络错误，请稍后重试。",
+    "invalidEmail": "邮箱无效。",
+    "notFound": "未找到该开发者。",
+    "profileTitle": "开发者信息",
+    "statsTitle": "数据概览",
+    "followers": "粉丝数",
+    "totalLikes": "总点赞",
+    "totalFavorites": "总收藏",
+    "follow": "关注",
+    "unfollow": "已关注",
+    "selfLabel": "这是你",
+    "visitWebsite": "访问网站",
+    "sponsorBadge": "赞助者",
+    "tabs": {
+      "products": "作品",
+      "favorites": "收藏"
+    },
+    "productsEmpty": "暂无作品。",
+    "favoritesEmpty": "暂无收藏。",
+    "productsLoadFailed": "加载作品失败。",
+    "favoritesLoadFailed": "加载收藏失败。"
+  },
   "categories": {
     "ai": "AI 工具",
     "productivity": "效率工具",
@@ -491,9 +517,9 @@
       "invalidUrl": "官网链接无效，无法预览。"
     },
     "developerLeaderboard": {
-      "title": "上月最受欢迎开发者",
-      "badge": "上月",
-      "subtitle": "按其产品收到的收藏与点赞数量综合排序。",
+      "title": "最近一周最活跃开发者",
+      "badge": "近7天",
+      "subtitle": "按过去 7 天其产品收到的收藏与点赞数量综合排序。",
       "loading": "加载中...",
       "empty": "暂无排行数据。",
       "favorites": "{count} 收藏",

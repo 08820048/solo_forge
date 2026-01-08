@@ -413,6 +413,32 @@
       "deleting": "Deleting..."
     }
   },
+  "makerProfile": {
+    "title": "Maker profile",
+    "subtitle": "Browse products, favorites, and stats.",
+    "loading": "Loading...",
+    "networkError": "Network error. Please try again later.",
+    "invalidEmail": "Invalid email.",
+    "notFound": "Maker not found.",
+    "profileTitle": "Profile",
+    "statsTitle": "Stats",
+    "followers": "Followers",
+    "totalLikes": "Total likes",
+    "totalFavorites": "Total favorites",
+    "follow": "Follow",
+    "unfollow": "Following",
+    "selfLabel": "It's you",
+    "visitWebsite": "Visit website",
+    "sponsorBadge": "Sponsor",
+    "tabs": {
+      "products": "Products",
+      "favorites": "Favorites"
+    },
+    "productsEmpty": "No products yet.",
+    "favoritesEmpty": "No favorites yet.",
+    "productsLoadFailed": "Failed to load products.",
+    "favoritesLoadFailed": "Failed to load favorites."
+  },
   "categories": {
     "ai": "AI Tools",
     "productivity": "Productivity",
@@ -491,9 +517,9 @@
       "invalidUrl": "Invalid website URL."
     },
     "developerLeaderboard": {
-      "title": "Top Makers Last Month",
-      "badge": "Last month",
-      "subtitle": "Ranked by likes + favorites received last month.",
+      "title": "Top Makers This Week",
+      "badge": "Last 7 days",
+      "subtitle": "Ranked by likes + favorites received in the past 7 days.",
       "loading": "Loading...",
       "empty": "No ranking data yet.",
       "favorites": "{count} favorites",
