@@ -12,8 +12,10 @@ import { Label } from '@/components/ui/label';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
+  clearSupabaseAuthStorage,
   getSupabaseAuthStoragePreference,
   getSupabaseBrowserClient,
+  resetSupabaseBrowserClients,
   setSupabaseAuthStoragePreference,
 } from '@/lib/supabase';
 import type { Provider } from '@supabase/supabase-js';
@@ -666,8 +668,11 @@ export default function Header() {
       const session = getSupabaseBrowserClient({ storage: 'session' });
       await Promise.allSettled([local.auth.signOut(), session.auth.signOut()]);
     } catch {}
+    clearSupabaseAuthStorage();
+    resetSupabaseBrowserClients();
     writeUserToStorage(null);
     setUser(null);
+    setIsAuthenticated(false);
     setUserMenuOpen(false);
   }
 

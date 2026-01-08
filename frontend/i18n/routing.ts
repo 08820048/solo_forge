@@ -25,7 +25,9 @@ export const routing = defineRouting({
     '/profile': '/profile',
     '/submit': '/submit',
     '/about': '/about',
-    '/feedback': '/feedback'
+    '/feedback': '/feedback',
+    '/terms': '/terms',
+    '/privacy': '/privacy'
   }
 });
 

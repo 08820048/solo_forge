@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import NextLink from 'next/link';
 import Image from 'next/image';
 import { Link as I18nLink } from '@/i18n/routing';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -135,19 +134,19 @@ export default function Footer() {
                 </I18nLink>
               </li>
               <li>
-                <a href="mailto:contact@soloforge.com" className="text-sm hover:text-foreground transition-colors font-sans">
-                  {t('links.contact')}
+                <a href="mailto:ilikexff@gmail.com" className="text-sm hover:text-foreground transition-colors font-sans">
+                  {t('links.contact')} - ilikexff@gmail.com
                 </a>
               </li>
               <li>
-                <NextLink href="/terms" className="text-sm hover:text-foreground transition-colors font-sans">
+                <I18nLink href="/terms" className="text-sm hover:text-foreground transition-colors font-sans">
                   {t('links.terms')}
-                </NextLink>
+                </I18nLink>
               </li>
               <li>
-                <NextLink href="/privacy" className="text-sm hover:text-foreground transition-colors font-sans">
+                <I18nLink href="/privacy" className="text-sm hover:text-foreground transition-colors font-sans">
                   {t('links.privacy')}
-                </NextLink>
+                </I18nLink>
               </li>
             </ul>
           </div>

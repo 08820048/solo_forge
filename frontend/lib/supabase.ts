@@ -23,6 +23,40 @@ function getProjectRefFromUrl(url: string) {
   }
 }
 
+export function clearSupabaseAuthStorage() {
+  try {
+    if (typeof window === 'undefined') return;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!url) return;
+    const projectRef = getProjectRefFromUrl(url);
+    const prefix = `sb-${projectRef}-auth-token`;
+
+    const storages: Array<Storage> = [window.localStorage, window.sessionStorage];
+    for (const store of storages) {
+      for (let i = store.length - 1; i >= 0; i -= 1) {
+        const key = store.key(i);
+        if (key && key.startsWith(prefix)) {
+          store.removeItem(key);
+        }
+      }
+    }
+  } catch {}
+}
+
+export function resetSupabaseBrowserClients() {
+  localClient = null;
+  sessionClient = null;
+  try {
+    const globalStore = (globalThis as unknown as Record<string, unknown>)[GLOBAL_CLIENT_KEY] as
+      | { local?: SupabaseClient; session?: SupabaseClient }
+      | undefined;
+    if (globalStore) {
+      delete globalStore.local;
+      delete globalStore.session;
+    }
+  } catch {}
+}
+
 /**
  * setSupabaseAuthStoragePreference
  * 保存“记住我”对应的认证存储偏好：local(记住) / session(不记住)。
@@ -53,7 +87,7 @@ export function getSupabaseAuthStoragePreference(): SupabaseAuthStorage {
  * 获取 Supabase 浏览器端 client；支持 localStorage / sessionStorage 两种会话持久化策略。
  */
 export function getSupabaseBrowserClient(options?: { storage?: SupabaseAuthStorage }) {
-  const storage = options?.storage ?? 'local';
+  const storage = options?.storage ?? getSupabaseAuthStoragePreference();
   const cached = storage === 'session' ? sessionClient : localClient;
   if (cached) return cached;
 
