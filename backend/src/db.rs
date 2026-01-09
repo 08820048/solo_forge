@@ -118,16 +118,16 @@ struct NewsletterRecipientRow {
 }
 
 #[derive(sqlx::FromRow)]
-struct NewsletterTopProductRow {
-    id: String,
-    name: String,
-    slogan: String,
-    website: String,
-    maker_name: String,
-    maker_email: String,
-    weekly_likes: i64,
-    weekly_favorites: i64,
-    score: i64,
+pub(crate) struct NewsletterTopProductRow {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) slogan: String,
+    pub(crate) website: String,
+    pub(crate) maker_name: String,
+    pub(crate) maker_email: String,
+    pub(crate) weekly_likes: i64,
+    pub(crate) weekly_favorites: i64,
+    pub(crate) score: i64,
 }
 
 #[derive(sqlx::FromRow)]
@@ -480,101 +480,47 @@ fn build_newsletter_unsubscribe_url(public_api_base_url: &str, email: &str, toke
  * build_weekly_newsletter_content
  * 构建周报邮件内容（中英双语 + 产品详情链接 + 退订链接）。
  */
-fn build_weekly_newsletter_content(
+pub(crate) fn build_weekly_newsletter_content(
     now: chrono::DateTime<chrono::Utc>,
     since: chrono::DateTime<chrono::Utc>,
     products: &[NewsletterTopProductRow],
     frontend_base_url: &str,
     unsubscribe_url: &str,
 ) -> (String, String, String) {
-    let subject = format!("SoloForge Weekly · 周报 ({})", now.format("%Y-%m-%d"));
+    let subject = format!("SoloForge Weekly ({})", now.format("%Y-%m-%d"));
 
     let mut text = String::new();
-    text.push_str(&format!(
-        "SoloForge 周报\n时间范围：{} ～ {}\n\n",
-        since.format("%Y-%m-%d"),
-        now.format("%Y-%m-%d")
-    ));
-    text.push_str("本周最受欢迎 Top 5 产品：\n\n");
-
-    let mut html = String::new();
-    html.push_str("<div style=\"font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; line-height: 1.6;\">");
-    html.push_str(&format!(
-        "<h2>SoloForge 周报</h2><p>时间范围：{} ～ {}</p><p>本周最受欢迎 Top 5 产品：</p>",
-        since.format("%Y-%m-%d"),
-        now.format("%Y-%m-%d")
-    ));
-    html.push_str("<ol>");
-
-    for (idx, p) in products.iter().enumerate() {
-        let n = idx + 1;
-        let score = p.score;
-        let likes = p.weekly_likes;
-        let favorites = p.weekly_favorites;
-        let website = p.website.trim();
-        let detail_url_zh = build_product_detail_url(frontend_base_url, "zh", &p.id);
-        let detail_url_en = build_product_detail_url(frontend_base_url, "en", &p.id);
-
-        text.push_str(&format!(
-            "{}. {} - {}\n产品详情（中文）：{}\nProduct details (EN): {}\n网站：{}\n本周热度：{}（赞 {} / 收藏 {}）\n作者：{} ({})\n\n",
-            n,
-            p.name,
-            p.slogan,
-            detail_url_zh,
-            detail_url_en,
-            website,
-            score,
-            likes,
-            favorites,
-            p.maker_name,
-            p.maker_email
-        ));
-
-        html.push_str("<li style=\"margin-bottom: 14px;\">");
-        html.push_str(&format!(
-            "<div><strong>{}</strong> - {}</div>",
-            html_escape(&p.name),
-            html_escape(&p.slogan)
-        ));
-        html.push_str(&format!(
-            "<div>详情：<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">中文</a> · <a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">EN</a></div>",
-            html_attr_escape(&detail_url_zh),
-            html_attr_escape(&detail_url_en)
-        ));
-        html.push_str(&format!(
-            "<div>网站：<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">{}</a></div>",
-            html_attr_escape(website),
-            html_escape(website)
-        ));
-        html.push_str(&format!(
-            "<div>本周热度：{}（赞 {} / 收藏 {}）</div>",
-            score, likes, favorites
-        ));
-        html.push_str(&format!(
-            "<div>作者：{}（{}）</div>",
-            html_escape(&p.maker_name),
-            html_escape(&p.maker_email)
-        ));
-        html.push_str("</li>");
-    }
-
-    html.push_str("</ol>");
-    text.push_str(&format!("退订：{}\n\n", unsubscribe_url));
-    text.push_str("---\n");
     text.push_str(&format!(
         "SoloForge Weekly\nTime range: {} – {}\n\nTop 5 products this week:\n\n",
         since.format("%Y-%m-%d"),
         now.format("%Y-%m-%d")
     ));
 
-    html.push_str("<hr style=\"border:none;border-top:1px solid #eee;margin:18px 0;\"/>");
-    html.push_str("<h2>SoloForge Weekly</h2>");
+    let mut html = String::new();
+    let range_en = format!("{} – {}", since.format("%Y-%m-%d"), now.format("%Y-%m-%d"));
+
+    html.push_str("<!doctype html><html><body style=\"margin:0;padding:0;background:#f6f7fb;\">");
+    html.push_str("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f6f7fb;padding:24px 0;\">");
+    html.push_str("<tr><td align=\"center\" style=\"padding:0 12px;\">");
+    html.push_str("<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;max-width:600px;background:#ffffff;border:1px solid #eaecef;border-radius:16px;overflow:hidden;\">");
+
+    html.push_str("<tr><td style=\"padding:22px 24px;background:#111827;color:#ffffff;\">");
+    html.push_str("<div style=\"font-size:18px;font-weight:700;letter-spacing:0.2px;\">SoloForge Weekly</div>");
     html.push_str(&format!(
-        "<p>Time range: {} – {}</p><p>Top 5 products this week:</p>",
-        since.format("%Y-%m-%d"),
-        now.format("%Y-%m-%d")
+        "<div style=\"margin-top:6px;font-size:12px;opacity:0.9;\">{}</div>",
+        html_escape(&range_en)
     ));
-    html.push_str("<ol>");
+    html.push_str("</td></tr>");
+
+    html.push_str("<tr><td style=\"padding:22px 24px;\">");
+    html.push_str("<div style=\"font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#111827;\">");
+
+    html.push_str("<h2 style=\"margin:0 0 6px 0;font-size:18px;\">SoloForge Weekly</h2>");
+    html.push_str(&format!(
+        "<div style=\"margin:0 0 14px 0;font-size:12px;color:#6b7280;\">Time range: {}</div>",
+        html_escape(&range_en)
+    ));
+    html.push_str("<div style=\"font-size:14px;font-weight:700;margin:0 0 12px 0;\">Top 5 products this week</div>");
 
     for (idx, p) in products.iter().enumerate() {
         let n = idx + 1;
@@ -583,6 +529,27 @@ fn build_weekly_newsletter_content(
         let favorites = p.weekly_favorites;
         let website = p.website.trim();
         let detail_url_en = build_product_detail_url(frontend_base_url, "en", &p.id);
+
+        html.push_str("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:0 0 12px 0;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;\">");
+        html.push_str("<tr><td style=\"padding:14px 14px 12px 14px;\">");
+
+        html.push_str("<div style=\"display:block;\">");
+        html.push_str(&format!(
+            "<span style=\"display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:12px;font-weight:700;margin-right:8px;\">{}</span>",
+            n
+        ));
+        html.push_str(&format!(
+            "<span style=\"font-size:15px;font-weight:800;\">{}</span>",
+            html_escape(&p.name)
+        ));
+        html.push_str("</div>");
+
+        if !p.slogan.trim().is_empty() {
+            html.push_str(&format!(
+                "<div style=\"margin-top:4px;font-size:13px;color:#4b5563;\">{}</div>",
+                html_escape(&p.slogan)
+            ));
+        }
 
         text.push_str(&format!(
             "{}. {} - {}\nDetails: {}\nWebsite: {}\nWeekly score: {} (likes {} / favorites {})\nMaker: {} ({})\n\n",
@@ -598,43 +565,42 @@ fn build_weekly_newsletter_content(
             p.maker_email
         ));
 
-        html.push_str("<li style=\"margin-bottom: 14px;\">");
+        html.push_str("<div style=\"margin-top:10px;\">");
         html.push_str(&format!(
-            "<div><strong>{}</strong> - {}</div>",
-            html_escape(&p.name),
-            html_escape(&p.slogan)
+            "<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\" style=\"display:inline-block;padding:8px 12px;margin:0 8px 8px 0;background:#111827;color:#ffffff;text-decoration:none;border-radius:10px;font-size:12px;font-weight:700;\">View details</a>",
+            html_attr_escape(&detail_url_en)
         ));
+        if !website.is_empty() {
+            html.push_str(&format!(
+                "<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\" style=\"display:inline-block;padding:8px 12px;margin:0 8px 8px 0;background:#ffffff;color:#111827;text-decoration:none;border:1px solid #e5e7eb;border-radius:10px;font-size:12px;font-weight:700;\">Visit website</a>",
+                html_attr_escape(website)
+            ));
+        }
+        html.push_str("</div>");
+
         html.push_str(&format!(
-            "<div>Details: <a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">{}</a></div>",
-            html_attr_escape(&detail_url_en),
-            html_escape(&detail_url_en)
-        ));
-        html.push_str(&format!(
-            "<div>Website: <a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">{}</a></div>",
-            html_attr_escape(website),
-            html_escape(website)
-        ));
-        html.push_str(&format!(
-            "<div>Weekly score: {} (likes {} / favorites {})</div>",
+            "<div style=\"margin-top:6px;font-size:12px;color:#6b7280;\">Weekly score <strong style=\"color:#111827;\">{}</strong> · likes {} · favorites {}</div>",
             score, likes, favorites
         ));
         html.push_str(&format!(
-            "<div>Maker: {} ({})</div>",
+            "<div style=\"margin-top:4px;font-size:12px;color:#6b7280;\">Maker: {} ({})</div>",
             html_escape(&p.maker_name),
             html_escape(&p.maker_email)
         ));
-        html.push_str("</li>");
+
+        html.push_str("</td></tr></table>");
     }
 
-    html.push_str("</ol>");
-    html.push_str("<p style=\"color:#666;font-size:12px;\">Unsubscribe: ");
+    text.push_str(&format!("Unsubscribe: {}\n", unsubscribe_url));
+
     html.push_str(&format!(
-        "<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\">{}</a>",
-        html_attr_escape(unsubscribe_url),
-        html_escape(unsubscribe_url)
+        "<div style=\"margin-top:14px;padding-top:14px;border-top:1px solid #e5e7eb;\"><div style=\"font-size:12px;color:#6b7280;\">Unsubscribe: <a href=\"{}\" target=\"_blank\" rel=\"noreferrer\" style=\"color:#111827;text-decoration:underline;\">click here</a></div></div>",
+        html_attr_escape(unsubscribe_url)
     ));
-    html.push_str("</p>");
-    html.push_str("</div>");
+    html.push_str("<div style=\"margin-top:16px;font-size:11px;color:#9ca3af;\">You are receiving this email because you subscribed to the SoloForge weekly brief.</div>");
+    html.push_str("</div></td></tr>");
+    html.push_str("</table></td></tr></table>");
+    html.push_str("</body></html>");
 
     (subject, html, text)
 }

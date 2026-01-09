@@ -151,6 +151,7 @@ async fn main() -> std::io::Result<()> {
                     .service(
                         web::scope("/newsletter")
                             .route("/subscribe", web::post().to(handlers::subscribe_newsletter))
+                            .route("/preview", web::get().to(handlers::preview_newsletter))
                             .route(
                                 "/unsubscribe",
                                 web::get().to(handlers::unsubscribe_newsletter),

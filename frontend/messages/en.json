@@ -161,7 +161,7 @@
   "footer": {
     "description": "SoloForge showcases products crafted by independent developers worldwide, bridging makers and early adopters through a curated platform.",
     "newsletter": {
-      "description": "Subscribe to the SoloForge weekly brief: every Thursday 08:00–10:00 UTC we send the top 5 most popular products of the week.",
+      "description": "Subscribe to the SoloForge weekly brief: receive the top 5 most popular products of the week.",
       "placeholder": "Your email",
       "submit": "Subscribe",
       "submitting": "Subscribing...",

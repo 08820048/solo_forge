@@ -861,6 +861,93 @@ pub async fn unsubscribe_newsletter(
     }
 }
 
+pub async fn preview_newsletter() -> impl Responder {
+    if !cfg!(debug_assertions) {
+        return HttpResponse::NotFound().finish();
+    }
+
+    let now = chrono::Utc::now();
+    let since = now - chrono::Duration::days(7);
+
+    let frontend_base_url = env::var("FRONTEND_BASE_URL")
+        .ok()
+        .unwrap_or_else(|| "http://localhost:3000".to_string());
+
+    let unsubscribe_url = "http://localhost:8080/api/newsletter/unsubscribe?email=preview%40example.com&token=preview"
+        .to_string();
+
+    let products = vec![
+        crate::db::NewsletterTopProductRow {
+            id: "preview-1".to_string(),
+            name: "PromptDock".to_string(),
+            slogan: "Manage prompts & snippets fast".to_string(),
+            website: "https://example.com/promptdock".to_string(),
+            maker_name: "Alex".to_string(),
+            maker_email: "alex@example.com".to_string(),
+            weekly_likes: 128,
+            weekly_favorites: 64,
+            score: 192,
+        },
+        crate::db::NewsletterTopProductRow {
+            id: "preview-2".to_string(),
+            name: "写作加速器".to_string(),
+            slogan: "让内容产出更快".to_string(),
+            website: "https://example.com/writing-booster".to_string(),
+            maker_name: "小王".to_string(),
+            maker_email: "xiaowang@example.com".to_string(),
+            weekly_likes: 97,
+            weekly_favorites: 52,
+            score: 149,
+        },
+        crate::db::NewsletterTopProductRow {
+            id: "preview-3".to_string(),
+            name: "LaunchKit".to_string(),
+            slogan: "Landing page + waitlist template".to_string(),
+            website: "https://example.com/launchkit".to_string(),
+            maker_name: "Chen".to_string(),
+            maker_email: "chen@example.com".to_string(),
+            weekly_likes: 66,
+            weekly_favorites: 38,
+            score: 104,
+        },
+        crate::db::NewsletterTopProductRow {
+            id: "preview-4".to_string(),
+            name: "API 体检".to_string(),
+            slogan: "自动化检查接口健康".to_string(),
+            website: "https://example.com/api-health".to_string(),
+            maker_name: "阿杰".to_string(),
+            maker_email: "ajie@example.com".to_string(),
+            weekly_likes: 59,
+            weekly_favorites: 31,
+            score: 90,
+        },
+        crate::db::NewsletterTopProductRow {
+            id: "preview-5".to_string(),
+            name: "BudgetBee".to_string(),
+            slogan: "Personal finance for creators".to_string(),
+            website: "https://example.com/budgetbee".to_string(),
+            maker_name: "Sana".to_string(),
+            maker_email: "sana@example.com".to_string(),
+            weekly_likes: 41,
+            weekly_favorites: 22,
+            score: 63,
+        },
+    ];
+
+    let (subject, html, _text) = crate::db::build_weekly_newsletter_content(
+        now,
+        since,
+        &products,
+        &frontend_base_url,
+        &unsubscribe_url,
+    );
+
+    HttpResponse::Ok()
+        .insert_header(("Content-Type", "text/html; charset=utf-8"))
+        .insert_header(("X-Newsletter-Subject", subject))
+        .body(html)
+}
+
 pub async fn follow_developer(
     path: web::Path<String>,
     body: Option<web::Json<InteractionBody>>,
@@ -1424,10 +1511,7 @@ pub async fn get_leaderboard(
         maker_names.entry(email).or_insert(name);
     }
 
-    let mut maker_items = maker_counts
-        .into_iter()
-        .map(|(maker_email, product_count)| (maker_email, product_count))
-        .collect::<Vec<_>>();
+    let mut maker_items = maker_counts.into_iter().collect::<Vec<_>>();
     maker_items.sort_by(|a, b| b.1.cmp(&a.1));
     maker_items.truncate(10);
 

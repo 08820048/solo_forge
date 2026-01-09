@@ -292,6 +292,7 @@ pub struct QueryParams {
     pub language: Option<String>,
     pub status: Option<String>,
     pub search: Option<String>,
+    #[allow(dead_code)]
     pub maker_email: Option<String>,
     pub sort: Option<String>,
     pub dir: Option<String>,
