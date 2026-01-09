@@ -20,11 +20,11 @@
         "title": "Free",
         "badge": "限量",
         "price": "免费",
-        "desc": "限前 50 个提交的产品享 7 天赞助位展示机会，每天随机出现在顶部/右侧位置。",
+        "desc": "限前 50 个提交的产品享 48 小时赞助位展示机会，每天随机出现在顶部/右侧位置。",
         "benefits": [
           "限前 50 个提交的产品",
           "赠完为止",
-          "每个产品最多 7 天展示机会",
+          "每个产品最多 48 小时展示机会",
           "每天随机出现在首页顶部/右侧赞助位"
         ]
       },
@@ -201,7 +201,7 @@
       "logoUploading": "Logo 上传中...",
       "logoUrl": "Logo 地址",
       "logoUrlPlaceholder": "粘贴图片地址，或在上方上传",
-      "logoHelp": "可选。登录后可直接上传图片，或填写公开可访问的图片地址。",
+      "logoHelp": "必填。登录后可直接上传图片，或填写公开可访问的图片地址。",
       "logoPreview": "暂无 Logo",
       "clearLogo": "清除",
       "category": "分类",
@@ -225,6 +225,8 @@
     },
     "error": {
       "fieldTooLong": "{field} 字数过长（最多 {max} 个字符）。",
+      "fieldTooShort": "{field} 字数过短（至少 {min} 个字符）。",
+      "logoRequired": "请填写或上传产品 Logo。",
       "logoInvalidUrl": "Logo 地址无效，请使用 http(s) 的图片链接。",
       "logoTooLarge": "图片过大，请选择 5MB 以内的图片。",
       "logoInvalidType": "文件类型不正确，请选择图片文件。",

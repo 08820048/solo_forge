@@ -31,7 +31,7 @@ pub struct Product {
     pub favorites: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ProductStatus {
     Pending,

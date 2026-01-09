@@ -17,7 +17,7 @@ import {
   resetSupabaseBrowserClients,
   setSupabaseAuthStoragePreference,
 } from '@/lib/supabase';
-import type { Provider } from '@supabase/supabase-js';
+import type { Provider, SupabaseClient, User as SupabaseUser } from '@supabase/supabase-js';
 
 type StoredUser = { name?: string; email?: string; avatarUrl?: string };
 
@@ -221,6 +221,72 @@ function getAvatarFallback(name?: string) {
   return normalized ? normalized.slice(0, 1).toUpperCase() : 'U';
 }
 
+/**
+ * pickRandomDisplayName
+ * 为邮箱注册用户生成一个稳定的英文随机名（基于邮箱哈希，确保同一邮箱多次一致）。
+ */
+function pickRandomDisplayName(email: string): string {
+  const candidates = [
+    'Alex',
+    'Taylor',
+    'Jordan',
+    'Casey',
+    'Morgan',
+    'Riley',
+    'Charlie',
+    'Sam',
+    'Jamie',
+    'Avery',
+  ];
+  const key = (email || '').trim().toLowerCase();
+  if (!key) return candidates[0];
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  }
+  const index = Math.abs(hash) % candidates.length;
+  return candidates[index];
+}
+
+/**
+ * buildDefaultAvatarUrl
+ * 为邮箱注册用户生成一个稳定的头像链接（基于邮箱 seed）。
+ */
+function buildDefaultAvatarUrl(email: string): string {
+  const seed = encodeURIComponent((email || '').trim().toLowerCase() || 'user');
+  return `https://api.dicebear.com/9.x/identicon/svg?seed=${seed}`;
+}
+
+/**
+ * ensureEmailUserProfile
+ * 针对“邮箱注册（provider=email）且未设置 name/avatar”的用户，自动写入随机昵称与头像到 Supabase user_metadata。
+ */
+async function ensureEmailUserProfile(client: SupabaseClient, user: SupabaseUser): Promise<SupabaseUser> {
+  const email = (user.email || '').trim();
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const provider = (user.app_metadata as Record<string, unknown> | null | undefined)?.provider;
+  const providerStr = typeof provider === 'string' ? provider : '';
+  const alreadyAuto = Boolean(meta.sf_auto_profile);
+
+  const nameRaw = (meta.full_name || meta.name || '') as string;
+  const avatarRaw = (meta.avatar_url || meta.picture || '') as string;
+  const hasName = Boolean(String(nameRaw || '').trim());
+  const hasAvatar = Boolean(String(avatarRaw || '').trim());
+
+  if (!email || providerStr !== 'email' || alreadyAuto || (hasName && hasAvatar)) return user;
+
+  const nextName = hasName ? String(nameRaw || '').trim() : pickRandomDisplayName(email);
+  const nextAvatar = hasAvatar ? String(avatarRaw || '').trim() : buildDefaultAvatarUrl(email);
+
+  const updates: Record<string, unknown> = { sf_auto_profile: true };
+  if (!hasName) updates.full_name = nextName;
+  if (!hasAvatar) updates.avatar_url = nextAvatar;
+
+  const { data, error } = await client.auth.updateUser({ data: updates });
+  if (error || !data.user) return user;
+  return data.user;
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
   if (error && typeof error === 'object' && 'message' in error) {
     const message = (error as { message?: unknown }).message;
@@ -398,15 +464,20 @@ export default function Header() {
         const session = getSupabaseBrowserClient({ storage: 'session' });
 
         let lastDeveloperSyncKey = '';
-        const applySession = (nextSession: Awaited<ReturnType<typeof local.auth.getSession>>['data']['session']) => {
+        const applySession = async (
+          nextSession: Awaited<ReturnType<typeof local.auth.getSession>>['data']['session'],
+          client: SupabaseClient
+        ) => {
           if (nextSession?.user) {
             setIsAuthenticated(true);
-            const meta = (nextSession.user.user_metadata ?? {}) as Record<string, unknown>;
-            const nameRaw = (meta.full_name || meta.name || nextSession.user.email || '') as string;
+
+            const ensuredUser = await ensureEmailUserProfile(client, nextSession.user);
+            const meta = (ensuredUser.user_metadata ?? {}) as Record<string, unknown>;
+            const nameRaw = (meta.full_name || meta.name || ensuredUser.email || '') as string;
             const avatarRaw = (meta.avatar_url || meta.picture) as string | undefined;
             const nextUser = {
               name: String(nameRaw || ''),
-              email: nextSession.user.email ?? undefined,
+              email: ensuredUser.email ?? undefined,
               avatarUrl: avatarRaw ? String(avatarRaw) : undefined,
             };
             writeUserToStorage(nextUser);
@@ -444,7 +515,11 @@ export default function Header() {
             const chosen = preferred === 'session'
               ? sessionRes.data.session ?? localRes.data.session
               : localRes.data.session ?? sessionRes.data.session;
-            applySession(chosen);
+            const clientForChosen =
+              preferred === 'session'
+                ? (sessionRes.data.session ? session : local)
+                : (localRes.data.session ? local : session);
+            await applySession(chosen, clientForChosen);
           } finally {
             syncing = false;
           }
@@ -1464,12 +1539,12 @@ function AuthDialog({
                 >
                   <button
                     type="button"
-                    onClick={() => onOAuthLogin('twitter')}
+                    onClick={() => onOAuthLogin('discord')}
                     disabled={loading || !enabled}
                     className="absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-background shadow flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"
-                    aria-label={tAuth('continueWith', { provider: 'X' })}
+                    aria-label={tAuth('continueWith', { provider: 'Discord' })}
                   >
-                    <i className="ri-twitter-x-line text-[18px] text-primary" aria-hidden="true" />
+                    <i className="ri-discord-fill text-[18px] text-primary" aria-hidden="true" />
                   </button>
                 </div>
               </div>

@@ -862,6 +862,143 @@ fn build_admin_product_submission_email_content(
     (subject, html, text)
 }
 
+/**
+ * build_maker_product_review_email_content
+ * 构建“产品审核结果（通过/拒绝）”通知给提交者的邮件内容（拒绝包含理由）。
+ */
+fn build_maker_product_review_email_content(
+    product: &Product,
+    frontend_base_url: &str,
+) -> (String, String, String) {
+    let is_zh = product
+        .language
+        .trim()
+        .to_ascii_lowercase()
+        .starts_with("zh");
+    let product_id = product.id.trim();
+    let product_name = product.name.trim();
+    let detail_url = build_product_detail_url(
+        frontend_base_url,
+        if is_zh { "zh" } else { "en" },
+        product_id,
+    );
+
+    let status = match product.status {
+        crate::models::ProductStatus::Approved => "approved",
+        crate::models::ProductStatus::Rejected => "rejected",
+        crate::models::ProductStatus::Pending => "pending",
+    };
+
+    let (subject, title_zh, title_en) = match product.status {
+        crate::models::ProductStatus::Approved => (
+            if is_zh {
+                format!("你的产品已通过审核：{}", product_name)
+            } else {
+                format!("Your product is approved: {}", product_name)
+            },
+            "审核通过",
+            "Approved",
+        ),
+        crate::models::ProductStatus::Rejected => (
+            if is_zh {
+                format!("你的产品未通过审核：{}", product_name)
+            } else {
+                format!("Your product is rejected: {}", product_name)
+            },
+            "未通过审核",
+            "Rejected",
+        ),
+        crate::models::ProductStatus::Pending => (
+            if is_zh {
+                format!("你的产品状态已更新：{}", product_name)
+            } else {
+                format!("Your product status updated: {}", product_name)
+            },
+            "状态更新",
+            "Status updated",
+        ),
+    };
+
+    let reason = product
+        .rejection_reason
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+
+    let mut text = String::new();
+    if is_zh {
+        text.push_str(&format!("{}\n\n", title_zh));
+        text.push_str(&format!("产品：{}\n", product_name));
+        text.push_str(&format!("状态：{}\n", status));
+        if matches!(product.status, crate::models::ProductStatus::Rejected) && !reason.is_empty() {
+            text.push_str(&format!("理由：{}\n", reason));
+        }
+        text.push_str(&format!("详情：{}\n", detail_url));
+        text.push_str("\n---\n");
+        text.push_str(&format!("{}\n\n", title_en));
+        text.push_str(&format!("Product: {}\n", product_name));
+        text.push_str(&format!("Status: {}\n", status));
+        if matches!(product.status, crate::models::ProductStatus::Rejected) && !reason.is_empty() {
+            text.push_str(&format!("Reason: {}\n", reason));
+        }
+        text.push_str(&format!("Details: {}\n", detail_url));
+    } else {
+        text.push_str(&format!("{}\n\n", title_en));
+        text.push_str(&format!("Product: {}\n", product_name));
+        text.push_str(&format!("Status: {}\n", status));
+        if matches!(product.status, crate::models::ProductStatus::Rejected) && !reason.is_empty() {
+            text.push_str(&format!("Reason: {}\n", reason));
+        }
+        text.push_str(&format!("Details: {}\n", detail_url));
+        text.push_str("\n---\n");
+        text.push_str(&format!("{}\n\n", title_zh));
+        text.push_str(&format!("产品：{}\n", product_name));
+        text.push_str(&format!("状态：{}\n", status));
+        if matches!(product.status, crate::models::ProductStatus::Rejected) && !reason.is_empty() {
+            text.push_str(&format!("理由：{}\n", reason));
+        }
+        text.push_str(&format!("详情：{}\n", detail_url));
+    }
+
+    let mut html = String::new();
+    html.push_str("<!doctype html><html><body style=\"margin:0;padding:0;background:#f6f7fb;\">");
+    html.push_str("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f6f7fb;padding:24px 0;\">");
+    html.push_str("<tr><td align=\"center\" style=\"padding:0 12px;\">");
+    html.push_str("<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;max-width:600px;background:#ffffff;border:1px solid #eaecef;border-radius:16px;overflow:hidden;\">");
+    html.push_str("<tr><td style=\"padding:18px 22px;background:#111827;color:#ffffff;\">");
+    html.push_str(&format!(
+        "<div style=\"font-size:16px;font-weight:800;\">{}</div>",
+        html_escape(if is_zh { title_zh } else { title_en })
+    ));
+    html.push_str("</td></tr>");
+    html.push_str("<tr><td style=\"padding:18px 22px;\">");
+    html.push_str("<div style=\"font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#111827;font-size:14px;\">");
+    html.push_str(&format!(
+        "<div style=\"font-size:16px;font-weight:800;margin:0 0 8px 0;\">{}</div>",
+        html_escape(product_name)
+    ));
+    html.push_str(&format!(
+        "<div style=\"margin:0 0 12px 0;color:#6b7280;\">Status: <strong style=\"color:#111827;\">{}</strong></div>",
+        html_escape(status)
+    ));
+    if matches!(product.status, crate::models::ProductStatus::Rejected) && !reason.is_empty() {
+        html.push_str(&format!(
+            "<div style=\"margin:0 0 12px 0;\"><div style=\"font-weight:700;margin-bottom:6px;\">Reason / 理由</div><div style=\"white-space:pre-wrap;color:#111827;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;\">{}</div></div>",
+            html_escape(&reason)
+        ));
+    }
+    html.push_str(&format!(
+        "<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\" style=\"display:inline-block;padding:10px 12px;background:#111827;color:#ffffff;text-decoration:none;border-radius:10px;font-size:12px;font-weight:800;\">{}</a>",
+        html_attr_escape(&detail_url),
+        if is_zh { "查看详情" } else { "View details" }
+    ));
+    html.push_str("</div></td></tr></table></td></tr></table>");
+    html.push_str("</body></html>");
+
+    (subject, html, text)
+}
+
 fn sanitize_create_product_request(product: &mut CreateProductRequest) {
     strip_nul_in_place(&mut product.name);
     strip_nul_in_place(&mut product.slogan);
@@ -4204,6 +4341,56 @@ impl Database {
             &token_secret,
         );
 
+        send_email_resend(&client, &resend_key, &from, &to, &subject, &html, &text).await?;
+        Ok(())
+    }
+
+    /**
+     * send_maker_product_review_notification
+     * 产品审核状态变更为通过/拒绝时，给提交者发送通知邮件（拒绝包含理由）。
+     */
+    pub async fn send_maker_product_review_notification(&self, product: &Product) -> Result<()> {
+        let resend_key = env::var("RESEND_API_KEY").ok().unwrap_or_default();
+        if resend_key.trim().is_empty() {
+            return Ok(());
+        }
+
+        let to = product.maker_email.trim().to_string();
+        if to.is_empty() {
+            return Ok(());
+        }
+
+        let from = env::var("PRODUCT_REVIEW_FROM")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| {
+                env::var("ADMIN_REVIEW_FROM")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+            })
+            .or_else(|| {
+                env::var("NEWSLETTER_FROM")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+            })
+            .unwrap_or_default();
+        if from.trim().is_empty() {
+            log::warn!("Maker review sender not configured: PRODUCT_REVIEW_FROM/ADMIN_REVIEW_FROM/NEWSLETTER_FROM missing");
+            return Ok(());
+        }
+
+        let frontend_base_url = env::var("FRONTEND_BASE_URL")
+            .ok()
+            .unwrap_or_else(|| "http://localhost:3000".to_string());
+
+        let client = Client::builder()
+            .timeout(Duration::from_secs(12))
+            .http1_only()
+            .build()
+            .unwrap_or_else(|_| Client::new());
+
+        let (subject, html, text) =
+            build_maker_product_review_email_content(product, &frontend_base_url);
         send_email_resend(&client, &resend_key, &from, &to, &subject, &html, &text).await?;
         Ok(())
     }

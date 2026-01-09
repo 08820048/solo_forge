@@ -25,6 +25,7 @@ const LIMITS = {
   makerWebsite: 200,
 } as const;
 
+const MIN_DESCRIPTION_CHARS = 250;
 const PRODUCT_LOGO_BUCKET = 'product-logos';
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 
@@ -72,6 +73,14 @@ async function readJsonSafe<T>(response: Response): Promise<T | null> {
  */
 function shouldFallbackToDirectBackend(status: number): boolean {
   return status === 403 || status === 502 || status === 503;
+}
+
+/**
+ * countUnicodeCharacters
+ * 统计字符串的 Unicode 字符数量（按 code point 计数）。
+ */
+function countUnicodeCharacters(value: string): number {
+  return Array.from((value ?? '').toString()).length;
 }
 
 /**
@@ -142,6 +151,12 @@ export default function SubmitForm({
   const validateMaxLength = (value: string, max: number, fieldLabel: string): string | null => {
     if (value.length <= max) return null;
     return t('error.fieldTooLong', { field: fieldLabel, max });
+  };
+
+  const validateMinLength = (value: string, min: number, fieldLabel: string): string | null => {
+    const normalized = (value || '').trim();
+    if (countUnicodeCharacters(normalized) >= min) return null;
+    return t('error.fieldTooShort', { field: fieldLabel, min });
   };
 
   const validateLogoUrl = (value: string): string | null => {
@@ -259,9 +274,11 @@ export default function SubmitForm({
       validateMaxLength(name, LIMITS.productName, t('form.productName')),
       validateMaxLength(slogan, LIMITS.slogan, t('form.slogan')),
       validateMaxLength(description, LIMITS.description, t('form.description')),
+      validateMinLength(description, MIN_DESCRIPTION_CHARS, t('form.description')),
       validateMaxLength(website, LIMITS.website, t('form.website')),
-      logoUrlValue ? validateMaxLength(logoUrlValue, LIMITS.logoUrl, t('form.logoUrl')) : null,
-      logoUrlValue ? validateLogoUrl(logoUrlValue) : null,
+      logoUrlValue ? null : t('error.logoRequired'),
+      validateMaxLength(logoUrlValue, LIMITS.logoUrl, t('form.logoUrl')),
+      validateLogoUrl(logoUrlValue),
       validateMaxLength(tagsRaw, LIMITS.tags, t('form.tags')),
       validateMaxLength(makerNameValue, LIMITS.makerName, t('form.makerName')),
       validateMaxLength(makerEmailValue, LIMITS.makerEmail, t('form.makerEmail')),
@@ -490,7 +507,7 @@ export default function SubmitForm({
 
             <div className="grid gap-2 sm:grid-cols-[140px_1fr] sm:items-start sm:gap-6">
               <Label htmlFor="logoUrl" className="sm:pt-2 sm:text-right">
-                {t('form.logo')}
+                {t('form.logo')} *
               </Label>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">

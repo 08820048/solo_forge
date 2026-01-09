@@ -20,11 +20,11 @@
         "title": "Free",
         "badge": "Limited",
         "price": "Free",
-        "desc": "Free sponsorship for the first 50 submitted products. Each product gets 7 days of eligibility with daily random placement (top/right).",
+        "desc": "Free sponsorship for the first 50 submitted products. Each product gets 48 hours of eligibility with daily random placement (top/right).",
         "benefits": [
           "Limited to the first 50 submitted products",
           "While stock lasts",
-          "Up to 7 days of exposure per product",
+          "Up to 48 hours of exposure per product",
           "Random daily placement in homepage top/right sponsored slots"
         ]
       },
@@ -223,7 +223,7 @@
       "logoUploading": "Uploading logo...",
       "logoUrl": "Logo URL",
       "logoUrlPlaceholder": "Paste an image URL or upload above",
-      "logoHelp": "Optional. Upload an image (requires login) or paste a public image URL.",
+      "logoHelp": "Required. Upload an image (requires login) or paste a public image URL.",
       "logoPreview": "No logo",
       "clearLogo": "Clear",
       "category": "Category",
@@ -247,6 +247,8 @@
     },
     "error": {
       "fieldTooLong": "{field} is too long (max {max} characters).",
+      "fieldTooShort": "{field} is too short (at least {min} characters).",
+      "logoRequired": "Please upload or provide a logo URL.",
       "logoInvalidUrl": "Logo URL is invalid. Please use an http(s) image URL.",
       "logoTooLarge": "Logo is too large. Please pick an image under 5MB.",
       "logoInvalidType": "Invalid file type. Please choose an image file.",

@@ -411,6 +411,7 @@ pub async fn get_product_by_id(
     request_body = CreateProductRequest,
     responses(
         (status = 201, body = ProductApiResponse),
+        (status = 400, body = EmptyApiResponse),
         (status = 500, body = EmptyApiResponse)
     )
 )]
@@ -426,7 +427,34 @@ pub async fn create_product(
         .and_then(|h| h.to_str().ok())
         .unwrap_or("en");
 
-    match db.create_product(product_data.into_inner()).await {
+    /**
+     * count_unicode_characters
+     * 统计字符串的 Unicode 字符数量（按 Rust char 计数）。
+     */
+    fn count_unicode_characters(value: &str) -> usize {
+        value.chars().count()
+    }
+
+    const MIN_PRODUCT_DESCRIPTION_CHARS: usize = 250;
+
+    let product = product_data.into_inner();
+    let desc_len = count_unicode_characters(product.description.trim());
+    if desc_len < MIN_PRODUCT_DESCRIPTION_CHARS {
+        let message = if lang.starts_with("zh") {
+            format!(
+                "产品描述至少需要 {} 个字符（当前 {}）。",
+                MIN_PRODUCT_DESCRIPTION_CHARS, desc_len
+            )
+        } else {
+            format!(
+                "Product description must be at least {} characters (current {}).",
+                MIN_PRODUCT_DESCRIPTION_CHARS, desc_len
+            )
+        };
+        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(message));
+    }
+
+    match db.create_product(product).await {
         Ok(product) => {
             let db_for_email = db.get_ref().clone();
             let product_for_email = product.clone();
@@ -589,7 +617,15 @@ pub async fn admin_review_product(
     };
 
     match db.update_product(&product_id, updates).await {
-        Ok(Some(_)) => {
+        Ok(Some(product)) => {
+            let db_for_email = db.get_ref().clone();
+            let product_for_email = product.clone();
+            tokio::spawn(async move {
+                let _ = db_for_email
+                    .send_maker_product_review_notification(&product_for_email)
+                    .await;
+            });
+
             if action == "approve" {
                 HttpResponse::Ok().content_type("text/html; charset=utf-8").body(
                     "<h2>审核通过</h2><p>该产品已被标记为 approved。</p><hr/><h2>Approved</h2><p>The product is now approved.</p>",
@@ -617,12 +653,57 @@ pub async fn admin_review_product(
 }
 
 pub async fn update_product(
+    req: HttpRequest,
     path: web::Path<String>,
     update_data: web::Json<UpdateProductRequest>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let id = path.into_inner();
     let mut updates = update_data.into_inner();
+
+    /**
+     * count_unicode_characters
+     * 统计字符串的 Unicode 字符数量（按 Rust char 计数）。
+     */
+    fn count_unicode_characters(value: &str) -> usize {
+        value.chars().count()
+    }
+
+    const MIN_PRODUCT_DESCRIPTION_CHARS: usize = 250;
+
+    if let Some(desc) = updates.description.as_deref() {
+        let lang = req
+            .headers()
+            .get("Accept-Language")
+            .and_then(|h| h.to_str().ok())
+            .unwrap_or("en");
+        let desc_len = count_unicode_characters(desc.trim());
+        if desc_len < MIN_PRODUCT_DESCRIPTION_CHARS {
+            let message = if lang.starts_with("zh") {
+                format!(
+                    "产品描述至少需要 {} 个字符（当前 {}）。",
+                    MIN_PRODUCT_DESCRIPTION_CHARS, desc_len
+                )
+            } else {
+                format!(
+                    "Product description must be at least {} characters (current {}).",
+                    MIN_PRODUCT_DESCRIPTION_CHARS, desc_len
+                )
+            };
+            return HttpResponse::BadRequest().json(ApiResponse::<()>::error(message));
+        }
+    }
+    let existing = match db.get_product_by_id(&id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return HttpResponse::NotFound()
+                .json(ApiResponse::<()>::error("Product not found".to_string()))
+        }
+        Err(e) => {
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
+        }
+    };
 
     if let Some(status) = updates.status.clone() {
         match status {
@@ -647,7 +728,24 @@ pub async fn update_product(
     }
 
     match db.update_product(&id, updates).await {
-        Ok(Some(product)) => HttpResponse::Ok().json(ApiResponse::success(product)),
+        Ok(Some(product)) => {
+            let should_notify = product.status != existing.status
+                && matches!(
+                    product.status,
+                    crate::models::ProductStatus::Approved | crate::models::ProductStatus::Rejected
+                );
+            if should_notify {
+                let db_for_email = db.get_ref().clone();
+                let product_for_email = product.clone();
+                tokio::spawn(async move {
+                    let _ = db_for_email
+                        .send_maker_product_review_notification(&product_for_email)
+                        .await;
+                });
+            }
+
+            HttpResponse::Ok().json(ApiResponse::success(product))
+        }
         Ok(None) => {
             HttpResponse::NotFound().json(ApiResponse::<()>::error("Product not found".to_string()))
         }
@@ -2995,7 +3093,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "PromptDock".to_string(),
             slogan: "Manage prompts & snippets fast".to_string(),
-            description: "A lightweight prompt/snippet manager for solo developers.".to_string(),
+            description: "A lightweight prompt/snippet manager for solo developers. Organize your best prompts, reusable snippets, and templates in one place, with fast search and tags. Keep your workflow consistent across projects and reduce context-switching when you’re shipping features every day. Built for makers who value speed, clarity, and focus.".to_string(),
             website: "https://example.com/promptdock".to_string(),
             logo_url: None,
             category: "ai".to_string(),
@@ -3012,7 +3110,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "SoloInvoice".to_string(),
             slogan: "Invoices for indie makers".to_string(),
-            description: "Generate invoices and track payments in minutes.".to_string(),
+            description: "Generate invoices and track payments in minutes. Create branded invoice templates, set due dates, and send reminders without leaving your dashboard. Track paid/unpaid status, export reports for bookkeeping, and keep client details organized. Perfect for solo founders who want simple, reliable invoicing without complex accounting software.".to_string(),
             website: "https://example.com/soloinvoice".to_string(),
             logo_url: None,
             category: "finance".to_string(),
@@ -3029,7 +3127,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "写作加速器".to_string(),
             slogan: "让内容产出更快".to_string(),
-            description: "面向独立创作者的写作与发布工作流工具。".to_string(),
+            description: "面向独立创作者的写作与发布工作流工具。支持选题管理、素材收集、Markdown 写作、模板复用与一键发布。你可以把灵感、草稿、引用、链接都整理在一个空间里，减少来回切换工具的时间。适合长期输出内容、希望提升稳定产出的个人与小团队。".to_string(),
             website: "https://example.com/writing-booster".to_string(),
             logo_url: None,
             category: "writing".to_string(),
@@ -3042,7 +3140,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "DevPalette".to_string(),
             slogan: "Design tokens for developers".to_string(),
-            description: "Create and export design tokens for your UI in seconds.".to_string(),
+            description: "Create and export design tokens for your UI in seconds. Define colors, spacing, typography, and component scales, then export to CSS variables, Tailwind config, or JSON for design systems. Keep designers and developers aligned with a single source of truth, and ship consistent UI faster across web and mobile projects.".to_string(),
             website: "https://example.com/devpalette".to_string(),
             logo_url: None,
             category: "design".to_string(),
@@ -3055,7 +3153,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "LaunchKit".to_string(),
             slogan: "Landing page + waitlist template".to_string(),
-            description: "A starter kit for launching fast with SEO-ready pages.".to_string(),
+            description: "A starter kit for launching fast with SEO-ready pages. Includes a landing page, waitlist form, email capture, and analytics-friendly structure. Customize sections, add screenshots, and publish in minutes. Built with best-practice metadata and performance defaults, so your product looks great and ranks well from day one.".to_string(),
             website: "https://example.com/launchkit".to_string(),
             logo_url: None,
             category: "marketing".to_string(),
@@ -3068,7 +3166,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "FocusFlow".to_string(),
             slogan: "Pomodoro meets deep work".to_string(),
-            description: "A minimal focus timer with sessions, stats, and shortcuts.".to_string(),
+            description: "A minimal focus timer with sessions, stats, and shortcuts. Run Pomodoro or custom intervals, track streaks, and review weekly focus summaries. Keyboard-first controls keep you in flow, while gentle notifications help you break at the right time. Designed for deep work, not distraction—simple UI, clear metrics, and zero bloat.".to_string(),
             website: "https://example.com/focusflow".to_string(),
             logo_url: None,
             category: "productivity".to_string(),
@@ -3081,7 +3179,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "API 体检".to_string(),
             slogan: "自动化检查接口健康".to_string(),
-            description: "面向团队的 API 健康度监控与告警工具。".to_string(),
+            description: "面向团队的 API 健康度监控与告警工具。支持定时探测、响应时间统计、SLA 报表、错误率趋势与多渠道告警（邮件/钉钉/Slack）。你可以按环境与服务拆分监控项，设置阈值与静默规则，并在仪表盘中快速定位异常。适用于微服务与对外开放 API 的长期运维。".to_string(),
             website: "https://example.com/api-health".to_string(),
             logo_url: None,
             category: "developer".to_string(),
@@ -3094,7 +3192,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "StoryBoard".to_string(),
             slogan: "Write, publish, grow".to_string(),
-            description: "A writing tool with publishing pipelines and analytics.".to_string(),
+            description: "A writing tool with publishing pipelines and analytics. Draft posts in Markdown, manage an editorial calendar, and publish to multiple platforms with one workflow. Track views, conversions, and audience growth over time, then iterate with insights. Ideal for creators who want a clean writing experience plus practical distribution and performance tracking.".to_string(),
             website: "https://example.com/storyboard".to_string(),
             logo_url: None,
             category: "writing".to_string(),
@@ -3107,7 +3205,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "PixelPack".to_string(),
             slogan: "Icons & UI kits for builders".to_string(),
-            description: "Curated icons, components, and templates to ship faster.".to_string(),
+            description: "Curated icons, components, and templates to ship faster. Browse a growing library of consistent icon sets and ready-to-use UI building blocks for dashboards, landing pages, and SaaS apps. Download as SVG/React components, customize colors and stroke width, and keep your product UI polished without starting from scratch every time.".to_string(),
             website: "https://example.com/pixelpack".to_string(),
             logo_url: None,
             category: "design".to_string(),
@@ -3120,7 +3218,7 @@ pub async fn dev_seed(req: HttpRequest, db: web::Data<Arc<Database>>) -> impl Re
         CreateProductRequest {
             name: "BudgetBee".to_string(),
             slogan: "Personal finance for creators".to_string(),
-            description: "Track income, expenses, and subscriptions in one place.".to_string(),
+            description: "Track income, expenses, and subscriptions in one place. Connect accounts or import CSV, categorize transactions, and spot trends quickly. Set budgets, monitor recurring charges, and get alerts when spending spikes. Built for creators and freelancers who want clarity and control over cash flow, without complex spreadsheets or confusing dashboards.".to_string(),
             website: "https://example.com/budgetbee".to_string(),
             logo_url: None,
             category: "finance".to_string(),

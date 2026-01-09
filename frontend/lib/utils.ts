@@ -45,6 +45,7 @@ export function isKnownRemoteImageUrl(url: string | null | undefined): boolean {
     const host = u.hostname.toLowerCase();
     if (host === 'lh3.googleusercontent.com') return true;
     if (host === 'avatars.githubusercontent.com') return true;
+    if (host === 'api.dicebear.com') return true;
     if (host.endsWith('.supabase.co')) return true;
     return false;
   } catch {
