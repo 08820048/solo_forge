@@ -134,6 +134,11 @@ export default function Footer() {
                 </I18nLink>
               </li>
               <li>
+                <I18nLink href="/pricing" className="text-sm hover:text-foreground transition-colors font-sans">
+                  {tNav('pricing')}
+                </I18nLink>
+              </li>
+              <li>
                 <a href="mailto:ilikexff@gmail.com" className="text-sm hover:text-foreground transition-colors font-sans">
                   {t('links.contact')} - ilikexff@gmail.com
                 </a>

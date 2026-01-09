@@ -849,6 +849,10 @@ export default function Header() {
             <i className="ri-skip-up-line text-sm" aria-hidden="true" />
             {tNav('leaderboard')}
           </Link>
+          <Link href="/pricing" className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <i className="ri-hand-coin-line text-sm" aria-hidden="true" />
+            {tNav('pricing')}
+          </Link>
           <button
             type="button"
             onClick={onSubmitClick}

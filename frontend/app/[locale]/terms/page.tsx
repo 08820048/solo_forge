@@ -62,7 +62,21 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
         </div>
 
         <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
-          <h2 className="text-2xl font-bold text-foreground">{isZh ? '5. 免责声明' : '5. Disclaimer'}</h2>
+          <h2 className="text-2xl font-bold text-foreground">{isZh ? '5. 付费服务与退款' : '5. Paid Services & Refunds'}</h2>
+          <p>
+            {isZh
+              ? '我们可能提供可选的付费服务（例如赞助位展示）。价格与权益以页面展示为准；付款可能由第三方支付服务商处理。'
+              : 'We may offer optional paid services (e.g., sponsorship placements). Pricing and benefits are as shown on the website; payments may be processed by third-party payment providers.'}
+          </p>
+          <p>
+            {isZh
+              ? '如你认为付费服务存在误扣款、未交付或其它异常，请在付款后 7 天内通过本页联系方式联系我们。我们将核实情况并在合理范围内处理退款或补偿。'
+              : 'If you believe there is an incorrect charge, non-delivery, or other issues, contact us within 7 days of payment using the contact details below. We will investigate and provide a refund or remedy when appropriate.'}
+          </p>
+        </div>
+
+        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+          <h2 className="text-2xl font-bold text-foreground">{isZh ? '6. 免责声明' : '6. Disclaimer'}</h2>
           <p>
             {isZh
               ? '本服务按“现状”提供。我们不对内容的准确性、可用性或特定用途适用性作出保证。你理解并同意自行承担使用风险。'
@@ -71,7 +85,7 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
         </div>
 
         <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
-          <h2 className="text-2xl font-bold text-foreground">{isZh ? '6. 条款变更' : '6. Changes'}</h2>
+          <h2 className="text-2xl font-bold text-foreground">{isZh ? '7. 条款变更' : '7. Changes'}</h2>
           <p>
             {isZh
               ? '我们可能会更新本条款。更新后继续使用本服务即视为接受更新内容。'
@@ -89,4 +103,3 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
     </div>
   );
 }
-
