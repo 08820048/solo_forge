@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
@@ -364,8 +365,8 @@ export default function DeveloperCenterPage() {
 
   if (!sessionReady) {
     return (
-        <div className="min-h-screen">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
+      <div className="min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 pb-12">
           <div className="py-24 text-center text-muted-foreground">{t('loading')}</div>
         </div>
       </div>
@@ -375,7 +376,7 @@ export default function DeveloperCenterPage() {
   if (!user?.email) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 pb-12">
           <div className="sf-wash rounded-2xl border border-border bg-card/50 p-10 text-center animate-on-scroll">
             <h1 className="text-3xl font-bold text-foreground tracking-tight">{t('title')}</h1>
             <p className="mt-3 text-muted-foreground">{t('loginRequired')}</p>
@@ -401,11 +402,11 @@ export default function DeveloperCenterPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 pb-12">
+      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-20 sm:pt-24 pb-12">
         <div className="mb-10 animate-on-scroll">
           <div className="flex items-end justify-between gap-6">
             <div>
-              <h1 className="text-4xl sm:text-5xl font-bold text-foreground tracking-tight">{t('title')}</h1>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight">{t('title')}</h1>
               <p className="mt-3 text-muted-foreground">{t('subtitle')}</p>
             </div>
             <div className="hidden sm:flex items-center gap-3">
@@ -429,12 +430,16 @@ export default function DeveloperCenterPage() {
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 shrink-0 rounded-full bg-muted border border-border/60 flex items-center justify-center overflow-hidden">
                     {user.avatarUrl ? (
-                      <img
+                      <Image
                         src={user.avatarUrl}
                         alt={user.name || user.email || 'User'}
+                        width={40}
+                        height={40}
                         className="w-full h-full object-cover"
                         loading="lazy"
                         referrerPolicy="no-referrer"
+                        unoptimized
+                        loader={({ src }) => src}
                       />
                     ) : (
                       <span className="text-sm font-semibold text-muted-foreground">
@@ -464,7 +469,7 @@ export default function DeveloperCenterPage() {
               <CardTitle className="text-sm">{t('stats.title')}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('stats.total')}</div>
                   <div className="mt-1 text-2xl font-bold text-foreground">{stats.total}</div>
@@ -482,7 +487,7 @@ export default function DeveloperCenterPage() {
                   <div className="mt-1 text-2xl font-bold text-foreground">{stats.rejected}</div>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('stats.followers')}</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">
@@ -533,12 +538,16 @@ export default function DeveloperCenterPage() {
                         <div key={p.id} className="py-4 flex items-start gap-4">
                           <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden border border-border/60">
                             {p.logo_url ? (
-                              <img
+                              <Image
                                 src={p.logo_url}
                                 alt={p.name}
+                                width={48}
+                                height={48}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
                                 referrerPolicy="no-referrer"
+                                unoptimized
+                                loader={({ src }) => src}
                               />
                             ) : (
                               <span className="text-sm font-semibold text-muted-foreground">
@@ -600,12 +609,16 @@ export default function DeveloperCenterPage() {
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="w-7 h-7 shrink-0 rounded-md bg-muted flex items-center justify-center overflow-hidden border border-border/60">
                               {p.logo_url ? (
-                                <img
+                                <Image
                                   src={p.logo_url}
                                   alt={p.name}
+                                  width={28}
+                                  height={28}
                                   className="w-full h-full object-cover"
                                   loading="lazy"
                                   referrerPolicy="no-referrer"
+                                  unoptimized
+                                  loader={({ src }) => src}
                                 />
                               ) : (
                                 <span className="text-[10px] font-semibold text-muted-foreground">
@@ -706,12 +719,16 @@ export default function DeveloperCenterPage() {
                     <div key={p.id} className="px-5 py-4 flex items-start gap-4">
                       <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden border border-border/60">
                         {p.logo_url ? (
-                          <img
+                          <Image
                             src={p.logo_url}
                             alt={p.name}
+                            width={48}
+                            height={48}
                             className="w-full h-full object-cover"
                             loading="lazy"
                             referrerPolicy="no-referrer"
+                            unoptimized
+                            loader={({ src }) => src}
                           />
                         ) : (
                           <span className="text-sm font-semibold text-muted-foreground">
@@ -799,12 +816,16 @@ export default function DeveloperCenterPage() {
                     <div key={p.id} className="px-5 py-4 flex items-start gap-4">
                       <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden border border-border/60">
                         {p.logo_url ? (
-                          <img
+                          <Image
                             src={p.logo_url}
                             alt={p.name}
+                            width={48}
+                            height={48}
                             className="w-full h-full object-cover"
                             loading="lazy"
                             referrerPolicy="no-referrer"
+                            unoptimized
+                            loader={({ src }) => src}
                           />
                         ) : (
                           <span className="text-sm font-semibold text-muted-foreground">

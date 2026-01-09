@@ -153,7 +153,7 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl pt-24 pb-10">
+    <div className="mx-auto max-w-4xl pt-20 sm:pt-24 pb-10 px-4 sm:px-6">
       <div className="sf-wash rounded-2xl border border-border bg-card/50 overflow-hidden">
         <div className="px-6 py-5 border-b border-border">
           <div className="flex items-start justify-between gap-4">

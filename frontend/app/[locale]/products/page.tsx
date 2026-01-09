@@ -160,10 +160,10 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 py-12">
+      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-20 sm:pt-24 pb-12">
         <div className="mb-12 animate-on-scroll">
-          <h1 className="text-5xl font-bold text-foreground mb-6 font-sans tracking-tight">{t('title')}</h1>
-          <p className="text-xl text-muted-foreground font-sans">{t('subtitle', { count: filteredProducts.length })}</p>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-4 sm:mb-6 font-sans tracking-tight">{t('title')}</h1>
+          <p className="text-base sm:text-lg lg:text-xl text-muted-foreground font-sans">{t('subtitle', { count: filteredProducts.length })}</p>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -211,7 +211,7 @@ export default function ProductsPage() {
           )}
         </div>
 
-        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
           {filteredProducts.map((product) => (
             <ProductCard key={product.id} product={product} variant="productsList" />
           ))}

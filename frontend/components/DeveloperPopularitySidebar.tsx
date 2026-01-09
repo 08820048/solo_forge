@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
@@ -398,12 +399,16 @@ export default function DeveloperPopularitySidebar() {
                       >
                         <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground">
                           {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
-                            <img
+                            <Image
                               src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
                               alt={d.name || d.email}
+                              width={36}
+                              height={36}
                               className="w-full h-full object-cover"
                               loading="lazy"
                               referrerPolicy="no-referrer"
+                              unoptimized
+                              loader={({ src }) => src}
                             />
                           ) : (
                             (d.name || d.email).trim().charAt(0).toUpperCase()
@@ -496,12 +501,16 @@ export default function DeveloperPopularitySidebar() {
                       >
                         <div className="w-9 h-9 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-xs font-semibold text-muted-foreground">
                           {getCurrentUserAvatarOverride(d.email, d.avatar_url) ? (
-                            <img
+                            <Image
                               src={getCurrentUserAvatarOverride(d.email, d.avatar_url) as string}
                               alt={d.name || d.email}
+                              width={36}
+                              height={36}
                               className="w-full h-full object-cover"
                               loading="lazy"
                               referrerPolicy="no-referrer"
+                              unoptimized
+                              loader={({ src }) => src}
                             />
                           ) : (
                             (d.name || d.email).trim().charAt(0).toUpperCase()

@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -113,31 +114,35 @@ export default async function ProductDetailPage({
   const makerEmail = String(maker?.email || product?.maker_email || '').trim().toLowerCase();
 
   return (
-    <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 pb-12">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-20 sm:pt-24 pb-12">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Main Content */}
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-2">
           {/* Header */}
           <div className="mb-8">
-            <div className="flex items-start space-x-6 mb-6">
-              <div className="w-24 h-24 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-muted">
+            <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 mb-6">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-muted">
                 {product.logo_url ? (
-                  <img
+                  <Image
                     src={product.logo_url}
                     alt={product.name}
+                    width={96}
+                    height={96}
                     className="w-full h-full object-cover"
                     loading="lazy"
                     referrerPolicy="no-referrer"
+                    unoptimized
+                    loader={({ src }) => src}
                   />
                 ) : (
                   <div className="w-full h-full bg-black flex items-center justify-center">
-                    <span className="text-white text-4xl font-bold">{product.name.charAt(0)}</span>
+                    <span className="text-white text-2xl sm:text-3xl lg:text-4xl font-bold">{product.name.charAt(0)}</span>
                   </div>
                 )}
               </div>
               <div className="flex-1">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-                  <h1 className="text-4xl font-bold text-foreground">
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground">
                     {product.name}
                   </h1>
                   <a
@@ -150,7 +155,7 @@ export default async function ProductDetailPage({
                     <span aria-hidden="true">→</span>
                   </a>
                 </div>
-                <div className="text-xl text-muted-foreground mb-4 mt-2">
+                <div className="text-base sm:text-lg lg:text-xl text-muted-foreground mb-4 mt-2">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{

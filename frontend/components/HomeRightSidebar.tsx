@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
@@ -341,12 +342,16 @@ export default function HomeRightSidebar() {
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                       {p.logo_url ? (
-                        <img
+                        <Image
                           src={p.logo_url}
                           alt={p.name}
+                          width={40}
+                          height={40}
                           className="w-full h-full object-cover"
                           loading="lazy"
                           referrerPolicy="no-referrer"
+                          unoptimized
+                          loader={({ src }) => src}
                         />
                       ) : (
                         <span className="text-muted-foreground text-sm font-semibold">

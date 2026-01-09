@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/routing';
 import { Card, CardContent } from '@/components/ui/card';
@@ -352,8 +353,8 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
       className="group"
     >
       <Card className="h-full bg-card/70 backdrop-blur-sm border-border hover:bg-card transition-all duration-300 hover:shadow-2xl hover:shadow-black/5 spotlight-group">
-        <CardContent className="p-6 flex flex-col h-full relative overflow-hidden">
-          <div className="absolute right-4 top-4 z-20 flex items-start gap-3">
+        <CardContent className="p-5 sm:p-6 flex flex-col h-full relative overflow-hidden">
+          <div className="absolute right-3 top-3 sm:right-4 sm:top-4 z-20 flex items-start gap-3">
             <div className="flex flex-col items-center">
               <button
                 type="button"
@@ -365,14 +366,14 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
                   void toggleLike();
                 }}
                 className={[
-                  'rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                  'rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
                   selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
                 ].join(' ')}
               >
                 <i
                   key={liked ? 'liked' : 'unliked'}
                   className={[
-                    `${liked ? 'ri-thumb-up-fill' : 'ri-thumb-up-line'} text-base transition-all duration-200`,
+                    `${liked ? 'ri-thumb-up-fill' : 'ri-thumb-up-line'} text-[15px] sm:text-base transition-all duration-200`,
                     liked ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
                   ].join(' ')}
                   aria-hidden="true"
@@ -391,14 +392,14 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
                   void toggleFavorite();
                 }}
                 className={[
-                  'rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                  'rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
                   selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
                 ].join(' ')}
               >
                 <i
                   key={favorited ? 'favorited' : 'unfavorited'}
                   className={[
-                    `${favorited ? 'ri-heart-3-fill' : 'ri-heart-3-line'} text-base transition-all duration-200`,
+                    `${favorited ? 'ri-heart-3-fill' : 'ri-heart-3-line'} text-[15px] sm:text-base transition-all duration-200`,
                     favorited ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
                   ].join(' ')}
                   aria-hidden="true"
@@ -418,13 +419,13 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
                       window.open(websiteUrl, '_blank', 'noopener,noreferrer');
                     } catch {}
                   }}
-                  className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                  className="rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
                 >
-                  <i className="ri-global-line text-base" aria-hidden="true" />
+                  <i className="ri-global-line text-[15px] sm:text-base" aria-hidden="true" />
                 </button>
               ) : (
-                <span className="rounded-full w-9 h-9 flex items-center justify-center border border-border bg-background/70 text-muted-foreground">
-                  <i className="ri-global-line text-base" aria-hidden="true" />
+                <span className="rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background/70 text-muted-foreground">
+                  <i className="ri-global-line text-[15px] sm:text-base" aria-hidden="true" />
                 </span>
               )}
               <span className="mt-1 text-[10px] leading-none text-transparent select-none">0</span>
@@ -432,17 +433,21 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
           </div>
 
           {/* Logo */}
-          <div className="relative z-10 w-16 h-16 bg-secondary rounded-lg mb-4 flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:opacity-90 spotlight-border">
+          <div className="relative z-10 w-14 h-14 sm:w-16 sm:h-16 bg-secondary rounded-lg mb-3 sm:mb-4 flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:opacity-90 spotlight-border">
             {product.logo_url ? (
-              <img
+              <Image
                 src={product.logo_url}
                 alt={product.name}
+                width={64}
+                height={64}
                 className="w-full h-full object-cover"
                 loading="lazy"
                 referrerPolicy="no-referrer"
+                unoptimized
+                loader={({ src }) => src}
               />
             ) : (
-              <span className="text-secondary-foreground text-2xl font-bold font-sans">
+              <span className="text-secondary-foreground text-xl sm:text-2xl font-bold font-sans">
                 {product.name.trim().charAt(0).toUpperCase()}
               </span>
             )}
@@ -451,7 +456,7 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
           {/* Content */}
           <div className="relative z-10 flex-1">
             <div className="flex items-start gap-3 mb-2">
-              <h3 className="min-w-0 flex-1 text-xl font-semibold text-foreground font-sans tracking-tight truncate">
+              <h3 className="min-w-0 flex-1 text-lg sm:text-xl font-semibold text-foreground font-sans tracking-tight truncate">
                 {product.name}
               </h3>
               {!isProductsList ? (
@@ -460,7 +465,7 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
                 </Badge>
               ) : null}
             </div>
-            <p className="text-muted-foreground mb-4 line-clamp-2 font-sans">
+            <p className="text-muted-foreground mb-3 sm:mb-4 line-clamp-2 font-sans">
               <SloganMarkdown value={product.slogan} />
             </p>
           </div>
@@ -480,12 +485,16 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
               >
                 <div className="w-7 h-7 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-[10px] font-semibold text-muted-foreground">
                   {makerAvatarUrl ? (
-                    <img
+                    <Image
                       src={makerAvatarUrl}
                       alt={makerDisplayName || makerEmail}
+                      width={28}
+                      height={28}
                       className="w-full h-full object-cover"
                       loading="lazy"
                       referrerPolicy="no-referrer"
+                      unoptimized
+                      loader={({ src }) => src}
                     />
                   ) : (
                     makerInitial

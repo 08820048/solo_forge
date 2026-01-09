@@ -35,6 +35,15 @@ function getFeedbackRepo() {
   return repo || null;
 }
 
+function splitRepoFullName(repo: string): { owner: string; name: string } | null {
+  const parts = repo
+    .split('/')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length !== 2) return null;
+  return { owner: parts[0], name: parts[1] };
+}
+
 /**
  * githubRequest
  * 发起 GitHub API 请求，自动处理鉴权与常用头部。
@@ -130,7 +139,7 @@ function buildSearchQuery({
   status: string | null;
   type: string | null;
 }) {
-  const parts: string[] = [`repo:${repo}`, 'is:issue'];
+  const parts: string[] = [`repo:${repo}`, 'is:issue', 'label:"feedback"'];
   if (q) parts.push(`${q} in:title,body`);
   if (status && status !== 'all') {
     if (status === 'open') parts.push('is:open');
@@ -169,6 +178,34 @@ function mapSearchItemToIssue(item: unknown): FeedbackIssue {
     url: String(obj.html_url || ''),
     author: user?.login ? String(user.login) : null,
   };
+}
+
+async function listFeedbackIssues(params: {
+  owner: string;
+  name: string;
+  status: string | null;
+  type: string | null;
+  page: number;
+}) {
+  const url = new URL(`https://api.github.com/repos/${params.owner}/${params.name}/issues`);
+  url.searchParams.set('sort', 'updated');
+  url.searchParams.set('direction', 'desc');
+  url.searchParams.set('per_page', '30');
+  url.searchParams.set('page', String(Math.max(1, Math.min(10, params.page))));
+
+  const state = params.status === 'open' ? 'open' : params.status === 'closed' ? 'closed' : 'all';
+  url.searchParams.set('state', state);
+
+  const labels: string[] = ['feedback'];
+  if (params.status && params.status !== 'all' && params.status !== 'open' && params.status !== 'closed') {
+    labels.push(`status:${params.status}`);
+  }
+  if (params.type && params.type !== 'all') {
+    labels.push(`type:${params.type}`);
+  }
+  url.searchParams.set('labels', labels.join(','));
+
+  return githubRequest(url.toString());
 }
 
 /**
@@ -227,11 +264,41 @@ export async function GET(request: Request) {
     );
   }
 
+  const repoInfo = splitRepoFullName(repo);
+  if (!repoInfo) {
+    return NextResponse.json<ApiResponse<null>>({ success: false, message: 'Invalid GITHUB_FEEDBACK_REPO format' }, { status: 500 });
+  }
+
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get('q') || '').trim() || null;
   const status = (searchParams.get('status') || '').trim() || null;
   const type = (searchParams.get('type') || '').trim() || null;
   const page = Number(searchParams.get('page') || '1') || 1;
+
+  if (!q) {
+    const response = await listFeedbackIssues({ owner: repoInfo.owner, name: repoInfo.name, status, type, page });
+    if (!response.ok) {
+      const statusCode = response.status;
+      const text = await response.text().catch(() => '');
+      if (statusCode === 401 || statusCode === 403 || statusCode === 404) {
+        return NextResponse.json<ApiResponse<FeedbackIssue[]>>(
+          { success: true, data: [], message: `GitHub request failed (${statusCode}): ${text || response.statusText}` },
+          { status: 200 }
+        );
+      }
+      return NextResponse.json<ApiResponse<null>>(
+        { success: false, message: `GitHub request failed (${statusCode}): ${text || response.statusText}` },
+        { status: 502 }
+      );
+    }
+
+    const json = (await response.json().catch(() => null)) as unknown;
+    const items = Array.isArray(json) ? (json as unknown[]) : [];
+    const issues = items
+      .filter((item) => !(isRecord(item) && 'pull_request' in item))
+      .map(mapSearchItemToIssue);
+    return NextResponse.json<ApiResponse<FeedbackIssue[]>>({ success: true, data: issues });
+  }
 
   const query = buildSearchQuery({ repo, q, status, type });
   const url = new URL('https://api.github.com/search/issues');
@@ -243,9 +310,36 @@ export async function GET(request: Request) {
 
   const response = await githubRequest(url.toString());
   if (!response.ok) {
+    const statusCode = response.status;
     const text = await response.text().catch(() => '');
+
+    if (statusCode === 422 || statusCode === 401 || statusCode === 403 || statusCode === 404) {
+      const fallback = await listFeedbackIssues({ owner: repoInfo.owner, name: repoInfo.name, status, type, page });
+      if (fallback.ok) {
+        const json = (await fallback.json().catch(() => null)) as unknown;
+        const items = Array.isArray(json) ? (json as unknown[]) : [];
+        const issues = items
+          .filter((item) => !(isRecord(item) && 'pull_request' in item))
+          .map(mapSearchItemToIssue);
+        return NextResponse.json<ApiResponse<FeedbackIssue[]>>({
+          success: true,
+          data: issues,
+          message: `GitHub Search API unavailable (${statusCode}); fallback to issues list.`,
+        });
+      }
+      const fallbackText = await fallback.text().catch(() => '');
+      return NextResponse.json<ApiResponse<FeedbackIssue[]>>(
+        {
+          success: true,
+          data: [],
+          message: `GitHub request failed (${statusCode}): ${text || response.statusText}. Fallback failed (${fallback.status}): ${fallbackText || fallback.statusText}`,
+        },
+        { status: 200 }
+      );
+    }
+
     return NextResponse.json<ApiResponse<null>>(
-      { success: false, message: `GitHub request failed (${response.status}): ${text || response.statusText}` },
+      { success: false, message: `GitHub request failed (${statusCode}): ${text || response.statusText}` },
       { status: 502 }
     );
   }

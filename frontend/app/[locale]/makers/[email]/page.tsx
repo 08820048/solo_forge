@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/i18n/routing';
@@ -395,11 +396,11 @@ export default function MakerProfilePage({ params }: { params: Promise<{ email: 
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 pb-12">
+      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-20 sm:pt-24 pb-12">
         <div className="mb-10 animate-on-scroll">
           <div className="flex items-end justify-between gap-6">
             <div>
-              <h1 className="text-4xl sm:text-5xl font-bold text-foreground tracking-tight">{t('title')}</h1>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight">{t('title')}</h1>
               <p className="mt-3 text-muted-foreground">{t('subtitle')}</p>
             </div>
             <div className="hidden sm:flex items-center gap-3">
@@ -438,12 +439,16 @@ export default function MakerProfilePage({ params }: { params: Promise<{ email: 
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-11 h-11 shrink-0 rounded-full bg-muted border border-border/60 flex items-center justify-center overflow-hidden">
                       {avatarUrl ? (
-                        <img
+                        <Image
                           src={avatarUrl}
                           alt={displayName || targetEmail || 'User'}
+                          width={44}
+                          height={44}
                           className="w-full h-full object-cover"
                           loading="lazy"
                           referrerPolicy="no-referrer"
+                          unoptimized
+                          loader={({ src }) => src}
                         />
                       ) : (
                         <span className="text-sm font-semibold text-muted-foreground">{initial}</span>
@@ -486,7 +491,7 @@ export default function MakerProfilePage({ params }: { params: Promise<{ email: 
               <CardTitle className="text-sm">{t('statsTitle')}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('followers')}</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">{statsLoading && !stats ? '…' : fmt(stats?.followers)}</div>
@@ -497,9 +502,7 @@ export default function MakerProfilePage({ params }: { params: Promise<{ email: 
                 </div>
                 <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('totalFavorites')}</div>
-                  <div className="mt-1 text-lg font-semibold text-foreground">
-                    {statsLoading && !stats ? '…' : fmt(stats?.total_favorites)}
-                  </div>
+                  <div className="mt-1 text-lg font-semibold text-foreground">{statsLoading && !stats ? '…' : fmt(stats?.total_favorites)}</div>
                 </div>
               </div>
               {statsMessage ? <div className="mt-3 text-xs text-destructive">{statsMessage}</div> : null}

@@ -97,18 +97,18 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   return (
     <div className="min-h-screen relative isolate">
       <GridPattern className="-z-10" />
-      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 pb-16 relative">
+      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-20 sm:pt-24 pb-16 relative">
         <div className="space-y-16">
           <Hero />
-          <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_320px] gap-6">
-            <div className="hidden lg:block">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[260px_minmax(0,1fr)_320px] gap-6">
+            <div className="hidden 2xl:block">
               <DeveloperPopularitySidebar />
             </div>
             <div className="space-y-16 min-w-0">
               <ProductGrid section="featured" />
               <ProductGrid section="recent" />
             </div>
-            <div className="hidden lg:block">
+            <div className="hidden xl:block">
               <HomeRightSidebar />
             </div>
           </div>

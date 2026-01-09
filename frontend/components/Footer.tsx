@@ -161,13 +161,8 @@ export default function Footer() {
                 </I18nLink>
               </li>
               <li>
-                <a href="https://twitter.com/soloforge" target="_blank" rel="noopener noreferrer" className="text-sm hover:text-foreground transition-colors font-sans">
+                <a href="https://x.com/xuyixff" target="_blank" rel="noopener noreferrer" className="text-sm hover:text-foreground transition-colors font-sans">
                   {t('social.twitter')}
-                </a>
-              </li>
-              <li>
-                <a href="https://github.com/soloforge" target="_blank" rel="noopener noreferrer" className="text-sm hover:text-foreground transition-colors font-sans">
-                  {t('social.github')}
                 </a>
               </li>
             </ul>

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import { useEffect, useState } from 'react';
@@ -149,7 +150,7 @@ export default function Hero() {
 
   return (
     <section className="sf-wash rounded-2xl border border-border bg-card/50 overflow-hidden">
-      <div className="px-6 py-5 border-b border-border">
+      <div className="px-4 sm:px-6 py-5 border-b border-border">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -160,7 +161,7 @@ export default function Hero() {
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {loading ? (
           <div className="space-y-3 animate-in fade-in-0 duration-300">
             {Array.from({ length: 2 }).map((_, idx) => (
@@ -196,12 +197,16 @@ export default function Hero() {
                   <div className="flex items-start gap-3 min-w-0">
                     <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                       {product.logo_url ? (
-                        <img
+                        <Image
                           src={product.logo_url}
                           alt={product.name}
+                          width={48}
+                          height={48}
                           className="w-full h-full object-cover"
                           loading="lazy"
                           referrerPolicy="no-referrer"
+                          unoptimized
+                          loader={({ src }) => src}
                         />
                       ) : (
                         <span className="text-muted-foreground text-sm font-semibold">

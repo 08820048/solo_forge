@@ -181,7 +181,7 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
   if (!sessionReady) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 pb-12">
           <div className="py-24 text-center text-muted-foreground">{tDev('loading')}</div>
         </div>
       </div>
@@ -191,7 +191,7 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
   if (!user?.email) {
     return (
       <div className="min-h-screen">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 pb-12">
           <div className="sf-wash rounded-2xl border border-border bg-card/50 p-10 text-center animate-on-scroll">
             <h1 className="text-2xl font-bold text-foreground tracking-tight">{tDev('title')}</h1>
             <p className="mt-3 text-muted-foreground">{tDev('loginRequired')}</p>
@@ -211,7 +211,7 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8 pt-24 pb-12">
+      <div className="mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 pb-12">
         <div className="mb-6 flex items-center justify-between gap-4">
           <Button
             type="button"

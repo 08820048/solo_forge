@@ -856,7 +856,7 @@ export default function Header() {
   return (
     <nav className="fixed top-6 z-50 left-3 right-3 sm:left-4 sm:right-4 lg:left-6 lg:right-6 xl:left-8 xl:right-8 2xl:left-10 2xl:right-10">
       <div className="flex justify-center">
-        <div className="w-full max-w-4xl shrink-0 rounded-full border border-border bg-background/70 backdrop-blur-xl shadow-lg shadow-black/5 px-4 md:px-5 h-14 flex items-center justify-between gap-4 md:gap-10 transition-all duration-300">
+        <div className="w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl shrink-0 rounded-full border border-border bg-background/70 backdrop-blur-xl shadow-lg shadow-black/5 px-4 md:px-5 h-14 flex items-center justify-between gap-4 md:gap-10 transition-all duration-300">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
           <Image
@@ -881,10 +881,6 @@ export default function Header() {
           <Link href="/leaderboard" className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
             <i className="ri-skip-up-line text-sm" aria-hidden="true" />
             {tNav('leaderboard')}
-          </Link>
-          <Link href="/pricing" className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
-            <i className="ri-price-tag-3-line text-sm" aria-hidden="true" />
-            {tNav('pricing')}
           </Link>
           <button
             type="button"
@@ -1022,14 +1018,8 @@ export default function Header() {
             aria-label="Toggle Theme"
           >
             <Sun className="hidden dark:block" size={16} strokeWidth={1.5} />
-            <Moon className="block dark:hidden" size={16} strokeWidth={1.5} />
+          <Moon className="block dark:hidden" size={16} strokeWidth={1.5} />
           </button>
-          <Link
-            href="/pricing"
-            className="md:hidden text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {tNav('pricing')}
-          </Link>
           <button
             type="button"
             onClick={onSubmitClick}

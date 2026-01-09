@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
@@ -389,11 +390,11 @@ export default function LeaderboardPage() {
 
   return (
     <div className="min-h-screen">
-      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-24 pb-12">
+      <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-20 sm:pt-24 pb-12">
         <div className="mb-10 animate-on-scroll">
           <div className="flex items-end justify-between gap-6">
             <div>
-              <h1 className="text-4xl sm:text-5xl font-bold text-foreground tracking-tight">{t('title')}</h1>
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground tracking-tight">{t('title')}</h1>
               <p className="mt-3 text-muted-foreground">{t('subtitle')}</p>
             </div>
             <div className="hidden sm:flex items-center gap-3">
@@ -439,12 +440,16 @@ export default function LeaderboardPage() {
                           <div className="w-12 shrink-0 flex items-center">{renderRankBadge(idx + 1)}</div>
                           <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                             {p.logo_url ? (
-                              <img
+                              <Image
                                 src={p.logo_url}
                                 alt={p.name}
+                                width={40}
+                                height={40}
                                 className="w-full h-full object-cover"
                                 loading="lazy"
                                 referrerPolicy="no-referrer"
+                                unoptimized
+                                loader={({ src }) => src}
                               />
                             ) : (
                               <span className="text-muted-foreground text-sm font-semibold">{p.name.trim().charAt(0).toUpperCase()}</span>
@@ -566,12 +571,16 @@ export default function LeaderboardPage() {
                             >
                               <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden text-sm font-semibold text-muted-foreground">
                                 {m.avatar_url ? (
-                                  <img
+                                  <Image
                                     src={m.avatar_url}
                                     alt={m.maker_name || m.maker_email}
+                                    width={40}
+                                    height={40}
                                     className="w-full h-full object-cover"
                                     loading="lazy"
                                     referrerPolicy="no-referrer"
+                                    unoptimized
+                                    loader={({ src }) => src}
                                   />
                                 ) : (
                                   (m.maker_name || m.maker_email).trim().charAt(0).toUpperCase()

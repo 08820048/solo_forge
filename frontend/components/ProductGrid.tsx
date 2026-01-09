@@ -1,6 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
+import Image from 'next/image';
 import { Link, useRouter } from '@/i18n/routing';
 import { useEffect, useState } from 'react';
 import ProductCard from './ProductCard';
@@ -569,7 +570,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
       <div className="animate-on-scroll">
         <div className="flex items-end justify-between gap-6 mb-6">
           <div>
-            <h2 className="text-3xl font-bold text-foreground tracking-tight">{t('title')}</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{t('title')}</h2>
             <p className="mt-2 text-muted-foreground">{t('subtitle')}</p>
           </div>
           <div className="hidden sm:flex items-center gap-2">
@@ -646,12 +647,16 @@ export default function ProductGrid({ section }: ProductGridProps) {
                 <div key={p.id} className="px-5 py-4 flex items-center gap-4">
                   <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                     {p.logo_url ? (
-                      <img
+                      <Image
                         src={p.logo_url}
                         alt={p.name}
+                        width={40}
+                        height={40}
                         className="w-full h-full object-cover"
                         loading="lazy"
                         referrerPolicy="no-referrer"
+                        unoptimized
+                        loader={({ src }) => src}
                       />
                     ) : (
                       <span className="text-muted-foreground text-sm font-semibold">{p.name.trim().charAt(0).toUpperCase()}</span>
@@ -793,12 +798,16 @@ export default function ProductGrid({ section }: ProductGridProps) {
                     >
                       <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden text-sm font-semibold text-muted-foreground">
                         {d.avatar_url ? (
-                          <img
+                          <Image
                             src={d.avatar_url}
                             alt={d.name || d.email}
+                            width={40}
+                            height={40}
                             className="w-full h-full object-cover"
                             loading="lazy"
                             referrerPolicy="no-referrer"
+                            unoptimized
+                            loader={({ src }) => src}
                           />
                         ) : (
                           (d.name || d.email).trim().charAt(0).toUpperCase()
@@ -819,7 +828,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
 
         <div className="flex items-end justify-between gap-6">
           <div>
-            <h2 className="text-3xl font-bold text-foreground tracking-tight">{t('title')}</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{t('title')}</h2>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-muted-foreground">
               <span>{t('subtitle')}</span>
             </div>
@@ -842,7 +851,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in-0 duration-300">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 animate-in fade-in-0 duration-300">
           {Array.from({ length: 6 }).map((_, idx) => (
             <div
               key={idx}
@@ -855,7 +864,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
           {listMessage || t('empty')}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
           {products.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
