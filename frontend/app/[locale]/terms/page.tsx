@@ -7,6 +7,26 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return {
     title: `Terms of Service - ${t('appName')}`,
     description: t('slogan'),
+    alternates: {
+      canonical: `/${locale}/terms`,
+      languages: {
+        en: '/en/terms',
+        zh: '/zh/terms',
+      },
+    },
+    openGraph: {
+      type: 'article',
+      title: `Terms of Service - ${t('appName')}`,
+      description: t('slogan'),
+      url: `/${locale}/terms`,
+      images: [{ url: '/docs/imgs/image.jpg' }],
+    },
+    twitter: {
+      card: 'summary',
+      title: `Terms of Service - ${t('appName')}`,
+      description: t('slogan'),
+      images: ['/docs/imgs/image.jpg'],
+    },
   };
 }
 

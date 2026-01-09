@@ -827,7 +827,7 @@ export default function Header() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
           <Image
-            src="/docs/logo.png"
+            src="/docs/imgs/image.jpg"
             alt="SoloForge"
             width={20}
             height={20}

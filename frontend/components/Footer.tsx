@@ -88,7 +88,7 @@ export default function Footer() {
           <div className="col-span-1 md:col-span-2">
             <div className="mb-4">
               <div className="inline-flex items-center gap-2 text-xl font-semibold text-foreground bg-spotlight">
-                <Image src="/docs/logo.png" alt="SoloForge" width={22} height={22} className="rounded-sm" />
+                <Image src="/docs/imgs/image.jpg" alt="SoloForge" width={22} height={22} className="rounded-sm" />
                 <span>SoloForge</span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground max-w-md font-sans">

@@ -83,6 +83,26 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return {
     title: t('appName'),
     description: t('slogan'),
+    alternates: {
+      canonical: `/${locale}`,
+      languages: {
+        en: '/en',
+        zh: '/zh',
+      },
+    },
+    openGraph: {
+      type: 'website',
+      title: t('appName'),
+      description: t('slogan'),
+      url: `/${locale}`,
+      images: [{ url: '/docs/imgs/image.jpg' }],
+    },
+    twitter: {
+      card: 'summary',
+      title: t('appName'),
+      description: t('slogan'),
+      images: ['/docs/imgs/image.jpg'],
+    },
   };
 }
 

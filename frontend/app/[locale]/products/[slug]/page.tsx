@@ -15,6 +15,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string; slug: string }>
 }) {
   const { locale, slug } = await params;
+  const url = `/${locale}/products/${slug}`;
 
   try {
     // Fetch product data from API
@@ -27,10 +28,33 @@ export async function generateMetadata({
     if (response.ok) {
       const data = await response.json();
       const product = data.data;
+      const title = `${product.name} - SoloForge`;
+      const description = String(product.slogan || '').trim();
+      const imageUrl = typeof product.logo_url === 'string' && product.logo_url.trim() ? product.logo_url.trim() : '/docs/imgs/image.jpg';
 
       return {
-        title: `${product.name} - SoloForge`,
-        description: product.slogan,
+        title,
+        description,
+        alternates: {
+          canonical: url,
+          languages: {
+            en: `/en/products/${slug}`,
+            zh: `/zh/products/${slug}`,
+          },
+        },
+        openGraph: {
+          type: 'website',
+          title,
+          description,
+          url,
+          images: [{ url: imageUrl }],
+        },
+        twitter: {
+          card: 'summary',
+          title,
+          description,
+          images: [imageUrl],
+        },
       };
     }
   } catch {
@@ -39,10 +63,32 @@ export async function generateMetadata({
       name: 'AI Writing Assistant',
       slogan: 'Write better content with AI',
     };
+    const title = `${product.name} - SoloForge`;
+    const description = product.slogan;
 
     return {
-      title: `${product.name} - SoloForge`,
-      description: product.slogan,
+      title,
+      description,
+      alternates: {
+        canonical: url,
+        languages: {
+          en: `/en/products/${slug}`,
+          zh: `/zh/products/${slug}`,
+        },
+      },
+      openGraph: {
+        type: 'website',
+        title,
+        description,
+        url,
+        images: [{ url: '/docs/imgs/image.jpg' }],
+      },
+      twitter: {
+        card: 'summary',
+        title,
+        description,
+        images: ['/docs/imgs/image.jpg'],
+      },
     };
   }
 }

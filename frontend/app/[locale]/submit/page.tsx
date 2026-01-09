@@ -8,6 +8,26 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return {
     title: `${t('title')} - SoloForge`,
     description: t('subtitle'),
+    alternates: {
+      canonical: `/${locale}/submit`,
+      languages: {
+        en: '/en/submit',
+        zh: '/zh/submit',
+      },
+    },
+    openGraph: {
+      type: 'website',
+      title: `${t('title')} - SoloForge`,
+      description: t('subtitle'),
+      url: `/${locale}/submit`,
+      images: [{ url: '/docs/imgs/image.jpg' }],
+    },
+    twitter: {
+      card: 'summary',
+      title: `${t('title')} - SoloForge`,
+      description: t('subtitle'),
+      images: ['/docs/imgs/image.jpg'],
+    },
   };
 }
 

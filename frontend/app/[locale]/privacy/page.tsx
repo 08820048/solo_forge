@@ -7,6 +7,26 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return {
     title: `Privacy Policy - ${t('appName')}`,
     description: t('slogan'),
+    alternates: {
+      canonical: `/${locale}/privacy`,
+      languages: {
+        en: '/en/privacy',
+        zh: '/zh/privacy',
+      },
+    },
+    openGraph: {
+      type: 'article',
+      title: `Privacy Policy - ${t('appName')}`,
+      description: t('slogan'),
+      url: `/${locale}/privacy`,
+      images: [{ url: '/docs/imgs/image.jpg' }],
+    },
+    twitter: {
+      card: 'summary',
+      title: `Privacy Policy - ${t('appName')}`,
+      description: t('slogan'),
+      images: ['/docs/imgs/image.jpg'],
+    },
   };
 }
 
@@ -99,4 +119,3 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
     </div>
   );
 }
-
