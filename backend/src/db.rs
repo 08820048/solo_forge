@@ -1,7 +1,8 @@
 use crate::models::{
     Category, CreateProductRequest, CreateSponsorshipGrantFromRequest, CreateSponsorshipRequest,
     Developer, DeveloperCenterStats, DeveloperPopularity, DeveloperWithFollowers, Product,
-    QueryParams, SponsorshipGrant, SponsorshipRequest, UpdateProductRequest,
+    PaymentsSummary, PricingPlan, QueryParams, SponsorshipGrant, SponsorshipOrder,
+    SponsorshipRequest, UpsertPricingPlanRequest, UpdateProductRequest,
 };
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
@@ -12,6 +13,7 @@ use sha2::Sha256;
 use sqlx::postgres::{PgConnectOptions, PgPool, PgPoolOptions};
 use sqlx::{Postgres, QueryBuilder};
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::env;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -173,6 +175,64 @@ struct SponsorshipGrantFullRow {
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(sqlx::FromRow)]
+#[allow(dead_code)]
+struct SponsorshipOrderRow {
+    id: uuid::Uuid,
+    user_email: String,
+    user_id: Option<String>,
+    product_id: String,
+    placement: String,
+    slot_index: Option<i32>,
+    requested_months: i32,
+    paid_months: Option<i32>,
+    status: String,
+    provider: String,
+    provider_checkout_id: Option<String>,
+    provider_order_id: Option<String>,
+    amount_usd_cents: Option<i32>,
+    grant_id: Option<i64>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(sqlx::FromRow)]
+struct PricingPlanRow {
+    id: uuid::Uuid,
+    plan_key: String,
+    placement: Option<String>,
+    monthly_usd_cents: Option<i32>,
+    creem_product_id: Option<String>,
+    title_en: String,
+    title_zh: String,
+    badge_en: Option<String>,
+    badge_zh: Option<String>,
+    description_en: Option<String>,
+    description_zh: Option<String>,
+    is_active: bool,
+    is_default: bool,
+    sort_order: i32,
+    campaign_active: bool,
+    campaign_percent_off: Option<i32>,
+    campaign_title_en: Option<String>,
+    campaign_title_zh: Option<String>,
+    campaign_creem_product_id: Option<String>,
+    campaign_starts_at: Option<chrono::DateTime<chrono::Utc>>,
+    campaign_ends_at: Option<chrono::DateTime<chrono::Utc>>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(sqlx::FromRow)]
+struct PricingPlanBenefitRow {
+    id: i64,
+    plan_id: uuid::Uuid,
+    sort_order: i32,
+    text_en: String,
+    text_zh: String,
+    available: bool,
+}
+
 pub struct HomeModuleState {
     pub key: String,
     pub mode: Option<String>,
@@ -237,6 +297,75 @@ fn map_sponsorship_grant_full_row(row: SponsorshipGrantFullRow) -> SponsorshipGr
     }
 }
 
+fn map_sponsorship_order_row(row: SponsorshipOrderRow) -> (String, String) {
+    let mut user_email = row.user_email;
+    strip_nul_in_place(&mut user_email);
+    (row.id.to_string(), user_email)
+}
+
+/**
+ * map_pricing_plan_row_to_model
+ * 将 pricing_plans + pricing_plan_benefits 行映射为对外返回的 PricingPlan。
+ */
+fn map_pricing_plan_row_to_model(mut row: PricingPlanRow, benefit_rows: Vec<PricingPlanBenefitRow>) -> PricingPlan {
+    strip_nul_in_place(&mut row.plan_key);
+    strip_nul_in_place_opt(&mut row.placement);
+    strip_nul_in_place_opt(&mut row.creem_product_id);
+    strip_nul_in_place(&mut row.title_en);
+    strip_nul_in_place(&mut row.title_zh);
+    strip_nul_in_place_opt(&mut row.badge_en);
+    strip_nul_in_place_opt(&mut row.badge_zh);
+    strip_nul_in_place_opt(&mut row.description_en);
+    strip_nul_in_place_opt(&mut row.description_zh);
+    strip_nul_in_place_opt(&mut row.campaign_title_en);
+    strip_nul_in_place_opt(&mut row.campaign_title_zh);
+    strip_nul_in_place_opt(&mut row.campaign_creem_product_id);
+
+    let benefits = benefit_rows
+        .into_iter()
+        .map(|mut b| {
+            strip_nul_in_place(&mut b.text_en);
+            strip_nul_in_place(&mut b.text_zh);
+            crate::models::PricingPlanBenefit {
+                id: b.id,
+                sort_order: b.sort_order,
+                text_en: b.text_en,
+                text_zh: b.text_zh,
+                available: b.available,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    PricingPlan {
+        id: row.id.to_string(),
+        plan_key: row.plan_key,
+        placement: row.placement,
+        monthly_usd_cents: row.monthly_usd_cents,
+        creem_product_id: row.creem_product_id,
+        title_en: row.title_en,
+        title_zh: row.title_zh,
+        badge_en: row.badge_en,
+        badge_zh: row.badge_zh,
+        description_en: row.description_en,
+        description_zh: row.description_zh,
+        is_active: row.is_active,
+        is_default: row.is_default,
+        sort_order: row.sort_order,
+        benefits,
+        campaign: crate::models::PricingPlanCampaign {
+            active: row.campaign_active,
+            percent_off: row.campaign_percent_off,
+            title_en: row.campaign_title_en,
+            title_zh: row.campaign_title_zh,
+            creem_product_id: row.campaign_creem_product_id,
+            starts_at: row.campaign_starts_at,
+            ends_at: row.campaign_ends_at,
+        },
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    }
+}
+
 /**
  * parse_product_status
  * 将数据库/接口返回的 status 字符串解析为 ProductStatus。
@@ -295,6 +424,7 @@ fn is_missing_relation_error(err: &anyhow::Error, relation: &str) -> bool {
 }
 
 static PRODUCTS_REJECTION_REASON_READY: AtomicBool = AtomicBool::new(false);
+static PRICING_TEXT_MIGRATION_READY: AtomicBool = AtomicBool::new(false);
 
 async fn ensure_products_rejection_reason_column(pool: &PgPool) -> Result<()> {
     if PRODUCTS_REJECTION_REASON_READY.load(Ordering::Relaxed) {
@@ -336,6 +466,177 @@ async fn ensure_developers_sponsor_columns(pool: &PgPool) -> Result<()> {
 
 static SPONSORSHIP_TABLES_READY: AtomicBool = AtomicBool::new(false);
 
+static PRICING_TABLES_READY: AtomicBool = AtomicBool::new(false);
+
+/**
+ * ensure_pricing_tables
+ * 自动创建 pricing_plans / pricing_plan_benefits 表与必要索引，避免旧库缺表导致接口失败。
+ */
+async fn ensure_pricing_tables(pool: &PgPool) -> Result<()> {
+    if PRICING_TABLES_READY.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS pricing_plans ( \
+            id UUID PRIMARY KEY, \
+            plan_key TEXT NOT NULL UNIQUE, \
+            placement TEXT CHECK (placement IN ('home_top', 'home_right')), \
+            monthly_usd_cents INT, \
+            creem_product_id TEXT, \
+            title_en TEXT NOT NULL, \
+            title_zh TEXT NOT NULL, \
+            badge_en TEXT, \
+            badge_zh TEXT, \
+            description_en TEXT, \
+            description_zh TEXT, \
+            is_active BOOLEAN NOT NULL DEFAULT TRUE, \
+            is_default BOOLEAN NOT NULL DEFAULT FALSE, \
+            sort_order INT NOT NULL DEFAULT 0, \
+            campaign_active BOOLEAN NOT NULL DEFAULT FALSE, \
+            campaign_percent_off INT, \
+            campaign_title_en TEXT, \
+            campaign_title_zh TEXT, \
+            campaign_creem_product_id TEXT, \
+            campaign_starts_at TIMESTAMPTZ, \
+            campaign_ends_at TIMESTAMPTZ, \
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), \
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW() \
+        )",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS pricing_plan_benefits ( \
+            id BIGSERIAL PRIMARY KEY, \
+            plan_id UUID NOT NULL REFERENCES pricing_plans(id) ON DELETE CASCADE, \
+            sort_order INT NOT NULL DEFAULT 0, \
+            text_en TEXT NOT NULL, \
+            text_zh TEXT NOT NULL, \
+            available BOOLEAN NOT NULL DEFAULT TRUE \
+        )",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_pricing_plans_active_sort ON pricing_plans(is_active, sort_order)",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_pricing_plans_placement ON pricing_plans(placement)",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_pricing_plan_benefits_plan_id_sort ON pricing_plan_benefits(plan_id, sort_order)",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+
+    let existing_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(1) FROM pricing_plans")
+            .persistent(false)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0);
+    if existing_count == 0 {
+        let free_id = uuid::Uuid::new_v4();
+        let top_id = uuid::Uuid::new_v4();
+        let right_id = uuid::Uuid::new_v4();
+
+        let _ = sqlx::query(
+            "INSERT INTO pricing_plans \
+             (id, plan_key, placement, monthly_usd_cents, creem_product_id, title_en, title_zh, badge_en, badge_zh, description_en, description_zh, is_active, is_default, sort_order) \
+             VALUES \
+             ($1, 'free', NULL, NULL, NULL, 'Free', 'Free', 'Limited', '限量', 'Limited free exposure opportunity.', '限量免费曝光机会。', TRUE, FALSE, 10), \
+             ($2, 'home_top', 'home_top', 1000, NULL, 'Pro · Top', 'Pro · 顶部', 'Pricing', '定价', 'Highest exposure in homepage top module.', '展示在首页顶部定价模块（最高曝光）。', TRUE, TRUE, 20), \
+             ($3, 'home_right', 'home_right', 500, NULL, 'Pro · Right', 'Pro · 右侧', 'Pricing', '定价', 'Stable exposure in homepage right module.', '展示在首页右侧定价模块（稳定曝光）。', TRUE, FALSE, 30)",
+        )
+        .persistent(false)
+        .bind(free_id)
+        .bind(top_id)
+        .bind(right_id)
+        .execute(pool)
+        .await;
+
+        let _ = sqlx::query(
+            "INSERT INTO pricing_plan_benefits (plan_id, sort_order, text_en, text_zh, available) VALUES \
+             ($1, 10, 'Eligible for random free slots', '每天随机出现在免费位', TRUE), \
+             ($1, 20, 'Up to 48 hours exposure', '每个产品最多 48 小时展示机会', TRUE), \
+             ($2, 10, 'Homepage top slot', '首页顶部定价位', TRUE), \
+             ($2, 20, 'Pricing badge', '定价认证标识', TRUE), \
+             ($3, 10, 'Homepage right slot', '首页右侧定价位', TRUE), \
+             ($3, 20, 'Pricing badge', '定价认证标识', TRUE)",
+        )
+        .persistent(false)
+        .bind(free_id)
+        .bind(top_id)
+        .bind(right_id)
+        .execute(pool)
+        .await;
+    }
+
+    let _ = sqlx::query(
+        "UPDATE pricing_plans \
+         SET badge_zh = REPLACE(badge_zh, '赞助', '定价'), \
+             description_zh = REPLACE(description_zh, '赞助', '定价')",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await;
+
+    let _ = sqlx::query(
+        "UPDATE pricing_plan_benefits \
+         SET text_zh = REPLACE(text_zh, '赞助', '定价')",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await;
+
+    PRICING_TABLES_READY.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+/**
+ * ensure_pricing_text_migration
+ * 将历史文案中的“赞助”批量迁移为“定价”，避免旧数据导致前台仍显示旧词。
+ */
+async fn ensure_pricing_text_migration(pool: &PgPool) -> Result<()> {
+    if PRICING_TEXT_MIGRATION_READY.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+
+    sqlx::query(
+        "UPDATE pricing_plans \
+         SET badge_en = REPLACE(badge_en, 'Sponsor', 'Pricing'), \
+             badge_zh = REPLACE(badge_zh, '赞助', '定价'), \
+             description_zh = REPLACE(description_zh, '赞助', '定价')",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "UPDATE pricing_plan_benefits \
+         SET text_en = REPLACE(text_en, 'Sponsor', 'Pricing'), \
+             text_zh = REPLACE(text_zh, '赞助', '定价')",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+
+    PRICING_TEXT_MIGRATION_READY.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
 /**
  * ensure_sponsorship_tables
  * 自动创建 sponsorship_requests / sponsorship_grants 表与必要索引，避免旧库缺表导致接口失败。
@@ -348,6 +649,7 @@ async fn ensure_sponsorship_tables(pool: &PgPool) -> Result<()> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS sponsorship_grants ( \
             id BIGSERIAL PRIMARY KEY, \
+            order_id UUID, \
             product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE, \
             placement TEXT NOT NULL CHECK (placement IN ('home_top', 'home_right')), \
             slot_index INT, \
@@ -361,6 +663,11 @@ async fn ensure_sponsorship_tables(pool: &PgPool) -> Result<()> {
     .persistent(false)
     .execute(pool)
     .await?;
+
+    sqlx::query("ALTER TABLE sponsorship_grants ADD COLUMN IF NOT EXISTS order_id UUID")
+        .persistent(false)
+        .execute(pool)
+        .await?;
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS sponsorship_requests ( \
@@ -381,10 +688,76 @@ async fn ensure_sponsorship_tables(pool: &PgPool) -> Result<()> {
     .execute(pool)
     .await?;
 
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS sponsorship_orders ( \
+            id UUID PRIMARY KEY, \
+            user_email TEXT NOT NULL, \
+            user_id TEXT, \
+            product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE, \
+            placement TEXT NOT NULL CHECK (placement IN ('home_top', 'home_right')), \
+            slot_index INT, \
+            requested_months INT NOT NULL, \
+            paid_months INT, \
+            status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created', 'paid', 'canceled', 'failed')), \
+            provider TEXT NOT NULL DEFAULT 'creem', \
+            provider_checkout_id TEXT, \
+            provider_order_id TEXT, \
+            amount_usd_cents INT, \
+            pricing_plan_id UUID, \
+            pricing_plan_key TEXT, \
+            monthly_usd_cents INT, \
+            discount_percent_off INT, \
+            grant_id BIGINT, \
+            created_at TIMESTAMPTZ DEFAULT NOW(), \
+            updated_at TIMESTAMPTZ DEFAULT NOW() \
+        )",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+
+    sqlx::query("ALTER TABLE sponsorship_orders ADD COLUMN IF NOT EXISTS pricing_plan_id UUID")
+        .persistent(false)
+        .execute(pool)
+        .await?;
+    sqlx::query("ALTER TABLE sponsorship_orders ADD COLUMN IF NOT EXISTS pricing_plan_key TEXT")
+        .persistent(false)
+        .execute(pool)
+        .await?;
+    sqlx::query("ALTER TABLE sponsorship_orders ADD COLUMN IF NOT EXISTS monthly_usd_cents INT")
+        .persistent(false)
+        .execute(pool)
+        .await?;
+    sqlx::query("ALTER TABLE sponsorship_orders ADD COLUMN IF NOT EXISTS discount_percent_off INT")
+        .persistent(false)
+        .execute(pool)
+        .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS creem_webhook_events ( \
+            id TEXT PRIMARY KEY, \
+            event_type TEXT NOT NULL, \
+            payload JSONB NOT NULL, \
+            received_at TIMESTAMPTZ DEFAULT NOW(), \
+            processed_at TIMESTAMPTZ, \
+            processing_error TEXT \
+        )",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_sponsorship_grants_product_id ON sponsorship_grants(product_id)")
         .persistent(false)
         .execute(pool)
         .await?;
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_sponsorship_grants_order_id_unique \
+         ON sponsorship_grants(order_id) WHERE order_id IS NOT NULL",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_sponsorship_grants_placement ON sponsorship_grants(placement)")
         .persistent(false)
         .execute(pool)
@@ -402,8 +775,57 @@ async fn ensure_sponsorship_tables(pool: &PgPool) -> Result<()> {
         .execute(pool)
         .await?;
 
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_sponsorship_orders_status ON sponsorship_orders(status)",
+    )
+    .persistent(false)
+    .execute(pool)
+    .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_sponsorship_orders_user_email ON sponsorship_orders(user_email)")
+        .persistent(false)
+        .execute(pool)
+        .await?;
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_sponsorship_orders_created_at ON sponsorship_orders(created_at DESC)")
+        .persistent(false)
+        .execute(pool)
+        .await?;
+
     SPONSORSHIP_TABLES_READY.store(true, Ordering::Relaxed);
     Ok(())
+}
+
+/**
+ * map_sponsorship_order_row_to_model
+ * 将 sponsorship_orders 行映射为对外返回的 SponsorshipOrder。
+ */
+fn map_sponsorship_order_row_to_model(mut row: SponsorshipOrderRow) -> SponsorshipOrder {
+    let id = row.id.to_string();
+    strip_nul_in_place(&mut row.user_email);
+    strip_nul_in_place_opt(&mut row.user_id);
+    strip_nul_in_place(&mut row.product_id);
+    strip_nul_in_place(&mut row.placement);
+    strip_nul_in_place_opt(&mut row.provider_checkout_id);
+    strip_nul_in_place_opt(&mut row.provider_order_id);
+    strip_nul_in_place(&mut row.status);
+    strip_nul_in_place(&mut row.provider);
+    SponsorshipOrder {
+        id,
+        user_email: row.user_email,
+        user_id: row.user_id,
+        product_id: row.product_id,
+        placement: row.placement,
+        slot_index: row.slot_index,
+        requested_months: row.requested_months,
+        paid_months: row.paid_months,
+        status: row.status,
+        provider: row.provider,
+        provider_checkout_id: row.provider_checkout_id,
+        provider_order_id: row.provider_order_id,
+        amount_usd_cents: row.amount_usd_cents,
+        grant_id: row.grant_id,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    }
 }
 
 fn strip_nul_in_place(value: &mut String) {
@@ -2735,6 +3157,520 @@ impl Database {
         }))
     }
 
+    pub async fn create_sponsorship_order(
+        &self,
+        user_email: &str,
+        user_id: Option<&str>,
+        product_id: &str,
+        placement: &str,
+        slot_index: Option<i32>,
+        requested_months: i32,
+        pricing: Option<(&str, &str, Option<i32>, Option<i32>)>,
+    ) -> Result<String> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let requested_months = requested_months.clamp(1, 24);
+        let id = uuid::Uuid::new_v4();
+        let user_email = strip_nul_str(user_email.trim());
+        let user_id = user_id.map(|v| strip_nul_str(v.trim()).into_owned());
+        let product_id = strip_nul_str(product_id.trim());
+        let placement = strip_nul_str(placement.trim());
+        let pricing_plan_id = pricing
+            .as_ref()
+            .and_then(|(id, _, _, _)| uuid::Uuid::parse_str(id.trim()).ok());
+        let pricing_plan_key = pricing
+            .as_ref()
+            .map(|(_, key, _, _)| strip_nul_str(key.trim()).into_owned())
+            .filter(|v| !v.is_empty());
+        let monthly_usd_cents = pricing.as_ref().and_then(|(_, _, cents, _)| *cents);
+        let discount_percent_off = pricing.as_ref().and_then(|(_, _, _, pct)| *pct);
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt = sqlx::query_as::<_, SponsorshipOrderRow>(
+                "INSERT INTO sponsorship_orders (id, user_email, user_id, product_id, placement, slot_index, requested_months, status, provider, pricing_plan_id, pricing_plan_key, monthly_usd_cents, discount_percent_off) \
+                 VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, 'created', 'creem', $8, $9, $10, $11) \
+                 RETURNING id, user_email, user_id, product_id::text as product_id, placement, slot_index, requested_months, paid_months, status, provider, provider_checkout_id, provider_order_id, amount_usd_cents, grant_id, created_at, updated_at",
+            )
+            .persistent(false)
+            .bind(id)
+            .bind(user_email.as_ref())
+            .bind(user_id.as_deref())
+            .bind(product_id.as_ref())
+            .bind(placement.as_ref())
+            .bind(slot_index)
+            .bind(requested_months)
+            .bind(pricing_plan_id)
+            .bind(pricing_plan_key.as_deref())
+            .bind(monthly_usd_cents)
+            .bind(discount_percent_off)
+            .fetch_one(pool)
+            .await;
+
+            match attempt {
+                Ok(row) => {
+                    let (id, _email) = map_sponsorship_order_row(row);
+                    return Ok(id);
+                }
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if (is_missing_relation_error(&e, "sponsorship_orders")
+                        || is_missing_relation_error(&e, "sponsorship_grants")
+                        || is_missing_relation_error(&e, "sponsorship_requests"))
+                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_sponsorship_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to create sponsorship order")))
+    }
+
+    pub async fn set_sponsorship_order_provider_checkout_id(
+        &self,
+        order_id: &str,
+        provider_checkout_id: &str,
+    ) -> Result<bool> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let order_id = uuid::Uuid::parse_str(order_id.trim())
+            .map_err(|_| anyhow::anyhow!("Invalid order_id"))?;
+        let provider_checkout_id = strip_nul_str(provider_checkout_id.trim());
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt = sqlx::query(
+                "UPDATE sponsorship_orders SET provider_checkout_id = $2, updated_at = NOW() \
+                 WHERE id = $1",
+            )
+            .persistent(false)
+            .bind(order_id)
+            .bind(provider_checkout_id.as_ref())
+            .execute(pool)
+            .await;
+
+            match attempt {
+                Ok(res) => return Ok(res.rows_affected() > 0),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_relation_error(&e, "sponsorship_orders")
+                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_sponsorship_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| {
+            anyhow::anyhow!("Failed to update sponsorship order after auto migration")
+        }))
+    }
+
+    pub async fn insert_creem_webhook_event_if_absent(
+        &self,
+        event_id: &str,
+        event_type: &str,
+        payload: &serde_json::Value,
+    ) -> Result<bool> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let event_id = strip_nul_str(event_id.trim());
+        let event_type = strip_nul_str(event_type.trim());
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt = sqlx::query(
+                "INSERT INTO creem_webhook_events (id, event_type, payload) VALUES ($1, $2, $3::jsonb) \
+                 ON CONFLICT (id) DO NOTHING",
+            )
+            .persistent(false)
+            .bind(event_id.as_ref())
+            .bind(event_type.as_ref())
+            .bind(payload)
+            .execute(pool)
+            .await;
+
+            match attempt {
+                Ok(res) => return Ok(res.rows_affected() > 0),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_relation_error(&e, "creem_webhook_events")
+                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_sponsorship_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to insert creem webhook event")))
+    }
+
+    pub async fn mark_creem_webhook_event_succeeded(&self, event_id: &str) -> Result<()> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let event_id = strip_nul_str(event_id.trim());
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt = sqlx::query(
+                "UPDATE creem_webhook_events SET processed_at = NOW(), processing_error = NULL WHERE id = $1",
+            )
+            .persistent(false)
+            .bind(event_id.as_ref())
+            .execute(pool)
+            .await;
+
+            match attempt {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_relation_error(&e, "creem_webhook_events")
+                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_sponsorship_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to update creem webhook event")))
+    }
+
+    pub async fn mark_creem_webhook_event_failed(
+        &self,
+        event_id: &str,
+        processing_error: &str,
+        finalized: bool,
+    ) -> Result<()> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let event_id = strip_nul_str(event_id.trim());
+        let processing_error = strip_nul_str(processing_error.trim());
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt = if finalized {
+                sqlx::query(
+                    "UPDATE creem_webhook_events SET processed_at = NOW(), processing_error = $2 WHERE id = $1",
+                )
+                .persistent(false)
+                .bind(event_id.as_ref())
+                .bind(processing_error.as_ref())
+                .execute(pool)
+                .await
+            } else {
+                sqlx::query(
+                    "UPDATE creem_webhook_events SET processed_at = NULL, processing_error = $2 WHERE id = $1",
+                )
+                .persistent(false)
+                .bind(event_id.as_ref())
+                .bind(processing_error.as_ref())
+                .execute(pool)
+                .await
+            };
+
+            match attempt {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_relation_error(&e, "creem_webhook_events")
+                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_sponsorship_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to update creem webhook event")))
+    }
+
+    pub async fn get_sponsorship_order_basic(
+        &self,
+        order_id: &str,
+    ) -> Result<Option<(String, String, String, String, Option<i32>, i32, Option<i64>)>> {
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            status: String,
+            user_email: String,
+            product_id: String,
+            placement: String,
+            slot_index: Option<i32>,
+            requested_months: i32,
+            grant_id: Option<i64>,
+        }
+
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let order_uuid = uuid::Uuid::parse_str(order_id.trim())
+            .map_err(|_| anyhow::anyhow!("Invalid order_id"))?;
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt = sqlx::query_as::<_, Row>(
+                "SELECT status, user_email, product_id::text as product_id, placement, slot_index, requested_months, grant_id \
+                 FROM sponsorship_orders WHERE id = $1",
+            )
+            .persistent(false)
+            .bind(order_uuid)
+            .fetch_optional(pool)
+            .await;
+
+            match attempt {
+                Ok(Some(mut row)) => {
+                    strip_nul_in_place(&mut row.status);
+                    strip_nul_in_place(&mut row.user_email);
+                    strip_nul_in_place(&mut row.product_id);
+                    strip_nul_in_place(&mut row.placement);
+                    return Ok(Some((
+                        row.status,
+                        row.user_email,
+                        row.product_id,
+                        row.placement,
+                        row.slot_index,
+                        row.requested_months,
+                        row.grant_id,
+                    )));
+                }
+                Ok(None) => return Ok(None),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_relation_error(&e, "sponsorship_orders")
+                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_sponsorship_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to fetch sponsorship order")))
+    }
+
+    pub async fn create_sponsorship_grant_and_mark_order_paid_from_creem(
+        &self,
+        order_id: &str,
+        provider_order_id: Option<&str>,
+        amount_usd_cents: i32,
+        paid_months: i32,
+    ) -> Result<SponsorshipGrant> {
+        #[derive(sqlx::FromRow)]
+        struct OrderRow {
+            status: String,
+            product_id: String,
+            placement: String,
+            slot_index: Option<i32>,
+            grant_id: Option<i64>,
+        }
+
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let order_uuid = uuid::Uuid::parse_str(order_id.trim())
+            .map_err(|_| anyhow::anyhow!("Invalid order_id"))?;
+        let provider_order_id = provider_order_id
+            .map(|v| strip_nul_str(v.trim()).into_owned())
+            .filter(|v| !v.is_empty());
+        let paid_months = paid_months.clamp(1, 120);
+        let duration_days = paid_months.saturating_mul(30).max(1);
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let mut tx = pool.begin().await?;
+
+            let attempt: Result<SponsorshipGrantFullRow, anyhow::Error> = async {
+                let order = sqlx::query_as::<_, OrderRow>(
+                    "SELECT status, product_id::text as product_id, placement, slot_index, grant_id \
+                     FROM sponsorship_orders WHERE id = $1",
+                )
+                .persistent(false)
+                .bind(order_uuid)
+                .fetch_optional(&mut *tx)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Sponsorship order not found"))?;
+
+                let slot_index = order.slot_index;
+                let order_grant_id = order.grant_id;
+                let mut status = order.status;
+                let mut product_id = order.product_id;
+                let mut placement = order.placement;
+                strip_nul_in_place(&mut status);
+                strip_nul_in_place(&mut product_id);
+                strip_nul_in_place(&mut placement);
+
+                if status == "paid" {
+                    if let Some(grant_id) = order_grant_id {
+                        return Ok(
+                            sqlx::query_as::<_, SponsorshipGrantFullRow>(
+                                "SELECT id, product_id::text as product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents, created_at \
+                                 FROM sponsorship_grants WHERE id = $1",
+                            )
+                            .persistent(false)
+                            .bind(grant_id)
+                            .fetch_one(&mut *tx)
+                            .await?,
+                        );
+                    }
+                }
+
+                if let Some(existing) = sqlx::query_as::<_, SponsorshipGrantFullRow>(
+                    "SELECT id, product_id::text as product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents, created_at \
+                     FROM sponsorship_grants WHERE order_id = $1",
+                )
+                .persistent(false)
+                .bind(order_uuid)
+                .fetch_optional(&mut *tx)
+                .await?
+                {
+                    let _ = sqlx::query(
+                        "UPDATE sponsorship_orders \
+                         SET status = 'paid', provider_order_id = $2, amount_usd_cents = $3, paid_months = $4, grant_id = $5, updated_at = NOW() \
+                         WHERE id = $1 AND status = 'created'",
+                    )
+                    .persistent(false)
+                    .bind(order_uuid)
+                    .bind(provider_order_id.as_deref())
+                    .bind(amount_usd_cents)
+                    .bind(paid_months)
+                    .bind(existing.id)
+                    .execute(&mut *tx)
+                    .await?;
+                    return Ok(existing);
+                }
+
+                let max_end: Option<chrono::DateTime<chrono::Utc>> = sqlx::query_scalar(
+                    "SELECT MAX(ends_at) FROM sponsorship_grants \
+                     WHERE placement = $1 AND slot_index IS NOT DISTINCT FROM $2",
+                )
+                .persistent(false)
+                .bind(placement.as_str())
+                .bind(slot_index)
+                .fetch_one(&mut *tx)
+                .await?;
+
+                let requested_start = chrono::Utc::now();
+                let starts_at = match max_end {
+                    Some(end) if end > requested_start => end,
+                    _ => requested_start,
+                };
+                let ends_at = starts_at + chrono::Duration::days(duration_days as i64);
+
+                let inserted = sqlx::query_as::<_, SponsorshipGrantFullRow>(
+                    "INSERT INTO sponsorship_grants (order_id, product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents) \
+                     VALUES ($1, $2::uuid, $3, $4, $5, $6, 'creem', $7) \
+                     RETURNING id, product_id::text as product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents, created_at",
+                )
+                .persistent(false)
+                .bind(order_uuid)
+                .bind(product_id.as_str())
+                .bind(placement.as_str())
+                .bind(slot_index)
+                .bind(starts_at)
+                .bind(ends_at)
+                .bind(amount_usd_cents)
+                .fetch_one(&mut *tx)
+                .await?;
+
+                let updated = sqlx::query(
+                    "UPDATE sponsorship_orders \
+                     SET status = 'paid', provider_order_id = $2, amount_usd_cents = $3, paid_months = $4, grant_id = $5, updated_at = NOW() \
+                     WHERE id = $1 AND status = 'created'",
+                )
+                .persistent(false)
+                .bind(order_uuid)
+                .bind(provider_order_id.as_deref())
+                .bind(amount_usd_cents)
+                .bind(paid_months)
+                .bind(inserted.id)
+                .execute(&mut *tx)
+                .await?;
+
+                if updated.rows_affected() == 0 {
+                    if let Some(existing) = sqlx::query_as::<_, SponsorshipGrantFullRow>(
+                        "SELECT id, product_id::text as product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents, created_at \
+                         FROM sponsorship_grants WHERE order_id = $1",
+                    )
+                    .persistent(false)
+                    .bind(order_uuid)
+                    .fetch_optional(&mut *tx)
+                    .await?
+                    {
+                        return Ok(existing);
+                    }
+                }
+
+                Ok(inserted)
+            }
+            .await;
+
+            match attempt {
+                Ok(grant_row) => {
+                    tx.commit().await?;
+                    return Ok(map_sponsorship_grant_full_row(grant_row));
+                }
+                Err(e) => {
+                    let _ = tx.rollback().await;
+                    if (is_missing_relation_error(&e, "sponsorship_grants")
+                        || is_missing_relation_error(&e, "sponsorship_orders")
+                        || is_missing_relation_error(&e, "creem_webhook_events"))
+                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_sponsorship_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| {
+            anyhow::anyhow!("Failed to create sponsorship grant from creem webhook")
+        }))
+    }
+
     pub async fn list_sponsorship_grants(
         &self,
         placement: Option<&str>,
@@ -2839,6 +3775,775 @@ impl Database {
         Err(last_err.unwrap_or_else(|| {
             anyhow::anyhow!("Failed to delete sponsorship grant after auto migration")
         }))
+    }
+
+    /**
+     * list_pricing_plans
+     * 读取定价方案列表（包含权益明细）。
+     */
+    pub async fn list_pricing_plans(&self, include_inactive: bool) -> Result<Vec<PricingPlan>> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let _ = ensure_pricing_text_migration(pool).await;
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt: Result<Vec<PricingPlan>, anyhow::Error> = async {
+                let plans = if include_inactive {
+                    sqlx::query_as::<_, PricingPlanRow>(
+                        "SELECT \
+                            id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                            title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
+                            is_active, is_default, sort_order, \
+                            campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                            created_at, updated_at \
+                         FROM pricing_plans \
+                         ORDER BY sort_order ASC, created_at ASC, id ASC",
+                    )
+                    .persistent(false)
+                    .fetch_all(pool)
+                    .await?
+                } else {
+                    sqlx::query_as::<_, PricingPlanRow>(
+                        "SELECT \
+                            id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                            title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
+                            is_active, is_default, sort_order, \
+                            campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                            created_at, updated_at \
+                         FROM pricing_plans \
+                         WHERE is_active = TRUE \
+                         ORDER BY sort_order ASC, created_at ASC, id ASC",
+                    )
+                    .persistent(false)
+                    .fetch_all(pool)
+                    .await?
+                };
+
+                if plans.is_empty() {
+                    return Ok(Vec::new());
+                }
+
+                let plan_ids: Vec<uuid::Uuid> = plans.iter().map(|p| p.id).collect();
+                let benefits = sqlx::query_as::<_, PricingPlanBenefitRow>(
+                    "SELECT id, plan_id, sort_order, text_en, text_zh, available \
+                     FROM pricing_plan_benefits \
+                     WHERE plan_id = ANY($1) \
+                     ORDER BY plan_id ASC, sort_order ASC, id ASC",
+                )
+                .persistent(false)
+                .bind(&plan_ids)
+                .fetch_all(pool)
+                .await?;
+
+                let mut benefits_by_plan: HashMap<uuid::Uuid, Vec<PricingPlanBenefitRow>> =
+                    HashMap::new();
+                for b in benefits {
+                    benefits_by_plan.entry(b.plan_id).or_default().push(b);
+                }
+
+                Ok(plans
+                    .into_iter()
+                    .map(|row| {
+                        let benefit_rows = benefits_by_plan.remove(&row.id).unwrap_or_default();
+                        map_pricing_plan_row_to_model(row, benefit_rows)
+                    })
+                    .collect())
+            }
+            .await;
+
+            match attempt {
+                Ok(v) => return Ok(v),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if (is_missing_relation_error(&e, "pricing_plans")
+                        || is_missing_relation_error(&e, "pricing_plan_benefits"))
+                        && !PRICING_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_pricing_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to list pricing plans")))
+    }
+
+    /**
+     * upsert_pricing_plan
+     * 新增或更新定价方案，并同步权益列表；若标记为 default，会清理同 placement 的其它 default。
+     */
+    pub async fn upsert_pricing_plan(&self, input: UpsertPricingPlanRequest) -> Result<PricingPlan> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let plan_key = strip_nul_str(input.plan_key.trim()).into_owned();
+        if plan_key.is_empty() {
+            return Err(anyhow::anyhow!("Missing plan_key"));
+        }
+
+        let placement = input
+            .placement
+            .as_deref()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+        if let Some(ref p) = placement {
+            if p != "home_top" && p != "home_right" {
+                return Err(anyhow::anyhow!("Invalid placement"));
+            }
+        }
+
+        let id = input
+            .id
+            .as_deref()
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty())
+            .and_then(|v| uuid::Uuid::parse_str(v).ok());
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let mut tx = pool.begin().await?;
+
+            let attempt: Result<PricingPlan, anyhow::Error> = async {
+                let existing_id = if let Some(id) = id {
+                    Some(id)
+                } else {
+                    sqlx::query_scalar::<_, uuid::Uuid>(
+                        "SELECT id FROM pricing_plans WHERE plan_key = $1 LIMIT 1",
+                    )
+                    .persistent(false)
+                    .bind(plan_key.as_str())
+                    .fetch_optional(&mut *tx)
+                    .await?
+                };
+                let plan_id = existing_id.unwrap_or_else(uuid::Uuid::new_v4);
+
+                let title_en = strip_nul_str(input.title_en.trim()).into_owned();
+                let title_zh = strip_nul_str(input.title_zh.trim()).into_owned();
+                if title_en.is_empty() || title_zh.is_empty() {
+                    return Err(anyhow::anyhow!("Missing title"));
+                }
+
+                let badge_en = input
+                    .badge_en
+                    .as_deref()
+                    .map(|v| strip_nul_str(v.trim()).into_owned())
+                    .filter(|v| !v.is_empty());
+                let badge_zh = input
+                    .badge_zh
+                    .as_deref()
+                    .map(|v| strip_nul_str(v.trim()).into_owned())
+                    .filter(|v| !v.is_empty());
+                let description_en = input
+                    .description_en
+                    .as_deref()
+                    .map(|v| strip_nul_str(v.trim()).into_owned())
+                    .filter(|v| !v.is_empty());
+                let description_zh = input
+                    .description_zh
+                    .as_deref()
+                    .map(|v| strip_nul_str(v.trim()).into_owned())
+                    .filter(|v| !v.is_empty());
+
+                let creem_product_id = input
+                    .creem_product_id
+                    .as_deref()
+                    .map(|v| strip_nul_str(v.trim()).into_owned())
+                    .filter(|v| !v.is_empty());
+
+                let campaign = input.campaign.clone();
+                let campaign_creem_product_id = campaign
+                    .creem_product_id
+                    .as_deref()
+                    .map(|v| strip_nul_str(v.trim()).into_owned())
+                    .filter(|v| !v.is_empty());
+
+                sqlx::query(
+                    "INSERT INTO pricing_plans \
+                     (id, plan_key, placement, monthly_usd_cents, creem_product_id, title_en, title_zh, badge_en, badge_zh, description_en, description_zh, is_active, is_default, sort_order, \
+                      campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, updated_at) \
+                     VALUES \
+                     ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,NOW()) \
+                     ON CONFLICT (id) DO UPDATE SET \
+                       plan_key = EXCLUDED.plan_key, \
+                       placement = EXCLUDED.placement, \
+                       monthly_usd_cents = EXCLUDED.monthly_usd_cents, \
+                       creem_product_id = EXCLUDED.creem_product_id, \
+                       title_en = EXCLUDED.title_en, \
+                       title_zh = EXCLUDED.title_zh, \
+                       badge_en = EXCLUDED.badge_en, \
+                       badge_zh = EXCLUDED.badge_zh, \
+                       description_en = EXCLUDED.description_en, \
+                       description_zh = EXCLUDED.description_zh, \
+                       is_active = EXCLUDED.is_active, \
+                       is_default = EXCLUDED.is_default, \
+                       sort_order = EXCLUDED.sort_order, \
+                       campaign_active = EXCLUDED.campaign_active, \
+                       campaign_percent_off = EXCLUDED.campaign_percent_off, \
+                       campaign_title_en = EXCLUDED.campaign_title_en, \
+                       campaign_title_zh = EXCLUDED.campaign_title_zh, \
+                       campaign_creem_product_id = EXCLUDED.campaign_creem_product_id, \
+                       campaign_starts_at = EXCLUDED.campaign_starts_at, \
+                       campaign_ends_at = EXCLUDED.campaign_ends_at, \
+                       updated_at = NOW()",
+                )
+                .persistent(false)
+                .bind(plan_id)
+                .bind(plan_key.as_str())
+                .bind(placement.as_deref())
+                .bind(input.monthly_usd_cents)
+                .bind(creem_product_id.as_deref())
+                .bind(title_en.as_str())
+                .bind(title_zh.as_str())
+                .bind(badge_en.as_deref())
+                .bind(badge_zh.as_deref())
+                .bind(description_en.as_deref())
+                .bind(description_zh.as_deref())
+                .bind(input.is_active)
+                .bind(input.is_default)
+                .bind(input.sort_order)
+                .bind(campaign.active)
+                .bind(campaign.percent_off)
+                .bind(
+                    campaign
+                        .title_en
+                        .as_deref()
+                        .map(|v| strip_nul_str(v.trim()).into_owned()),
+                )
+                .bind(
+                    campaign
+                        .title_zh
+                        .as_deref()
+                        .map(|v| strip_nul_str(v.trim()).into_owned()),
+                )
+                .bind(campaign_creem_product_id.as_deref())
+                .bind(campaign.starts_at)
+                .bind(campaign.ends_at)
+                .execute(&mut *tx)
+                .await?;
+
+                if input.is_default {
+                    let placement_for_default = placement.as_deref();
+                    sqlx::query(
+                        "UPDATE pricing_plans SET is_default = FALSE, updated_at = NOW() \
+                         WHERE id <> $1 AND (placement IS NOT DISTINCT FROM $2)",
+                    )
+                    .persistent(false)
+                    .bind(plan_id)
+                    .bind(placement_for_default)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+
+                sqlx::query("DELETE FROM pricing_plan_benefits WHERE plan_id = $1")
+                    .persistent(false)
+                    .bind(plan_id)
+                    .execute(&mut *tx)
+                    .await?;
+
+                for b in input.benefits.iter() {
+                    let text_en = strip_nul_str(b.text_en.trim()).into_owned();
+                    let text_zh = strip_nul_str(b.text_zh.trim()).into_owned();
+                    if text_en.is_empty() && text_zh.is_empty() {
+                        continue;
+                    }
+                    let text_en = if text_en.is_empty() { text_zh.clone() } else { text_en };
+                    let text_zh = if text_zh.is_empty() { text_en.clone() } else { text_zh };
+
+                    sqlx::query(
+                        "INSERT INTO pricing_plan_benefits (plan_id, sort_order, text_en, text_zh, available) \
+                         VALUES ($1,$2,$3,$4,$5)",
+                    )
+                    .persistent(false)
+                    .bind(plan_id)
+                    .bind(b.sort_order)
+                    .bind(text_en.as_str())
+                    .bind(text_zh.as_str())
+                    .bind(b.available)
+                    .execute(&mut *tx)
+                    .await?;
+                }
+
+                let plan_row = sqlx::query_as::<_, PricingPlanRow>(
+                    "SELECT \
+                        id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                        title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
+                        is_active, is_default, sort_order, \
+                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                        created_at, updated_at \
+                     FROM pricing_plans WHERE id = $1",
+                )
+                .persistent(false)
+                .bind(plan_id)
+                .fetch_one(&mut *tx)
+                .await?;
+
+                let benefit_rows = sqlx::query_as::<_, PricingPlanBenefitRow>(
+                    "SELECT id, plan_id, sort_order, text_en, text_zh, available \
+                     FROM pricing_plan_benefits WHERE plan_id = $1 ORDER BY sort_order ASC, id ASC",
+                )
+                .persistent(false)
+                .bind(plan_id)
+                .fetch_all(&mut *tx)
+                .await?;
+
+                Ok(map_pricing_plan_row_to_model(plan_row, benefit_rows))
+            }
+            .await;
+
+            match attempt {
+                Ok(v) => {
+                    tx.commit().await?;
+                    return Ok(v);
+                }
+                Err(e) => {
+                    let _ = tx.rollback().await;
+                    let e: anyhow::Error = e.into();
+                    if (is_missing_relation_error(&e, "pricing_plans")
+                        || is_missing_relation_error(&e, "pricing_plan_benefits"))
+                        && !PRICING_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_pricing_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to upsert pricing plan")))
+    }
+
+    /**
+     * delete_pricing_plan
+     * 删除指定定价方案（连带删除权益）。
+     */
+    pub async fn delete_pricing_plan(&self, id: &str) -> Result<bool> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let plan_id = uuid::Uuid::parse_str(id.trim())
+            .map_err(|_| anyhow::anyhow!("Invalid id"))?;
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt = sqlx::query("DELETE FROM pricing_plans WHERE id = $1")
+                .persistent(false)
+                .bind(plan_id)
+                .execute(pool)
+                .await;
+
+            match attempt {
+                Ok(res) => return Ok(res.rows_affected() > 0),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_relation_error(&e, "pricing_plans")
+                        && !PRICING_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_pricing_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to delete pricing plan")))
+    }
+
+    pub async fn get_pricing_plan_by_id(&self, id: &str) -> Result<Option<PricingPlan>> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let plan_id = uuid::Uuid::parse_str(id.trim())
+            .map_err(|_| anyhow::anyhow!("Invalid id"))?;
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt: Result<Option<PricingPlan>, anyhow::Error> = async {
+                let plan_row = sqlx::query_as::<_, PricingPlanRow>(
+                    "SELECT \
+                        id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                        title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
+                        is_active, is_default, sort_order, \
+                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                        created_at, updated_at \
+                     FROM pricing_plans WHERE id = $1",
+                )
+                .persistent(false)
+                .bind(plan_id)
+                .fetch_optional(pool)
+                .await?;
+
+                let Some(plan_row) = plan_row else {
+                    return Ok(None);
+                };
+
+                let benefit_rows = sqlx::query_as::<_, PricingPlanBenefitRow>(
+                    "SELECT id, plan_id, sort_order, text_en, text_zh, available \
+                     FROM pricing_plan_benefits WHERE plan_id = $1 ORDER BY sort_order ASC, id ASC",
+                )
+                .persistent(false)
+                .bind(plan_id)
+                .fetch_all(pool)
+                .await?;
+
+                Ok(Some(map_pricing_plan_row_to_model(plan_row, benefit_rows)))
+            }
+            .await;
+
+            match attempt {
+                Ok(v) => return Ok(v),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if (is_missing_relation_error(&e, "pricing_plans")
+                        || is_missing_relation_error(&e, "pricing_plan_benefits"))
+                        && !PRICING_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_pricing_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to get pricing plan")))
+    }
+
+    pub async fn get_pricing_plan_by_key(&self, plan_key: &str) -> Result<Option<PricingPlan>> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let plan_key = strip_nul_str(plan_key.trim()).into_owned();
+        if plan_key.is_empty() {
+            return Ok(None);
+        }
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt: Result<Option<PricingPlan>, anyhow::Error> = async {
+                let plan_row = sqlx::query_as::<_, PricingPlanRow>(
+                    "SELECT \
+                        id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                        title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
+                        is_active, is_default, sort_order, \
+                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                        created_at, updated_at \
+                     FROM pricing_plans WHERE plan_key = $1 LIMIT 1",
+                )
+                .persistent(false)
+                .bind(plan_key.as_str())
+                .fetch_optional(pool)
+                .await?;
+
+                let Some(plan_row) = plan_row else {
+                    return Ok(None);
+                };
+
+                let benefit_rows = sqlx::query_as::<_, PricingPlanBenefitRow>(
+                    "SELECT id, plan_id, sort_order, text_en, text_zh, available \
+                     FROM pricing_plan_benefits WHERE plan_id = $1 ORDER BY sort_order ASC, id ASC",
+                )
+                .persistent(false)
+                .bind(plan_row.id)
+                .fetch_all(pool)
+                .await?;
+
+                Ok(Some(map_pricing_plan_row_to_model(plan_row, benefit_rows)))
+            }
+            .await;
+
+            match attempt {
+                Ok(v) => return Ok(v),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if (is_missing_relation_error(&e, "pricing_plans")
+                        || is_missing_relation_error(&e, "pricing_plan_benefits"))
+                        && !PRICING_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_pricing_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to get pricing plan")))
+    }
+
+    pub async fn get_default_pricing_plan_for_placement(
+        &self,
+        placement: Option<&str>,
+    ) -> Result<Option<PricingPlan>> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let placement = placement
+            .map(|v| strip_nul_str(v.trim()).into_owned())
+            .filter(|v| !v.is_empty());
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt: Result<Option<PricingPlan>, anyhow::Error> = async {
+                let plan_row = sqlx::query_as::<_, PricingPlanRow>(
+                    "SELECT \
+                        id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                        title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
+                        is_active, is_default, sort_order, \
+                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                        created_at, updated_at \
+                     FROM pricing_plans \
+                     WHERE is_default = TRUE AND is_active = TRUE AND (placement IS NOT DISTINCT FROM $1) \
+                     ORDER BY sort_order ASC, id ASC \
+                     LIMIT 1",
+                )
+                .persistent(false)
+                .bind(placement.as_deref())
+                .fetch_optional(pool)
+                .await?;
+
+                let Some(plan_row) = plan_row else {
+                    return Ok(None);
+                };
+
+                let benefit_rows = sqlx::query_as::<_, PricingPlanBenefitRow>(
+                    "SELECT id, plan_id, sort_order, text_en, text_zh, available \
+                     FROM pricing_plan_benefits WHERE plan_id = $1 ORDER BY sort_order ASC, id ASC",
+                )
+                .persistent(false)
+                .bind(plan_row.id)
+                .fetch_all(pool)
+                .await?;
+
+                Ok(Some(map_pricing_plan_row_to_model(plan_row, benefit_rows)))
+            }
+            .await;
+
+            match attempt {
+                Ok(v) => return Ok(v),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if (is_missing_relation_error(&e, "pricing_plans")
+                        || is_missing_relation_error(&e, "pricing_plan_benefits"))
+                        && !PRICING_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_pricing_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to get pricing plan")))
+    }
+
+    /**
+     * list_sponsorship_orders
+     * 查询支付订单列表（当前实现基于 sponsorship_orders）。
+     */
+    pub async fn list_sponsorship_orders(
+        &self,
+        status: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<SponsorshipOrder>> {
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let limit = limit.clamp(1, 200);
+        let offset = offset.max(0);
+        let status = status
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt = if let Some(ref status) = status {
+                sqlx::query_as::<_, SponsorshipOrderRow>(
+                    "SELECT id, user_email, user_id, product_id::text as product_id, placement, slot_index, requested_months, paid_months, status, provider, provider_checkout_id, provider_order_id, amount_usd_cents, grant_id, created_at, updated_at \
+                     FROM sponsorship_orders \
+                     WHERE status = $1 \
+                     ORDER BY created_at DESC, id DESC \
+                     LIMIT $2 OFFSET $3",
+                )
+                .persistent(false)
+                .bind(status.as_str())
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(pool)
+                .await
+            } else {
+                sqlx::query_as::<_, SponsorshipOrderRow>(
+                    "SELECT id, user_email, user_id, product_id::text as product_id, placement, slot_index, requested_months, paid_months, status, provider, provider_checkout_id, provider_order_id, amount_usd_cents, grant_id, created_at, updated_at \
+                     FROM sponsorship_orders \
+                     ORDER BY created_at DESC, id DESC \
+                     LIMIT $1 OFFSET $2",
+                )
+                .persistent(false)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(pool)
+                .await
+            };
+
+            match attempt {
+                Ok(rows) => return Ok(rows.into_iter().map(map_sponsorship_order_row_to_model).collect()),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_relation_error(&e, "sponsorship_orders")
+                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_sponsorship_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to list sponsorship orders")))
+    }
+
+    /**
+     * get_payments_summary
+     * 汇总支付统计（订单状态分布 + 近 N 天收入按天聚合）。
+     */
+    pub async fn get_payments_summary(&self, days: i64) -> Result<PaymentsSummary> {
+        #[derive(sqlx::FromRow)]
+        struct StatusAggRow {
+            status: String,
+            count: i64,
+        }
+
+        #[derive(sqlx::FromRow)]
+        struct DayAggRow {
+            day: chrono::DateTime<chrono::Utc>,
+            paid_orders: i64,
+            gross_usd_cents: i64,
+        }
+
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let days = days.clamp(1, 365);
+        let since = chrono::Utc::now() - chrono::Duration::days(days);
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for _attempt_idx in 0..2 {
+            let attempt: Result<PaymentsSummary, anyhow::Error> = async {
+                let status_rows = sqlx::query_as::<_, StatusAggRow>(
+                    "SELECT status, COUNT(1)::bigint as count \
+                     FROM sponsorship_orders \
+                     GROUP BY status \
+                     ORDER BY status ASC",
+                )
+                .persistent(false)
+                .fetch_all(pool)
+                .await?;
+
+                let mut created_orders = 0i64;
+                let mut paid_orders = 0i64;
+                let mut failed_orders = 0i64;
+                let mut canceled_orders = 0i64;
+                for mut r in status_rows {
+                    strip_nul_in_place(&mut r.status);
+                    match r.status.as_str() {
+                        "created" => created_orders = r.count,
+                        "paid" => paid_orders = r.count,
+                        "failed" => failed_orders = r.count,
+                        "canceled" => canceled_orders = r.count,
+                        _ => {}
+                    }
+                }
+
+                let gross_usd_cents: i64 = sqlx::query_scalar(
+                    "SELECT COALESCE(SUM(amount_usd_cents), 0)::bigint \
+                     FROM sponsorship_orders \
+                     WHERE status = 'paid'",
+                )
+                .persistent(false)
+                .fetch_one(pool)
+                .await
+                .unwrap_or(0);
+
+                let day_rows = sqlx::query_as::<_, DayAggRow>(
+                    "SELECT date_trunc('day', updated_at)::timestamptz as day, \
+                            COUNT(1)::bigint as paid_orders, \
+                            COALESCE(SUM(amount_usd_cents), 0)::bigint as gross_usd_cents \
+                     FROM sponsorship_orders \
+                     WHERE status = 'paid' AND updated_at >= $1 \
+                     GROUP BY 1 \
+                     ORDER BY 1 ASC",
+                )
+                .persistent(false)
+                .bind(since)
+                .fetch_all(pool)
+                .await?;
+
+                Ok(PaymentsSummary {
+                    created_orders,
+                    paid_orders,
+                    failed_orders,
+                    canceled_orders,
+                    gross_usd_cents,
+                    by_day: day_rows
+                        .into_iter()
+                        .map(|r| crate::models::PaymentsDayAgg {
+                            day: r.day,
+                            paid_orders: r.paid_orders,
+                            gross_usd_cents: r.gross_usd_cents,
+                        })
+                        .collect(),
+                })
+            }
+            .await;
+
+            match attempt {
+                Ok(v) => return Ok(v),
+                Err(e) => {
+                    let e: anyhow::Error = e.into();
+                    if is_missing_relation_error(&e, "sponsorship_orders")
+                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
+                        && ensure_sponsorship_tables(pool).await.is_ok()
+                    {
+                        continue;
+                    }
+                    last_err = Some(e);
+                    break;
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to compute payments summary")))
     }
 
     pub async fn get_favorite_products(

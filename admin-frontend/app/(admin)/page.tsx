@@ -124,8 +124,8 @@ export default function AdminHomePage() {
           <Link className={buttonClassName({ variant: 'outline' })} href="/products">
             产品管理
           </Link>
-          <Link className={buttonClassName({ variant: 'outline' })} href="/sponsorship">
-            赞助管理
+          <Link className={buttonClassName({ variant: 'outline' })} href="/pricing">
+            定价与支付
           </Link>
           <Link className={buttonClassName({ variant: 'outline' })} href="/categories">
             分类管理

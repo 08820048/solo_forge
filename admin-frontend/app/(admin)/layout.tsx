@@ -76,7 +76,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       { href: '/', label: '概览' },
       { href: '/products', label: '产品管理' },
       { href: '/categories', label: '分类管理' },
-      { href: '/sponsorship', label: '赞助管理' },
+      { href: '/pricing', label: '定价与支付' },
+      { href: '/sponsorship', label: '广告位管理' },
     ],
     []
   );

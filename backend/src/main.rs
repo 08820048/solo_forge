@@ -169,10 +169,25 @@ async fn main() -> std::io::Result<()> {
                             )
                             .route("/featured", web::get().to(handlers::get_home_featured)),
                     )
-                    .service(web::scope("/sponsorship").route(
-                        "/requests",
-                        web::post().to(handlers::create_sponsorship_request),
-                    ))
+                    .service(
+                        web::scope("/pricing-plans")
+                            .route("", web::get().to(handlers::get_pricing_plans)),
+                    )
+                    .service(
+                        web::scope("/sponsorship")
+                            .route(
+                                "/requests",
+                                web::post().to(handlers::create_sponsorship_request),
+                            )
+                            .route(
+                                "/checkout",
+                                web::post().to(handlers::create_creem_sponsorship_checkout),
+                            ),
+                    )
+                    .service(
+                        web::scope("/creem")
+                            .route("/webhook", web::post().to(handlers::creem_webhook)),
+                    )
                     .service(
                         web::scope("/dev")
                             .route("/bootstrap", web::post().to(handlers::dev_bootstrap))
@@ -208,6 +223,26 @@ async fn main() -> std::io::Result<()> {
                             .route(
                                 "/sponsorship/grants",
                                 web::delete().to(handlers::admin_delete_sponsorship_grant),
+                            )
+                            .route(
+                                "/pricing-plans",
+                                web::get().to(handlers::admin_list_pricing_plans),
+                            )
+                            .route(
+                                "/pricing-plans",
+                                web::post().to(handlers::admin_upsert_pricing_plan),
+                            )
+                            .route(
+                                "/pricing-plans/{id}",
+                                web::delete().to(handlers::admin_delete_pricing_plan),
+                            )
+                            .route(
+                                "/payments/orders",
+                                web::get().to(handlers::admin_list_sponsorship_orders),
+                            )
+                            .route(
+                                "/payments/summary",
+                                web::get().to(handlers::admin_get_payments_summary),
                             )
                             .route(
                                 "/home-modules/{key}",

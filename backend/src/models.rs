@@ -175,6 +175,114 @@ pub struct CreateSponsorshipGrantFromRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PricingPlanBenefit {
+    pub id: i64,
+    pub sort_order: i32,
+    pub text_en: String,
+    pub text_zh: String,
+    pub available: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PricingPlanCampaign {
+    pub active: bool,
+    pub percent_off: Option<i32>,
+    pub title_en: Option<String>,
+    pub title_zh: Option<String>,
+    pub creem_product_id: Option<String>,
+    pub starts_at: Option<DateTime<Utc>>,
+    pub ends_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PricingPlan {
+    pub id: String,
+    pub plan_key: String,
+    pub placement: Option<String>,
+    pub monthly_usd_cents: Option<i32>,
+    pub creem_product_id: Option<String>,
+    pub title_en: String,
+    pub title_zh: String,
+    pub badge_en: Option<String>,
+    pub badge_zh: Option<String>,
+    pub description_en: Option<String>,
+    pub description_zh: Option<String>,
+    pub is_active: bool,
+    pub is_default: bool,
+    pub sort_order: i32,
+    pub benefits: Vec<PricingPlanBenefit>,
+    pub campaign: PricingPlanCampaign,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct UpsertPricingPlanRequest {
+    pub id: Option<String>,
+    pub plan_key: String,
+    pub placement: Option<String>,
+    pub monthly_usd_cents: Option<i32>,
+    pub creem_product_id: Option<String>,
+    pub title_en: String,
+    pub title_zh: String,
+    pub badge_en: Option<String>,
+    pub badge_zh: Option<String>,
+    pub description_en: Option<String>,
+    pub description_zh: Option<String>,
+    pub is_active: bool,
+    pub is_default: bool,
+    pub sort_order: i32,
+    pub benefits: Vec<UpsertPricingPlanBenefit>,
+    pub campaign: PricingPlanCampaign,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct UpsertPricingPlanBenefit {
+    pub id: Option<i64>,
+    pub sort_order: i32,
+    pub text_en: String,
+    pub text_zh: String,
+    pub available: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct SponsorshipOrder {
+    pub id: String,
+    pub user_email: String,
+    pub user_id: Option<String>,
+    pub product_id: String,
+    pub placement: String,
+    pub slot_index: Option<i32>,
+    pub requested_months: i32,
+    pub paid_months: Option<i32>,
+    pub status: String,
+    pub provider: String,
+    pub provider_checkout_id: Option<String>,
+    pub provider_order_id: Option<String>,
+    pub amount_usd_cents: Option<i32>,
+    pub grant_id: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PaymentsDayAgg {
+    pub day: DateTime<Utc>,
+    pub paid_orders: i64,
+    pub gross_usd_cents: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct PaymentsSummary {
+    pub created_orders: i64,
+    pub paid_orders: i64,
+    pub failed_orders: i64,
+    pub canceled_orders: i64,
+    pub gross_usd_cents: i64,
+    pub by_day: Vec<PaymentsDayAgg>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct DeveloperCenterStats {
     pub followers: i64,
     pub total_likes: i64,

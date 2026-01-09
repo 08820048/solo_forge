@@ -3,7 +3,7 @@
     "home": "Home",
     "products": "Products",
     "leaderboard": "Leaderboard",
-    "pricing": "Sponsor",
+    "pricing": "Pricing",
     "submit": "Submit",
     "feedback": "Feedback",
     "login": "Log in",
@@ -13,43 +13,43 @@
     "about": "About"
   },
   "pricing": {
-    "title": "Sponsorship",
-    "subtitle": "Sponsor your product for top exposure on the homepage.",
+    "title": "Pricing",
+    "subtitle": "Choose a pricing plan for top exposure on the homepage.",
     "tiers": {
       "free": {
         "title": "Free",
         "badge": "Limited",
         "price": "Free",
-        "desc": "Free sponsorship for the first 50 submitted products. Each product gets 48 hours of eligibility with daily random placement (top/right).",
+        "desc": "Free exposure for the first 50 submitted products. Each product gets 48 hours of eligibility with daily random placement (top/right).",
         "benefits": [
           "Limited to the first 50 submitted products",
           "While stock lasts",
           "Up to 48 hours of exposure per product",
-          "Random daily placement in homepage top/right sponsored slots"
+          "Random daily placement in homepage top/right slots"
         ]
       },
       "top": {
         "title": "Pro · Top",
-        "badge": "Sponsor",
+        "badge": "Pricing",
         "price": "$10 / month",
-        "desc": "Displayed in the top sponsored module on the homepage (highest exposure).",
+        "desc": "Displayed in the top module on the homepage (highest exposure).",
         "benefits": [
-          { "text": "Fixed placement in homepage top sponsored slot (left/right)", "available": true },
-          { "text": "Fixed placement in homepage right sponsored slot (1/2/3)", "available": true },
-          { "text": "Unified sponsor identity badge", "available": true },
+          { "text": "Fixed placement in homepage top slot (left/right)", "available": true },
+          { "text": "Fixed placement in homepage right slot (1/2/3)", "available": true },
+          { "text": "Unified identity badge", "available": true },
           { "text": "Recommended in X (Twitter) posts", "available": true },
           { "text": "Up to 3 newsletter mentions per month", "available": true }
         ]
       },
       "right": {
         "title": "Pro · Right",
-        "badge": "Sponsor",
+        "badge": "Pricing",
         "price": "$5 / slot / month",
-        "desc": "Displayed in the right sidebar sponsored module (up to 3 items).",
+        "desc": "Displayed in the right sidebar module (up to 3 items).",
         "benefits": [
-          { "text": "Fixed placement in homepage top sponsored slot (left/right)", "available": false },
-          { "text": "Fixed placement in homepage right sponsored slot (1/2/3)", "available": true },
-          { "text": "Unified sponsor identity badge", "available": true },
+          { "text": "Fixed placement in homepage top slot (left/right)", "available": false },
+          { "text": "Fixed placement in homepage right slot (1/2/3)", "available": true },
+          { "text": "Unified identity badge", "available": true },
           { "text": "Recommended in X (Twitter) posts", "available": false },
           { "text": "Up to 1 newsletter mention per month", "available": true }
         ]
@@ -65,33 +65,33 @@
       ]
     },
       "actions": {
-        "sponsor": "Sponsor on Ko-fi",
-        "iPaid": "I’ve sponsored",
-        "submit": "Submit listing info",
+        "sponsor": "Buy now",
+        "iPaid": "I’ve paid",
+        "submit": "Continue to payment",
         "submitNow": "Submit now",
         "submitting": "Submitting...",
         "close": "Close"
       },
     "instructions": {
-      "title": "Important: include these details in your sponsorship note",
-      "desc": "To help us track and manually list your sponsored placement, please include:",
+      "title": "Payment notes",
+      "desc": "Your payment will be linked to your account automatically. No manual note is required.",
       "fields": {
         "email": "Your login email (used on this site)",
-        "product": "The product to display (name / URL / product ID)",
+        "product": "Product to display (product ID)",
         "placement": "Preferred placement (Top / Right)",
         "slot": "Slot detail (Top: left/right; Right: 1/2/3)",
-        "duration": "Duration (choose or custom)"
+        "duration": "Months (1/3/6/12)"
       },
       "exampleTitle": "Example",
-      "example": "Email: you@example.com\nProduct: https://your-product.com\nPlacement: Top\nSlot: Left\nDuration: 30 days"
+      "example": "Product: 1b2c3d4e-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nPlacement: Top\nSlot: Left\nMonths: 1"
     },
     "form": {
-      "title": "Sponsorship listing request (recommended)",
-      "desc": "If it’s hard to provide all details on the sponsor platform, submit them here for faster processing.",
+      "title": "Start payment",
+      "desc": "Fill in the product and placement, then you’ll be redirected to checkout.",
       "email": "Login email",
       "emailPlaceholder": "you@example.com",
       "product": "Product to display",
-      "productPlaceholder": "Product name / URL / product ID",
+      "productPlaceholder": "Product ID (UUID)",
       "placement": "Placement",
       "placementTop": "Top",
       "placementRight": "Right",
@@ -107,8 +107,8 @@
       "customDays": "Custom days",
       "customDaysPlaceholder": "e.g. 45",
       "note": "Extra notes (optional)",
-      "notePlaceholder": "e.g. Ko-fi order ID, duration, preferred start date",
-      "missingRequired": "Email and product are required.",
+      "notePlaceholder": "e.g. preferred start date (optional)",
+      "missingRequired": "Product is required.",
       "submitted": "Submitted. We’ll process it soon.",
       "submitFailed": "Submit failed. Please try again later."
     }

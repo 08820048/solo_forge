@@ -475,8 +475,8 @@ export default function AdminSponsorshipPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="text-3xl font-semibold tracking-tight">赞助管理</div>
-          <div className="mt-1 text-sm text-muted-foreground">处理赞助请求、查看赞助队列。</div>
+          <div className="text-3xl font-semibold tracking-tight">广告位管理</div>
+          <div className="mt-1 text-sm text-muted-foreground">处理广告位请求、查看展示队列。</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled={loading || reloading} onClick={() => void reload()}>

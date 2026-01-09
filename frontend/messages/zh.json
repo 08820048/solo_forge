@@ -3,7 +3,7 @@
     "home": "首页",
     "products": "产品",
     "leaderboard": "排行",
-    "pricing": "赞助",
+    "pricing": "定价",
     "submit": "提交",
     "feedback": "反馈",
     "login": "登录",
@@ -13,85 +13,85 @@
     "about": "关于"
   },
   "pricing": {
-    "title": "赞助",
-    "subtitle": "通过赞助把你的产品优先展示在首页赞助位。",
+    "title": "定价",
+    "subtitle": "通过定价把你的产品优先展示在首页定价位。",
     "tiers": {
       "free": {
         "title": "Free",
         "badge": "限量",
         "price": "免费",
-        "desc": "限前 50 个提交的产品享 48 小时赞助位展示机会，每天随机出现在顶部/右侧位置。",
+        "desc": "限前 50 个提交的产品享 48 小时定价位展示机会，每天随机出现在顶部/右侧位置。",
         "benefits": [
           "限前 50 个提交的产品",
           "赠完为止",
           "每个产品最多 48 小时展示机会",
-          "每天随机出现在首页顶部/右侧赞助位"
+          "每天随机出现在首页顶部/右侧定价位"
         ]
       },
       "top": {
         "title": "Pro · 顶部",
-        "badge": "赞助",
+        "badge": "定价",
         "price": "$10 / 月",
-        "desc": "展示在首页顶部赞助模块（最高曝光）。",
+        "desc": "展示在首页顶部定价模块（最高曝光）。",
         "benefits": [
-          { "text": "固定展示在首页顶部赞助位（左/右）", "available": true },
-          { "text": "固定展示在首页右侧赞助位（1/2/3 槽位）", "available": true },
-          { "text": "统一的「赞助者」身份认证标识", "available": true },
+          { "text": "固定展示在首页顶部定价位（左/右）", "available": true },
+          { "text": "固定展示在首页右侧定价位（1/2/3 槽位）", "available": true },
+          { "text": "统一的「定价者」身份认证标识", "available": true },
           { "text": "X（Twitter）社交平台帖子推荐", "available": true },
           { "text": "每月最多 3 次邮件简报推广", "available": true }
         ]
       },
       "right": {
         "title": "Pro · 右侧",
-        "badge": "赞助",
+        "badge": "定价",
         "price": "$5 / 位 / 月",
-        "desc": "展示在首页右侧栏赞助模块（最多 3 个）。",
+        "desc": "展示在首页右侧栏定价模块（最多 3 个）。",
         "benefits": [
-          { "text": "固定展示在首页顶部赞助位（左/右）", "available": false },
-          { "text": "固定展示在首页右侧赞助位（1/2/3 槽位）", "available": true },
-          { "text": "统一的「赞助者」身份认证标识", "available": true },
+          { "text": "固定展示在首页顶部定价位（左/右）", "available": false },
+          { "text": "固定展示在首页右侧定价位（1/2/3 槽位）", "available": true },
+          { "text": "统一的「定价者」身份认证标识", "available": true },
           { "text": "X（Twitter）社交平台帖子推荐", "available": false },
           { "text": "每月最多 1 次邮件简报推广", "available": true }
         ]
       }
     },
     "benefits": {
-      "title": "赞助权益",
+      "title": "定价权益",
       "items": [
-        "统一的「赞助者」身份认证标识",
-        "首页顶部/右侧赞助位最高优先级曝光",
+        "统一的「定价者」身份认证标识",
+        "首页顶部/右侧定价位最高优先级曝光",
         "X（Twitter）社交平台帖子推荐",
         "每月最多 3 次邮件简报推广"
       ]
     },
       "actions": {
-        "sponsor": "去赞助（Ko-fi）",
-        "iPaid": "我已完成赞助",
-        "submit": "提交上架信息",
+        "sponsor": "立即购买",
+        "iPaid": "我已完成支付",
+        "submit": "去支付",
         "submitNow": "立即提交",
         "submitting": "提交中...",
         "close": "关闭"
       },
     "instructions": {
-      "title": "重要：赞助时务必填写以下信息",
-      "desc": "为了方便后台统计与手动上架赞助位置，请在赞助留言中务必填写：",
+      "title": "支付说明",
+      "desc": "支付会自动关联你的账号与定价信息，无需在支付备注中手动填写。",
       "fields": {
         "email": "登录邮箱（你在本网站登录用的邮箱）",
-        "product": "需要展示的产品（产品名称 / 产品链接 / 产品 ID 均可）",
+        "product": "需要展示的产品（产品 ID）",
         "placement": "希望展示的位置（顶部 / 右侧）",
         "slot": "槽位信息（顶部：左/右；右侧：1/2/3）",
-        "duration": "展示时长（可选择或自定义）"
+        "duration": "购买月数（1/3/6/12）"
       },
       "exampleTitle": "示例",
-      "example": "Email: you@example.com\nProduct: https://your-product.com\nPlacement: Top\nSlot: Left\nDuration: 30 days"
+      "example": "Product: 1b2c3d4e-xxxx-xxxx-xxxx-xxxxxxxxxxxx\nPlacement: Top\nSlot: Left\nMonths: 1"
     },
     "form": {
-      "title": "赞助上架信息登记（推荐）",
-      "desc": "如果赞助平台不便填写完整信息，也可以在这里提交，方便我们尽快处理。",
+      "title": "发起定价支付",
+      "desc": "填写产品与展示位置后，将跳转到支付页面完成支付。",
       "email": "登录邮箱",
       "emailPlaceholder": "you@example.com",
       "product": "需要展示的产品",
-      "productPlaceholder": "产品名称 / 产品链接 / 产品 ID",
+      "productPlaceholder": "产品 ID（UUID）",
       "placement": "展示位置",
       "placementTop": "顶部",
       "placementRight": "右侧",
@@ -107,8 +107,8 @@
       "customDays": "自定义天数",
       "customDaysPlaceholder": "例如：45",
       "note": "补充说明（可选）",
-      "notePlaceholder": "例如：Ko-fi 订单号、赞助时长、希望开始时间等",
-      "missingRequired": "请填写邮箱与产品信息。",
+      "notePlaceholder": "例如：希望开始时间等（可留空）",
+      "missingRequired": "请填写产品信息。",
       "submitted": "已提交，我们会尽快处理。",
       "submitFailed": "提交失败，请稍后重试。"
     }
