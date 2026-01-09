@@ -4,50 +4,16 @@ import { useLocale, useTranslations } from 'next-intl';
 import Image from 'next/image';
 import { Link, useRouter } from '@/i18n/routing';
 import { useEffect, useState } from 'react';
-import ProductCard from './ProductCard';
 import { Badge } from '@/components/ui/badge';
 import FlipClockCountdown from '@/components/ui/flip-clock-countdown';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { plainTextFromMarkdown } from '@/lib/utils';
 
-function SloganMarkdown({ value }: { value: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: ({ children }) => <span>{children}</span>,
-        a: ({ href, children }) => (
-          <a
-            href={href ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:opacity-80"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (href) window.open(href, '_blank', 'noopener,noreferrer');
-            }}
-          >
-            {children}
-          </a>
-        ),
-        code: ({ children }) => (
-          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
-        ),
-        ul: ({ children }) => <span>{children}</span>,
-        ol: ({ children }) => <span>{children}</span>,
-        li: ({ children }) => <span>• {children} </span>,
-        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        blockquote: ({ children }) => <span>{children}</span>,
-        pre: ({ children }) => <span>{children}</span>,
-        br: () => <span> </span>,
-      }}
-    >
-      {value}
-    </ReactMarkdown>
-  );
+/**
+ * SloganText
+ * 在产品列表里以纯文本展示 slogan，降低 JS 执行与渲染开销。
+ */
+function SloganText({ value }: { value: string }) {
+  return <span>{plainTextFromMarkdown(value)}</span>;
 }
 
 /**
@@ -676,7 +642,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
                       </Badge>
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground line-clamp-1">
-                      <SloganMarkdown value={p.slogan} />
+                      <SloganText value={p.slogan} />
                     </div>
                   </div>
 
@@ -851,23 +817,147 @@ export default function ProductGrid({ section }: ProductGridProps) {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 animate-in fade-in-0 duration-300">
-          {Array.from({ length: 6 }).map((_, idx) => (
-            <div
-              key={idx}
-              className="sf-wash h-[260px] rounded-xl border border-border bg-card animate-pulse"
-            />
-          ))}
+        <div className="sf-wash rounded-xl border border-border bg-card/50 animate-in fade-in-0 duration-300 animate-pulse">
+          <div className="px-5 py-4 border-b border-border">
+            <div className="h-4 w-32 bg-muted rounded" />
+          </div>
+          <div className="divide-y divide-border">
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <div key={idx} className="px-5 py-4 flex items-center gap-4">
+                <div className="w-10 h-10 shrink-0 bg-muted rounded-lg" />
+                <div className="min-w-0 flex-1">
+                  <div className="h-4 w-56 bg-muted rounded" />
+                  <div className="mt-2 h-4 w-full bg-muted rounded" />
+                  <div className="mt-3 h-3 w-28 bg-muted rounded" />
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <div className="w-8 h-8 bg-muted rounded-md" />
+                  <div className="w-8 h-8 bg-muted rounded-md" />
+                  <div className="w-8 h-8 bg-muted rounded-md" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : products.length === 0 ? (
         <div className="py-20 text-center text-muted-foreground animate-in fade-in-0 duration-300">
           {listMessage || t('empty')}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
+        <div className="sf-wash rounded-xl border border-border bg-card/50 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">{t('title')}</h3>
+            <span className="text-xs text-muted-foreground">{t('subtitle')}</span>
+          </div>
+          <div className="divide-y divide-border">
+            {products.map((p) => {
+              const selfActionDisabled = isSameUserEmail(p.maker_email ?? null, getAuthenticatedUserEmail());
+              return (
+                <div key={p.id} className="px-5 py-4 flex items-center gap-4">
+                  <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                    {p.logo_url ? (
+                      <Image
+                        src={p.logo_url}
+                        alt={p.name}
+                        width={40}
+                        height={40}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        unoptimized
+                        loader={({ src }) => src}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground text-sm font-semibold">{p.name.trim().charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Link
+                        href={{ pathname: '/products/[slug]', params: { slug: p.id } }}
+                        className="text-foreground font-medium hover:underline truncate"
+                      >
+                        {p.name}
+                      </Link>
+                      <Badge variant="secondary" className="shrink-0">
+                        {categoryT(p.category)}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground line-clamp-1">
+                      <SloganText value={p.slogan} />
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex items-start gap-3">
+                    <div className="flex flex-col items-center">
+                      <button
+                        type="button"
+                        aria-label={favoriteIds.includes(p.id) ? '取消收藏' : '收藏'}
+                        disabled={selfActionDisabled}
+                        onClick={() => void toggleFavorite(p.id)}
+                        className={[
+                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                          selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
+                        ].join(' ')}
+                      >
+                        <i
+                          key={favoriteIds.includes(p.id) ? 'favorited' : 'unfavorited'}
+                          className={[
+                            `${favoriteIds.includes(p.id) ? 'ri-heart-3-fill' : 'ri-heart-3-line'} text-base transition-all duration-200`,
+                            favoriteIds.includes(p.id)
+                              ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
+                              : 'text-muted-foreground',
+                          ].join(' ')}
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <span className="mt-1 text-[10px] leading-none text-muted-foreground tabular-nums">{p.favorites}</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <button
+                        type="button"
+                        aria-label={likeIds.includes(p.id) ? '取消点赞' : '点赞'}
+                        disabled={selfActionDisabled}
+                        onClick={() => void toggleLike(p.id)}
+                        className={[
+                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                          selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
+                        ].join(' ')}
+                      >
+                        <i
+                          key={likeIds.includes(p.id) ? 'liked' : 'unliked'}
+                          className={[
+                            `${likeIds.includes(p.id) ? 'ri-thumb-up-fill' : 'ri-thumb-up-line'} text-base transition-all duration-200`,
+                            likeIds.includes(p.id)
+                              ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
+                              : 'text-muted-foreground',
+                          ].join(' ')}
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <span className="mt-1 text-[10px] leading-none text-muted-foreground tabular-nums">{p.likes}</span>
+                    </div>
+                    {p.website ? (
+                      <a
+                        href={p.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                        aria-label="访问官网"
+                      >
+                        <i className="ri-global-line text-base" aria-hidden="true" />
+                      </a>
+                    ) : (
+                      <span className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 text-muted-foreground">
+                        <i className="ri-global-line text-base" aria-hidden="true" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

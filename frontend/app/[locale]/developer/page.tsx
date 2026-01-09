@@ -1,19 +1,23 @@
 'use client';
 
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import { Link } from '@/i18n/routing';
-import SubmitForm from '@/components/SubmitForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { isKnownRemoteImageUrl, plainTextFromMarkdown } from '@/lib/utils';
+
+const SubmitForm = dynamic(() => import('@/components/SubmitForm'), {
+  ssr: false,
+  loading: () => <div className="py-10 text-center text-muted-foreground">Loading…</div>,
+});
 
 type TabKey = 'overview' | 'submit' | 'products' | 'favorites' | 'stats';
 
@@ -61,39 +65,12 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
-function SloganMarkdown({ value }: { value: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: ({ children }) => <span>{children}</span>,
-        a: ({ href, children }) => (
-          <a
-            href={href ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:opacity-80"
-          >
-            {children}
-          </a>
-        ),
-        code: ({ children }) => (
-          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
-        ),
-        ul: ({ children }) => <span>{children}</span>,
-        ol: ({ children }) => <span>{children}</span>,
-        li: ({ children }) => <span>• {children} </span>,
-        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        blockquote: ({ children }) => <span>{children}</span>,
-        pre: ({ children }) => <span>{children}</span>,
-        br: () => <span> </span>,
-      }}
-    >
-      {value}
-    </ReactMarkdown>
-  );
+/**
+ * SloganText
+ * 在开发者中心列表里以纯文本展示 slogan，避免引入重型 Markdown 渲染开销。
+ */
+function SloganText({ value }: { value: string }) {
+  return <span>{plainTextFromMarkdown(value)}</span>;
 }
 
 function readUserFromStorage(): UserInfo | null {
@@ -430,17 +407,29 @@ export default function DeveloperCenterPage() {
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 shrink-0 rounded-full bg-muted border border-border/60 flex items-center justify-center overflow-hidden">
                     {user.avatarUrl ? (
-                      <Image
-                        src={user.avatarUrl}
-                        alt={user.name || user.email || 'User'}
-                        width={40}
-                        height={40}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        unoptimized
-                        loader={({ src }) => src}
-                      />
+                      isKnownRemoteImageUrl(user.avatarUrl) ? (
+                        <Image
+                          src={user.avatarUrl}
+                          alt={user.name || user.email || 'User'}
+                          width={40}
+                          height={40}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <Image
+                          src={user.avatarUrl}
+                          alt={user.name || user.email || 'User'}
+                          width={40}
+                          height={40}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          unoptimized
+                          loader={({ src }) => src}
+                        />
+                      )
                     ) : (
                       <span className="text-sm font-semibold text-muted-foreground">
                         {(user.name || user.email || 'U').trim().slice(0, 1).toUpperCase()}
@@ -538,17 +527,29 @@ export default function DeveloperCenterPage() {
                         <div key={p.id} className="py-4 flex items-start gap-4">
                           <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden border border-border/60">
                             {p.logo_url ? (
-                              <Image
-                                src={p.logo_url}
-                                alt={p.name}
-                                width={48}
-                                height={48}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                                unoptimized
-                                loader={({ src }) => src}
-                              />
+                              isKnownRemoteImageUrl(p.logo_url) ? (
+                                <Image
+                                  src={p.logo_url}
+                                  alt={p.name}
+                                  width={48}
+                                  height={48}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <Image
+                                  src={p.logo_url}
+                                  alt={p.name}
+                                  width={48}
+                                  height={48}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  unoptimized
+                                  loader={({ src }) => src}
+                                />
+                              )
                             ) : (
                               <span className="text-sm font-semibold text-muted-foreground">
                                 {p.name.trim().slice(0, 1).toUpperCase()}
@@ -566,7 +567,7 @@ export default function DeveloperCenterPage() {
                               {statusBadge(p.status)}
                             </div>
                             <div className="mt-1 text-sm text-muted-foreground line-clamp-1">
-                              <SloganMarkdown value={p.slogan} />
+                              <SloganText value={p.slogan} />
                             </div>
                             {p.status === 'rejected' && p.rejection_reason ? (
                               <div className="mt-1 text-xs text-destructive break-words">
@@ -609,17 +610,29 @@ export default function DeveloperCenterPage() {
                           <div className="flex items-center gap-3 min-w-0">
                             <div className="w-7 h-7 shrink-0 rounded-md bg-muted flex items-center justify-center overflow-hidden border border-border/60">
                               {p.logo_url ? (
-                                <Image
-                                  src={p.logo_url}
-                                  alt={p.name}
-                                  width={28}
-                                  height={28}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                  referrerPolicy="no-referrer"
-                                  unoptimized
-                                  loader={({ src }) => src}
-                                />
+                                isKnownRemoteImageUrl(p.logo_url) ? (
+                                  <Image
+                                    src={p.logo_url}
+                                    alt={p.name}
+                                    width={28}
+                                    height={28}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <Image
+                                    src={p.logo_url}
+                                    alt={p.name}
+                                    width={28}
+                                    height={28}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer"
+                                    unoptimized
+                                    loader={({ src }) => src}
+                                  />
+                                )
                               ) : (
                                 <span className="text-[10px] font-semibold text-muted-foreground">
                                   {p.name.trim().slice(0, 1).toUpperCase()}
@@ -719,17 +732,29 @@ export default function DeveloperCenterPage() {
                     <div key={p.id} className="px-5 py-4 flex items-start gap-4">
                       <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden border border-border/60">
                         {p.logo_url ? (
-                          <Image
-                            src={p.logo_url}
-                            alt={p.name}
-                            width={48}
-                            height={48}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            unoptimized
-                            loader={({ src }) => src}
-                          />
+                          isKnownRemoteImageUrl(p.logo_url) ? (
+                            <Image
+                              src={p.logo_url}
+                              alt={p.name}
+                              width={48}
+                              height={48}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <Image
+                              src={p.logo_url}
+                              alt={p.name}
+                              width={48}
+                              height={48}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              unoptimized
+                              loader={({ src }) => src}
+                            />
+                          )
                         ) : (
                           <span className="text-sm font-semibold text-muted-foreground">
                             {p.name.trim().slice(0, 1).toUpperCase()}
@@ -747,7 +772,7 @@ export default function DeveloperCenterPage() {
                           {statusBadge(p.status)}
                         </div>
                         <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                          <SloganMarkdown value={p.slogan} />
+                          <SloganText value={p.slogan} />
                         </div>
                         {p.status === 'rejected' && p.rejection_reason ? (
                           <div className="mt-2 text-xs text-destructive break-words">
@@ -844,7 +869,7 @@ export default function DeveloperCenterPage() {
                           <Badge variant="outline">{categoryT(p.category)}</Badge>
                         </div>
                         <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                          <SloganMarkdown value={p.slogan} />
+                          <SloganText value={p.slogan} />
                         </div>
                         <div className="mt-2 text-xs text-muted-foreground">{t('favorites.by', { maker: p.maker_name })}</div>
                       </div>

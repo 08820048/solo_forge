@@ -5,8 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@/components/ui/badge';
 import FlipClockCountdown from '@/components/ui/flip-clock-countdown';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { isKnownRemoteImageUrl, plainTextFromMarkdown } from '@/lib/utils';
 
 type ApiResponse<T> = { success: boolean; data?: T; message?: string };
 
@@ -52,39 +51,12 @@ function normalizeRemixIconClass(raw?: string | null) {
   return name.startsWith('ri-') ? name : `ri-${name}`;
 }
 
-function SloganMarkdown({ value }: { value: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: ({ children }) => <span>{children}</span>,
-        a: ({ href, children }) => (
-          <a
-            href={href ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:opacity-80"
-          >
-            {children}
-          </a>
-        ),
-        code: ({ children }) => (
-          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
-        ),
-        ul: ({ children }) => <span>{children}</span>,
-        ol: ({ children }) => <span>{children}</span>,
-        li: ({ children }) => <span>• {children} </span>,
-        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        blockquote: ({ children }) => <span>{children}</span>,
-        pre: ({ children }) => <span>{children}</span>,
-        br: () => <span> </span>,
-      }}
-    >
-      {value}
-    </ReactMarkdown>
-  );
+/**
+ * SloganText
+ * 侧栏列表项以纯文本展示 slogan，减少渲染成本。
+ */
+function SloganText({ value }: { value: string }) {
+  return <span>{plainTextFromMarkdown(value)}</span>;
 }
 
 function renderRank(rank: number) {
@@ -340,24 +312,36 @@ export default function HomeRightSidebar() {
               {sponsorList.map((p) => (
                 <div key={p.id} className="rounded-xl border border-border bg-background/40 px-4 py-4">
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
-                      {p.logo_url ? (
-                        <Image
-                          src={p.logo_url}
-                          alt={p.name}
-                          width={40}
-                          height={40}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          unoptimized
-                          loader={({ src }) => src}
-                        />
-                      ) : (
-                        <span className="text-muted-foreground text-sm font-semibold">
-                          {p.name.trim().charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                      <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                        {p.logo_url ? (
+                          isKnownRemoteImageUrl(p.logo_url) ? (
+                            <Image
+                              src={p.logo_url}
+                              alt={p.name}
+                              width={40}
+                              height={40}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <Image
+                              src={p.logo_url}
+                              alt={p.name}
+                              width={40}
+                              height={40}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              unoptimized
+                              loader={({ src }) => src}
+                            />
+                          )
+                        ) : (
+                          <span className="text-muted-foreground text-sm font-semibold">
+                            {p.name.trim().charAt(0).toUpperCase()}
+                          </span>
+                        )}
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -368,7 +352,7 @@ export default function HomeRightSidebar() {
                         </Badge>
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                        <SloganMarkdown value={p.slogan} />
+                        <SloganText value={p.slogan} />
                       </div>
                     </div>
 

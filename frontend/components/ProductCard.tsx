@@ -6,8 +6,7 @@ import { Link, useRouter } from '@/i18n/routing';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useEffect, useState, type MouseEvent } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { isKnownRemoteImageUrl, plainTextFromMarkdown } from '@/lib/utils';
 
 function readFavoritesFromStorage(): string[] {
   try {
@@ -164,44 +163,12 @@ interface ProductCardProps {
   variant?: 'homeFeatured' | 'productsList';
 }
 
-function SloganMarkdown({ value }: { value: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: ({ children }) => <span>{children}</span>,
-        a: ({ href, children }) => (
-          <a
-            href={href ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:opacity-80"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (href) window.open(href, '_blank', 'noopener,noreferrer');
-            }}
-          >
-            {children}
-          </a>
-        ),
-        code: ({ children }) => (
-          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
-        ),
-        ul: ({ children }) => <span>{children}</span>,
-        ol: ({ children }) => <span>{children}</span>,
-        li: ({ children }) => <span>• {children} </span>,
-        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        blockquote: ({ children }) => <span>{children}</span>,
-        pre: ({ children }) => <span>{children}</span>,
-        br: () => <span> </span>,
-      }}
-    >
-      {value}
-    </ReactMarkdown>
-  );
+/**
+ * SloganText
+ * 在产品卡片里以纯文本展示 slogan，降低 Markdown 渲染成本。
+ */
+function SloganText({ value }: { value: string }) {
+  return <span>{plainTextFromMarkdown(value)}</span>;
 }
 
 export default function ProductCard({ product, variant = 'homeFeatured' }: ProductCardProps) {
@@ -435,17 +402,29 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
           {/* Logo */}
           <div className="relative z-10 w-14 h-14 sm:w-16 sm:h-16 bg-secondary rounded-lg mb-3 sm:mb-4 flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:opacity-90 spotlight-border">
             {product.logo_url ? (
-              <Image
-                src={product.logo_url}
-                alt={product.name}
-                width={64}
-                height={64}
-                className="w-full h-full object-cover"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                unoptimized
-                loader={({ src }) => src}
-              />
+              isKnownRemoteImageUrl(product.logo_url) ? (
+                <Image
+                  src={product.logo_url}
+                  alt={product.name}
+                  width={64}
+                  height={64}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <Image
+                  src={product.logo_url}
+                  alt={product.name}
+                  width={64}
+                  height={64}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  unoptimized
+                  loader={({ src }) => src}
+                />
+              )
             ) : (
               <span className="text-secondary-foreground text-xl sm:text-2xl font-bold font-sans">
                 {product.name.trim().charAt(0).toUpperCase()}
@@ -466,7 +445,7 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
               ) : null}
             </div>
             <p className="text-muted-foreground mb-3 sm:mb-4 line-clamp-2 font-sans">
-              <SloganMarkdown value={product.slogan} />
+              <SloganText value={product.slogan} />
             </p>
           </div>
 
@@ -485,17 +464,29 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
               >
                 <div className="w-7 h-7 shrink-0 rounded-full bg-muted flex items-center justify-center overflow-hidden text-[10px] font-semibold text-muted-foreground">
                   {makerAvatarUrl ? (
-                    <Image
-                      src={makerAvatarUrl}
-                      alt={makerDisplayName || makerEmail}
-                      width={28}
-                      height={28}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      unoptimized
-                      loader={({ src }) => src}
-                    />
+                    isKnownRemoteImageUrl(makerAvatarUrl) ? (
+                      <Image
+                        src={makerAvatarUrl}
+                        alt={makerDisplayName || makerEmail}
+                        width={28}
+                        height={28}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <Image
+                        src={makerAvatarUrl}
+                        alt={makerDisplayName || makerEmail}
+                        width={28}
+                        height={28}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        unoptimized
+                        loader={({ src }) => src}
+                      />
+                    )
                   ) : (
                     makerInitial
                   )}

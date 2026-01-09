@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { plainTextFromMarkdown } from '@/lib/utils';
 
 type UserInfo = { name?: string; email?: string; avatarUrl?: string };
 
@@ -251,36 +252,7 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
                       {statusBadge}
                     </div>
                     <div className="mt-2 text-muted-foreground">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          p: ({ children }) => <span>{children}</span>,
-                          a: ({ href, children }) => (
-                            <a
-                              href={href ?? '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="underline underline-offset-2 hover:opacity-80"
-                            >
-                              {children}
-                            </a>
-                          ),
-                          code: ({ children }) => (
-                            <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
-                          ),
-                          ul: ({ children }) => <span>{children}</span>,
-                          ol: ({ children }) => <span>{children}</span>,
-                          li: ({ children }) => <span>• {children} </span>,
-                          h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                          h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                          h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                          blockquote: ({ children }) => <span>{children}</span>,
-                          pre: ({ children }) => <span>{children}</span>,
-                          br: () => <span> </span>,
-                        }}
-                      >
-                        {String(product.slogan || '')}
-                      </ReactMarkdown>
+                      <span>{plainTextFromMarkdown(String(product.slogan || ''))}</span>
                     </div>
                     <div className="mt-3 text-xs text-muted-foreground">
                       {tCategories(product.category)} · {tDetail('createdAt')} {formatDate(product.created_at, locale)}

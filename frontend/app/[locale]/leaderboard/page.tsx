@@ -6,8 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { isKnownRemoteImageUrl, plainTextFromMarkdown } from '@/lib/utils';
 
 type WindowKey = 'day' | 'week' | 'month' | 'all';
 
@@ -110,44 +109,12 @@ function isSameUserEmail(a?: string | null, b?: string | null): boolean {
   return left === right;
 }
 
-function SloganMarkdown({ value }: { value: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: ({ children }) => <span>{children}</span>,
-        a: ({ href, children }) => (
-          <a
-            href={href ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:opacity-80"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (href) window.open(href, '_blank', 'noopener,noreferrer');
-            }}
-          >
-            {children}
-          </a>
-        ),
-        code: ({ children }) => (
-          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
-        ),
-        ul: ({ children }) => <span>{children}</span>,
-        ol: ({ children }) => <span>{children}</span>,
-        li: ({ children }) => <span>• {children} </span>,
-        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        blockquote: ({ children }) => <span>{children}</span>,
-        pre: ({ children }) => <span>{children}</span>,
-        br: () => <span> </span>,
-      }}
-    >
-      {value}
-    </ReactMarkdown>
-  );
+/**
+ * SloganText
+ * 在排行榜列表里以纯文本展示 slogan，避免大量列表项触发 Markdown 渲染。
+ */
+function SloganText({ value }: { value: string }) {
+  return <span>{plainTextFromMarkdown(value)}</span>;
 }
 
 function renderRankBadge(rank: number) {
@@ -440,17 +407,29 @@ export default function LeaderboardPage() {
                           <div className="w-12 shrink-0 flex items-center">{renderRankBadge(idx + 1)}</div>
                           <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                             {p.logo_url ? (
-                              <Image
-                                src={p.logo_url}
-                                alt={p.name}
-                                width={40}
-                                height={40}
-                                className="w-full h-full object-cover"
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                                unoptimized
-                                loader={({ src }) => src}
-                              />
+                              isKnownRemoteImageUrl(p.logo_url) ? (
+                                <Image
+                                  src={p.logo_url}
+                                  alt={p.name}
+                                  width={40}
+                                  height={40}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <Image
+                                  src={p.logo_url}
+                                  alt={p.name}
+                                  width={40}
+                                  height={40}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                  unoptimized
+                                  loader={({ src }) => src}
+                                />
+                              )
                             ) : (
                               <span className="text-muted-foreground text-sm font-semibold">{p.name.trim().charAt(0).toUpperCase()}</span>
                             )}
@@ -468,7 +447,7 @@ export default function LeaderboardPage() {
                               </Badge>
                             </div>
                             <div className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                              <SloganMarkdown value={p.slogan} />
+                              <SloganText value={p.slogan} />
                             </div>
                           </div>
                           <div className="shrink-0 flex items-start gap-3">
@@ -571,17 +550,29 @@ export default function LeaderboardPage() {
                             >
                               <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden text-sm font-semibold text-muted-foreground">
                                 {m.avatar_url ? (
-                                  <Image
-                                    src={m.avatar_url}
-                                    alt={m.maker_name || m.maker_email}
-                                    width={40}
-                                    height={40}
-                                    className="w-full h-full object-cover"
-                                    loading="lazy"
-                                    referrerPolicy="no-referrer"
-                                    unoptimized
-                                    loader={({ src }) => src}
-                                  />
+                                  isKnownRemoteImageUrl(m.avatar_url) ? (
+                                    <Image
+                                      src={m.avatar_url}
+                                      alt={m.maker_name || m.maker_email}
+                                      width={40}
+                                      height={40}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <Image
+                                      src={m.avatar_url}
+                                      alt={m.maker_name || m.maker_email}
+                                      width={40}
+                                      height={40}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                      referrerPolicy="no-referrer"
+                                      unoptimized
+                                      loader={({ src }) => src}
+                                    />
+                                  )
                                 ) : (
                                   (m.maker_name || m.maker_email).trim().charAt(0).toUpperCase()
                                 )}

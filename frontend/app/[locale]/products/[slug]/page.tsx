@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Link } from '@/i18n/routing';
+import { isKnownRemoteImageUrl, plainTextFromMarkdown } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
@@ -123,17 +124,31 @@ export default async function ProductDetailPage({
             <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 mb-6">
               <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-muted">
                 {product.logo_url ? (
-                  <Image
-                    src={product.logo_url}
-                    alt={product.name}
-                    width={96}
-                    height={96}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                    unoptimized
-                    loader={({ src }) => src}
-                  />
+                  isKnownRemoteImageUrl(product.logo_url) ? (
+                    <Image
+                      src={product.logo_url}
+                      alt={product.name}
+                      width={96}
+                      height={96}
+                      className="w-full h-full object-cover"
+                      priority
+                      sizes="96px"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <Image
+                      src={product.logo_url}
+                      alt={product.name}
+                      width={96}
+                      height={96}
+                      className="w-full h-full object-cover"
+                      priority
+                      sizes="96px"
+                      referrerPolicy="no-referrer"
+                      unoptimized
+                      loader={({ src }) => src}
+                    />
+                  )
                 ) : (
                   <div className="w-full h-full bg-black flex items-center justify-center">
                     <span className="text-white text-2xl sm:text-3xl lg:text-4xl font-bold">{product.name.charAt(0)}</span>
@@ -156,49 +171,7 @@ export default async function ProductDetailPage({
                   </a>
                 </div>
                 <div className="text-base sm:text-lg lg:text-xl text-muted-foreground mb-4 mt-2">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      p: ({ ...props }) => <span {...props} />,
-                      a: ({ ...props }) => (
-                        <a
-                          {...props}
-                          className="text-foreground underline underline-offset-4"
-                          target="_blank"
-                          rel="noreferrer"
-                        />
-                      ),
-                      code: ({ className: codeClassName, children, ...props }) => {
-                        const inline = !String(codeClassName || '').includes('language-');
-                        if (inline) {
-                          return (
-                            <code
-                              {...props}
-                              className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90"
-                            >
-                              {children}
-                            </code>
-                          );
-                        }
-                        return (
-                          <code {...props} className={codeClassName}>
-                            {children}
-                          </code>
-                        );
-                      },
-                      ul: ({ ...props }) => <span {...props} />,
-                      ol: ({ ...props }) => <span {...props} />,
-                      li: ({ ...props }) => <span {...props} />,
-                      h1: ({ ...props }) => <span {...props} />,
-                      h2: ({ ...props }) => <span {...props} />,
-                      h3: ({ ...props }) => <span {...props} />,
-                      pre: ({ ...props }) => <span {...props} />,
-                      blockquote: ({ ...props }) => <span {...props} />,
-                      br: () => <span> </span>,
-                    }}
-                  >
-                    {String(product.slogan || '')}
-                  </ReactMarkdown>
+                  {plainTextFromMarkdown(String(product.slogan || ''))}
                 </div>
               </div>
             </div>

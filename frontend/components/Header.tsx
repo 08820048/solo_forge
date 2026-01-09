@@ -9,8 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { isKnownRemoteImageUrl, plainTextFromMarkdown } from '@/lib/utils';
 import {
   clearSupabaseAuthStorage,
   getSupabaseAuthStoragePreference,
@@ -152,44 +151,12 @@ function writeUserToStorage(user: { name?: string; email?: string; avatarUrl?: s
   } catch {}
 }
 
-function SloganMarkdown({ value }: { value: string }) {
-  return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        p: ({ children }) => <span>{children}</span>,
-        a: ({ href, children }) => (
-          <a
-            href={href ?? '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:opacity-80"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (href) window.open(href, '_blank', 'noopener,noreferrer');
-            }}
-          >
-            {children}
-          </a>
-        ),
-        code: ({ children }) => (
-          <code className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground/90">{children}</code>
-        ),
-        ul: ({ children }) => <span>{children}</span>,
-        ol: ({ children }) => <span>{children}</span>,
-        li: ({ children }) => <span>• {children} </span>,
-        h1: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h2: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        h3: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-        blockquote: ({ children }) => <span>{children}</span>,
-        pre: ({ children }) => <span>{children}</span>,
-        br: () => <span> </span>,
-      }}
-    >
-      {value}
-    </ReactMarkdown>
-  );
+/**
+ * SloganText
+ * Header 搜索结果/提示中的短文案以纯文本展示，减少 Markdown 渲染开销。
+ */
+function SloganText({ value }: { value: string }) {
+  return <span>{plainTextFromMarkdown(value)}</span>;
 }
 
 /**
@@ -1039,15 +1006,25 @@ export default function Header() {
                 aria-label="User menu"
               >
                 {user.avatarUrl ? (
-                  <Image
-                    src={user.avatarUrl}
-                    alt={user.name || 'User'}
-                    width={32}
-                    height={32}
-                    className="w-full h-full object-cover"
-                    unoptimized
-                    loader={({ src }) => src}
-                  />
+                  isKnownRemoteImageUrl(user.avatarUrl) ? (
+                    <Image
+                      src={user.avatarUrl}
+                      alt={user.name || 'User'}
+                      width={32}
+                      height={32}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Image
+                      src={user.avatarUrl}
+                      alt={user.name || 'User'}
+                      width={32}
+                      height={32}
+                      className="w-full h-full object-cover"
+                      unoptimized
+                      loader={({ src }) => src}
+                    />
+                  )
                 ) : (
                   <span className="text-xs font-semibold text-foreground">{avatarFallback}</span>
                 )}
@@ -1287,7 +1264,7 @@ function SearchDialog({
                   >
                     <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
                     <div className="mt-0.5 text-xs text-muted-foreground truncate">
-                      <SloganMarkdown value={p.slogan} />
+                      <SloganText value={p.slogan} />
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground truncate">by {p.maker_name}</div>
                   </Link>
