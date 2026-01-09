@@ -186,6 +186,10 @@ async fn main() -> std::io::Result<()> {
                                 web::post().to(handlers::admin_upsert_categories),
                             )
                             .route(
+                                "/review-product",
+                                web::get().to(handlers::admin_review_product),
+                            )
+                            .route(
                                 "/categories/{id}",
                                 web::delete().to(handlers::admin_delete_category),
                             )

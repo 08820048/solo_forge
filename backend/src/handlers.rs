@@ -428,6 +428,14 @@ pub async fn create_product(
 
     match db.create_product(product_data.into_inner()).await {
         Ok(product) => {
+            let db_for_email = db.get_ref().clone();
+            let product_for_email = product.clone();
+            tokio::spawn(async move {
+                let _ = db_for_email
+                    .send_admin_product_submission_notification(&product_for_email)
+                    .await;
+            });
+
             let message = if lang.starts_with("zh") {
                 "产品提交成功，等待审核"
             } else {
@@ -443,6 +451,168 @@ pub async fn create_product(
         }
         Err(e) => HttpResponse::InternalServerError()
             .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+fn verify_admin_review_token(
+    product_id: &str,
+    action: &str,
+    exp_ts: i64,
+    token: &str,
+    secret: &str,
+) -> bool {
+    if secret.trim().is_empty() {
+        return false;
+    }
+    let token = token.trim();
+    if token.is_empty() {
+        return false;
+    }
+    if exp_ts <= Utc::now().timestamp() {
+        return false;
+    }
+
+    let sig = match general_purpose::URL_SAFE_NO_PAD.decode(token) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    mac.update(product_id.as_bytes());
+    mac.update(b"|");
+    mac.update(action.as_bytes());
+    mac.update(b"|");
+    mac.update(exp_ts.to_string().as_bytes());
+    mac.verify_slice(&sig).is_ok()
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminReviewProductQuery {
+    pub product_id: Option<String>,
+    pub action: Option<String>,
+    pub exp: Option<i64>,
+    pub sig: Option<String>,
+}
+
+pub async fn admin_review_product(
+    query: web::Query<AdminReviewProductQuery>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    let product_id = query.product_id.as_deref().unwrap_or("").trim().to_string();
+    let action = query
+        .action
+        .as_deref()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    let exp = query.exp.unwrap_or(0);
+    let sig = query.sig.as_deref().unwrap_or("").trim().to_string();
+
+    if product_id.is_empty() {
+        return HttpResponse::BadRequest()
+            .content_type("text/html; charset=utf-8")
+            .body("<h2>请求无效</h2><p>缺少 product_id。</p><hr/><h2>Invalid request</h2><p>Missing product_id.</p>");
+    }
+    if action != "approve" && action != "reject" {
+        return HttpResponse::BadRequest()
+            .content_type("text/html; charset=utf-8")
+            .body("<h2>请求无效</h2><p>action 必须为 approve 或 reject。</p><hr/><h2>Invalid request</h2><p>action must be approve or reject.</p>");
+    }
+
+    let secret = env::var("ADMIN_REVIEW_TOKEN_SECRET")
+        .ok()
+        .unwrap_or_default();
+    if !verify_admin_review_token(&product_id, &action, exp, &sig, &secret) {
+        return HttpResponse::BadRequest()
+            .content_type("text/html; charset=utf-8")
+            .body("<h2>链接无效或已过期</h2><p>请检查链接或重新发起审核。</p><hr/><h2>Invalid or expired link</h2><p>Please check the link or request a new review.</p>");
+    }
+
+    let existing = match db.get_product_by_id(&product_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return HttpResponse::NotFound()
+                .content_type("text/html; charset=utf-8")
+                .body("<h2>产品不存在</h2><p>未找到该产品。</p><hr/><h2>Product not found</h2><p>No product matches the given id.</p>");
+        }
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                return HttpResponse::Ok()
+                    .content_type("text/html; charset=utf-8")
+                    .body("<h2>数据库暂不可用</h2><p>请稍后重试。</p><hr/><h2>Database unavailable</h2><p>Please try again later.</p>");
+            }
+            return HttpResponse::InternalServerError()
+                .content_type("text/html; charset=utf-8")
+                .body("<h2>服务器错误</h2><p>请稍后重试。</p><hr/><h2>Server error</h2><p>Please try again later.</p>");
+        }
+    };
+
+    if action == "approve" && matches!(existing.status, crate::models::ProductStatus::Approved) {
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body("<h2>已通过</h2><p>该产品之前已通过审核。</p><hr/><h2>Already approved</h2><p>This product has already been approved.</p>");
+    }
+    if action == "reject" && matches!(existing.status, crate::models::ProductStatus::Rejected) {
+        return HttpResponse::Ok()
+            .content_type("text/html; charset=utf-8")
+            .body("<h2>已拒绝</h2><p>该产品之前已被拒绝。</p><hr/><h2>Already rejected</h2><p>This product has already been rejected.</p>");
+    }
+
+    let updates = if action == "approve" {
+        UpdateProductRequest {
+            name: None,
+            slogan: None,
+            description: None,
+            website: None,
+            logo_url: None,
+            category: None,
+            tags: None,
+            status: Some(crate::models::ProductStatus::Approved),
+            rejection_reason: Some(String::new()),
+        }
+    } else {
+        UpdateProductRequest {
+            name: None,
+            slogan: None,
+            description: None,
+            website: None,
+            logo_url: None,
+            category: None,
+            tags: None,
+            status: Some(crate::models::ProductStatus::Rejected),
+            rejection_reason: Some("Rejected by admin review".to_string()),
+        }
+    };
+
+    match db.update_product(&product_id, updates).await {
+        Ok(Some(_)) => {
+            if action == "approve" {
+                HttpResponse::Ok().content_type("text/html; charset=utf-8").body(
+                    "<h2>审核通过</h2><p>该产品已被标记为 approved。</p><hr/><h2>Approved</h2><p>The product is now approved.</p>",
+                )
+            } else {
+                HttpResponse::Ok().content_type("text/html; charset=utf-8").body(
+                    "<h2>已拒绝</h2><p>该产品已被标记为 rejected。</p><hr/><h2>Rejected</h2><p>The product is now rejected.</p>",
+                )
+            }
+        }
+        Ok(None) => HttpResponse::NotFound()
+            .content_type("text/html; charset=utf-8")
+            .body("<h2>产品不存在</h2><p>未找到该产品。</p><hr/><h2>Product not found</h2><p>No product matches the given id.</p>"),
+        Err(e) => {
+            if is_db_unavailable_error(&e) {
+                return HttpResponse::Ok()
+                    .content_type("text/html; charset=utf-8")
+                    .body("<h2>数据库暂不可用</h2><p>请稍后重试。</p><hr/><h2>Database unavailable</h2><p>Please try again later.</p>");
+            }
+            HttpResponse::InternalServerError()
+                .content_type("text/html; charset=utf-8")
+                .body("<h2>服务器错误</h2><p>请稍后重试。</p><hr/><h2>Server error</h2><p>Please try again later.</p>")
+        }
     }
 }
 

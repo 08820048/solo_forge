@@ -450,6 +450,51 @@ fn build_product_detail_url(frontend_base_url: &str, locale: &str, product_id: &
 }
 
 /**
+ * compute_admin_review_token
+ * 计算管理员邮件审核 token（HMAC-SHA256 + URL-safe base64，无 padding）。
+ */
+fn compute_admin_review_token(
+    product_id: &str,
+    action: &str,
+    exp_ts: i64,
+    secret: &str,
+) -> Result<String> {
+    type HmacSha256 = Hmac<Sha256>;
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|_| anyhow::anyhow!("Invalid ADMIN_REVIEW_TOKEN_SECRET"))?;
+    mac.update(product_id.as_bytes());
+    mac.update(b"|");
+    mac.update(action.as_bytes());
+    mac.update(b"|");
+    mac.update(exp_ts.to_string().as_bytes());
+    let bytes = mac.finalize().into_bytes();
+    Ok(general_purpose::URL_SAFE_NO_PAD.encode(bytes))
+}
+
+/**
+ * build_admin_review_url
+ * 拼装管理员邮件一键审核链接（指向后端 /api/admin/review-product 接口）。
+ */
+fn build_admin_review_url(
+    public_api_base_url: &str,
+    product_id: &str,
+    action: &str,
+    exp_ts: i64,
+    token: &str,
+) -> String {
+    let base = normalize_base_url(public_api_base_url);
+    let pid_q = urlencoding::encode(product_id);
+    let action_q = urlencoding::encode(action);
+    let exp_s = exp_ts.to_string();
+    let exp_q = urlencoding::encode(&exp_s);
+    let sig_q = urlencoding::encode(token);
+    format!(
+        "{}/api/admin/review-product?product_id={}&action={}&exp={}&sig={}",
+        base, pid_q, action_q, exp_q, sig_q
+    )
+}
+
+/**
  * compute_newsletter_unsubscribe_token
  * 计算退订 token（HMAC-SHA256 + URL-safe base64，无 padding）。
  */
@@ -650,6 +695,173 @@ async fn send_email_resend(
     Err(anyhow::anyhow!("Resend error: {} {}", status, body))
 }
 
+/**
+ * build_admin_product_submission_email_content
+ * 构建“产品提交待审核”的管理员通知邮件内容（包含一键通过/拒绝链接）。
+ */
+fn build_admin_product_submission_email_content(
+    product: &Product,
+    frontend_base_url: &str,
+    public_api_base_url: &str,
+    token_secret: &str,
+) -> (String, String, String) {
+    let subject = format!("New product submitted: {}", product.name.trim());
+
+    let product_name = product.name.trim();
+    let product_slogan = product.slogan.trim();
+    let product_desc = product.description.trim();
+    let product_website = product.website.trim();
+    let maker_name = product.maker_name.trim();
+    let maker_email = product.maker_email.trim();
+    let category = product.category.trim();
+    let product_id = product.id.trim();
+
+    let detail_url = build_product_detail_url(frontend_base_url, "en", product_id);
+
+    let exp_ts = (chrono::Utc::now() + chrono::Duration::days(7)).timestamp();
+    let approve_token =
+        compute_admin_review_token(product_id, "approve", exp_ts, token_secret).unwrap_or_default();
+    let reject_token =
+        compute_admin_review_token(product_id, "reject", exp_ts, token_secret).unwrap_or_default();
+    let approve_url = if !approve_token.trim().is_empty() {
+        build_admin_review_url(
+            public_api_base_url,
+            product_id,
+            "approve",
+            exp_ts,
+            &approve_token,
+        )
+    } else {
+        String::new()
+    };
+    let reject_url = if !reject_token.trim().is_empty() {
+        build_admin_review_url(
+            public_api_base_url,
+            product_id,
+            "reject",
+            exp_ts,
+            &reject_token,
+        )
+    } else {
+        String::new()
+    };
+
+    let mut text = String::new();
+    text.push_str("New product submitted (pending review)\n\n");
+    text.push_str(&format!("Name: {}\n", product_name));
+    if !product_slogan.is_empty() {
+        text.push_str(&format!("Slogan: {}\n", product_slogan));
+    }
+    text.push_str(&format!("Category: {}\n", category));
+    text.push_str(&format!("Website: {}\n", product_website));
+    text.push_str(&format!("Maker: {} ({})\n", maker_name, maker_email));
+    text.push_str(&format!("Product ID: {}\n", product_id));
+    text.push_str(&format!("Details: {}\n", detail_url));
+    if !approve_url.is_empty() && !reject_url.is_empty() {
+        text.push_str(&format!(
+            "\nApprove: {}\nReject: {}\n",
+            approve_url, reject_url
+        ));
+    } else {
+        text.push_str(
+            "\nOne-click review links are not configured (missing ADMIN_REVIEW_TOKEN_SECRET).\n",
+        );
+    }
+
+    let mut html = String::new();
+    html.push_str("<!doctype html><html><body style=\"margin:0;padding:0;background:#f6f7fb;\">");
+    html.push_str("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background:#f6f7fb;padding:24px 0;\">");
+    html.push_str("<tr><td align=\"center\" style=\"padding:0 12px;\">");
+    html.push_str("<table role=\"presentation\" width=\"640\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;max-width:640px;background:#ffffff;border:1px solid #eaecef;border-radius:16px;overflow:hidden;\">");
+    html.push_str("<tr><td style=\"padding:18px 22px;background:#111827;color:#ffffff;\">");
+    html.push_str(
+        "<div style=\"font-size:16px;font-weight:800;\">SoloForge · Product Review</div>",
+    );
+    html.push_str("<div style=\"margin-top:6px;font-size:12px;opacity:0.9;\">A new product is waiting for approval</div>");
+    html.push_str("</td></tr>");
+
+    html.push_str("<tr><td style=\"padding:18px 22px;\">");
+    html.push_str("<div style=\"font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.6;color:#111827;\">");
+    html.push_str(&format!(
+        "<div style=\"font-size:18px;font-weight:800;margin:0 0 6px 0;\">{}</div>",
+        html_escape(product_name)
+    ));
+    if !product_slogan.is_empty() {
+        html.push_str(&format!(
+            "<div style=\"font-size:13px;color:#4b5563;margin:0 0 10px 0;\">{}</div>",
+            html_escape(product_slogan)
+        ));
+    }
+
+    html.push_str("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;\">");
+    html.push_str("<tr><td style=\"padding:12px 14px;\">");
+    html.push_str(&format!(
+        "<div style=\"font-size:12px;color:#6b7280;\">Category</div><div style=\"font-size:14px;font-weight:700;\">{}</div>",
+        html_escape(category)
+    ));
+    html.push_str("</td></tr>");
+    html.push_str("<tr><td style=\"padding:0 14px 12px 14px;\">");
+    html.push_str(&format!(
+        "<div style=\"font-size:12px;color:#6b7280;\">Maker</div><div style=\"font-size:14px;font-weight:700;\">{} ({})</div>",
+        html_escape(maker_name),
+        html_escape(maker_email)
+    ));
+    html.push_str("</td></tr>");
+    html.push_str("<tr><td style=\"padding:0 14px 12px 14px;\">");
+    html.push_str(&format!(
+        "<div style=\"font-size:12px;color:#6b7280;\">Website</div><div style=\"font-size:14px;font-weight:700;\"><a href=\"{}\" target=\"_blank\" rel=\"noreferrer\" style=\"color:#111827;text-decoration:underline;\">{}</a></div>",
+        html_attr_escape(product_website),
+        html_escape(product_website)
+    ));
+    html.push_str("</td></tr>");
+    html.push_str("<tr><td style=\"padding:0 14px 14px 14px;\">");
+    html.push_str(&format!(
+        "<div style=\"font-size:12px;color:#6b7280;\">Product ID</div><div style=\"font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;\">{}</div>",
+        html_escape(product_id)
+    ));
+    html.push_str("</td></tr></table>");
+
+    if !product_desc.is_empty() {
+        let clipped: String = product_desc.chars().take(600).collect();
+        html.push_str("<div style=\"margin-top:14px;\">");
+        html.push_str(
+            "<div style=\"font-size:12px;color:#6b7280;margin-bottom:6px;\">Description</div>",
+        );
+        html.push_str(&format!(
+            "<div style=\"font-size:13px;color:#111827;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;white-space:pre-wrap;\">{}</div>",
+            html_escape(&clipped)
+        ));
+        html.push_str("</div>");
+    }
+
+    html.push_str("<div style=\"margin-top:14px;\">");
+    html.push_str(&format!(
+        "<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\" style=\"display:inline-block;padding:10px 12px;margin:0 10px 10px 0;background:#111827;color:#ffffff;text-decoration:none;border-radius:10px;font-size:12px;font-weight:800;\">View detail page</a>",
+        html_attr_escape(&detail_url)
+    ));
+
+    if !approve_url.is_empty() && !reject_url.is_empty() {
+        html.push_str(&format!(
+            "<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\" style=\"display:inline-block;padding:10px 12px;margin:0 10px 10px 0;background:#16a34a;color:#ffffff;text-decoration:none;border-radius:10px;font-size:12px;font-weight:800;\">Approve</a>",
+            html_attr_escape(&approve_url)
+        ));
+        html.push_str(&format!(
+            "<a href=\"{}\" target=\"_blank\" rel=\"noreferrer\" style=\"display:inline-block;padding:10px 12px;margin:0 10px 10px 0;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:10px;font-size:12px;font-weight:800;\">Reject</a>",
+            html_attr_escape(&reject_url)
+        ));
+    } else {
+        html.push_str("<div style=\"margin-top:8px;font-size:12px;color:#6b7280;\">One-click review links are not configured. Set ADMIN_REVIEW_TOKEN_SECRET to enable.</div>");
+    }
+    html.push_str("</div>");
+
+    html.push_str("<div style=\"margin-top:16px;font-size:11px;color:#9ca3af;\">This message is sent automatically when a product is submitted.</div>");
+    html.push_str("</div></td></tr>");
+    html.push_str("</table></td></tr></table>");
+    html.push_str("</body></html>");
+
+    (subject, html, text)
+}
+
 fn sanitize_create_product_request(product: &mut CreateProductRequest) {
     strip_nul_in_place(&mut product.name);
     strip_nul_in_place(&mut product.slogan);
@@ -662,6 +874,7 @@ fn sanitize_create_product_request(product: &mut CreateProductRequest) {
     }
     strip_nul_in_place(&mut product.maker_name);
     strip_nul_in_place(&mut product.maker_email);
+    product.maker_email = product.maker_email.trim().to_ascii_lowercase();
     strip_nul_in_place_opt(&mut product.maker_website);
     strip_nul_in_place(&mut product.language);
 }
@@ -1405,6 +1618,15 @@ impl Database {
                         }
                     }
 
+                    if let Some(maker_email) = &params.maker_email {
+                        let normalized = maker_email.trim().to_ascii_lowercase();
+                        if !normalized.is_empty() {
+                            qb.push(" AND lower(p.maker_email) = lower(");
+                            qb.push_bind(normalized);
+                            qb.push(")");
+                        }
+                    }
+
                     let sort_by = params
                         .sort
                         .as_deref()
@@ -1541,6 +1763,13 @@ impl Database {
                 qp.append_pair("name", &format!("ilike.%{}%", search));
                 qp.append_pair("slogan", &format!("ilike.%{}%", search));
                 qp.append_pair("description", &format!("ilike.%{}%", search));
+            }
+
+            if let Some(maker_email) = &params.maker_email {
+                let normalized = maker_email.trim().to_ascii_lowercase();
+                if !normalized.is_empty() {
+                    qp.append_pair("maker_email", &format!("eq.{}", normalized));
+                }
             }
 
             if let Some(limit) = params.limit {
@@ -3916,6 +4145,67 @@ impl Database {
         }
 
         Err(anyhow::anyhow!("No database configured"))
+    }
+
+    /**
+     * send_admin_product_submission_notification
+     * 产品提交后给管理员发送通知邮件（可选：包含一键通过/拒绝链接）。
+     */
+    pub async fn send_admin_product_submission_notification(
+        &self,
+        product: &Product,
+    ) -> Result<()> {
+        let resend_key = env::var("RESEND_API_KEY").ok().unwrap_or_default();
+        if resend_key.trim().is_empty() {
+            return Ok(());
+        }
+
+        let to = env::var("ADMIN_REVIEW_EMAIL")
+            .ok()
+            .unwrap_or_else(|| "2217021563@qq.com".to_string())
+            .trim()
+            .to_string();
+        if to.is_empty() {
+            return Ok(());
+        }
+
+        let from = env::var("ADMIN_REVIEW_FROM")
+            .ok()
+            .filter(|v| !v.trim().is_empty())
+            .or_else(|| env::var("NEWSLETTER_FROM").ok())
+            .unwrap_or_default();
+        if from.trim().is_empty() {
+            log::warn!(
+                "Admin notify sender not configured: ADMIN_REVIEW_FROM/NEWSLETTER_FROM missing"
+            );
+            return Ok(());
+        }
+
+        let token_secret = env::var("ADMIN_REVIEW_TOKEN_SECRET")
+            .ok()
+            .unwrap_or_default();
+        let frontend_base_url = env::var("FRONTEND_BASE_URL")
+            .ok()
+            .unwrap_or_else(|| "http://localhost:3000".to_string());
+        let public_api_base_url = env::var("BACKEND_PUBLIC_URL")
+            .ok()
+            .unwrap_or_else(|| "http://localhost:8080".to_string());
+
+        let client = Client::builder()
+            .timeout(Duration::from_secs(12))
+            .http1_only()
+            .build()
+            .unwrap_or_else(|_| Client::new());
+
+        let (subject, html, text) = build_admin_product_submission_email_content(
+            product,
+            &frontend_base_url,
+            &public_api_base_url,
+            &token_secret,
+        );
+
+        send_email_resend(&client, &resend_key, &from, &to, &subject, &html, &text).await?;
+        Ok(())
     }
 
     pub async fn send_weekly_newsletter_if_due(&self) -> Result<usize> {
