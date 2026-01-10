@@ -214,7 +214,7 @@ export default function DeveloperPopularitySidebar() {
           const popJson: ApiResponse<DeveloperPopularity[]> = await popRes.json();
           const topJson: ApiResponse<DeveloperWithFollowers[]> = await topRes.json();
           if (popJson.success) setList(popJson.data ?? []);
-          if (topJson.success) setTopList(topJson.data ?? []);
+          if (topJson.success) setTopList((topJson.data ?? []).filter((d) => Number(d.followers ?? 0) > 0));
         } catch {
         }
       };
@@ -247,7 +247,7 @@ export default function DeveloperPopularitySidebar() {
           return;
         }
 
-        setTopList(json.data ?? []);
+        setTopList((json.data ?? []).filter((d) => Number(d.followers ?? 0) > 0));
       } catch {
         if (!cancelled) {
           setTopList([]);
@@ -298,11 +298,13 @@ export default function DeveloperPopularitySidebar() {
     setFollowedDevelopers(next);
     writeFollowedDevelopersToStorage(next);
     setTopList((cur) =>
-      cur.map((d) =>
-        d.email.toLowerCase() === normalizedEmail
-          ? { ...d, followers: Math.max(0, d.followers + (isFollowing ? -1 : 1)) }
-          : d
-      )
+      cur
+        .map((d) =>
+          d.email.toLowerCase() === normalizedEmail
+            ? { ...d, followers: Math.max(0, d.followers + (isFollowing ? -1 : 1)) }
+            : d
+        )
+        .filter((d) => d.followers > 0)
     );
 
     try {
@@ -320,22 +322,26 @@ export default function DeveloperPopularitySidebar() {
         setFollowedDevelopers(prev);
         writeFollowedDevelopersToStorage(prev);
         setTopList((cur) =>
-          cur.map((d) =>
+          cur
+            .map((d) =>
             d.email.toLowerCase() === normalizedEmail
               ? { ...d, followers: Math.max(0, d.followers + (isFollowing ? 1 : -1)) }
               : d
-          )
+            )
+            .filter((d) => d.followers > 0)
         );
       }
     } catch {
       setFollowedDevelopers(prev);
       writeFollowedDevelopersToStorage(prev);
       setTopList((cur) =>
-        cur.map((d) =>
+        cur
+          .map((d) =>
           d.email.toLowerCase() === normalizedEmail
             ? { ...d, followers: Math.max(0, d.followers + (isFollowing ? 1 : -1)) }
             : d
-        )
+          )
+          .filter((d) => d.followers > 0)
       );
     }
   };

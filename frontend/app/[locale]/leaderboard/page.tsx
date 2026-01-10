@@ -366,7 +366,10 @@ export default function LeaderboardPage() {
               <Link href="/products" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                 {navT('products')}
               </Link>
-              <Link href="/submit" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <Link
+                href={{ pathname: '/developer', query: { tab: 'submit' } }}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
                 {navT('submit')}
               </Link>
             </div>

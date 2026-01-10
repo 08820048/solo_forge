@@ -8,7 +8,6 @@ import { Mail, Lock, Sun, Moon, User, Palette } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { isKnownRemoteImageUrl, plainTextFromMarkdown } from '@/lib/utils';
 import {
   clearSupabaseAuthStorage,
@@ -631,7 +630,11 @@ export default function Header() {
         return;
       }
 
-      router.push(nextPath === '/submit' ? '/submit' : '/');
+      if (nextPath === '/submit') {
+        router.push({ pathname: '/developer', query: { tab: 'submit' } });
+        return;
+      }
+      router.push('/');
     } catch {}
   }, [isAuthenticated, router]);
 

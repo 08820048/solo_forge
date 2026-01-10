@@ -95,6 +95,17 @@ function formatDate(value: string, locale: string): string {
   }
 }
 
+function requestAuth(redirectPath: string) {
+  try {
+    sessionStorage.setItem('sf_post_login_redirect', redirectPath);
+  } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent('sf_require_auth', { detail: { redirectPath } }));
+  } catch {
+    window.dispatchEvent(new Event('sf_require_auth'));
+  }
+}
+
 export default function DeveloperCenterPage() {
   const t = useTranslations('developer');
   const navT = useTranslations('nav');
@@ -361,8 +372,12 @@ export default function DeveloperCenterPage() {
               <Button asChild variant="default">
                 <Link href="/">{navT('home')}</Link>
               </Button>
-              <Button asChild variant="outline">
-                <Link href="/submit">{navT('submit')}</Link>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => requestAuth('/developer?tab=submit')}
+              >
+                {navT('submit')}
               </Button>
             </div>
           </div>

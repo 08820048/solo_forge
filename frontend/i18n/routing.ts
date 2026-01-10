@@ -23,8 +23,6 @@ export const routing = defineRouting({
     '/developer/products/[id]': '/developer/products/[id]',
     '/makers/[email]': '/makers/[email]',
     '/profile': '/profile',
-    '/submit': '/submit',
-    '/about': '/about',
     '/feedback': '/feedback',
     '/terms': '/terms',
     '/privacy': '/privacy'

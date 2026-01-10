@@ -5489,6 +5489,7 @@ impl Database {
                  FROM developers d \
                  LEFT JOIN developer_follows f ON f.developer_email = d.email \
                  GROUP BY d.email, d.name, d.avatar_url, d.website, d.sponsor_role, d.sponsor_verified \
+                 HAVING COUNT(f.id) > 0 \
                  ORDER BY COUNT(f.id) DESC, d.name ASC \
                  LIMIT $1",
             )
@@ -5524,6 +5525,7 @@ impl Database {
                              FROM developers d \
                              LEFT JOIN developer_follows f ON f.developer_email = d.email \
                              GROUP BY d.email, d.name, d.avatar_url, d.website \
+                             HAVING COUNT(f.id) > 0 \
                              ORDER BY COUNT(f.id) DESC, d.name ASC \
                              LIMIT $1",
                         )

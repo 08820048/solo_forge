@@ -132,11 +132,6 @@ export default function Footer() {
             <h3 className="text-foreground font-semibold mb-4 font-sans">Links</h3>
             <ul className="space-y-2">
               <li>
-                <I18nLink href="/about" className="text-sm hover:text-foreground transition-colors font-sans">
-                  {t('links.about')}
-                </I18nLink>
-              </li>
-              <li>
                 <I18nLink href="/pricing" className="text-sm hover:text-foreground transition-colors font-sans">
                   {tNav('pricing')}
                 </I18nLink>

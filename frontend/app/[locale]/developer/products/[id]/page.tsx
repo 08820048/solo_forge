@@ -57,6 +57,17 @@ function formatDate(value: string, locale: string): string {
   }
 }
 
+function requestAuth(redirectPath: string) {
+  try {
+    sessionStorage.setItem('sf_post_login_redirect', redirectPath);
+  } catch {}
+  try {
+    window.dispatchEvent(new CustomEvent('sf_require_auth', { detail: { redirectPath } }));
+  } catch {
+    window.dispatchEvent(new Event('sf_require_auth'));
+  }
+}
+
 export default function DeveloperProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const awaitedParams = use(params);
   const id = String(awaitedParams?.id || '').trim();
@@ -200,8 +211,12 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
               <Button asChild variant="default">
                 <Link href="/">{tNav('home')}</Link>
               </Button>
-              <Button asChild variant="outline">
-                <Link href="/submit">{tNav('submit')}</Link>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => requestAuth('/developer?tab=submit')}
+              >
+                {tNav('submit')}
               </Button>
             </div>
           </div>
