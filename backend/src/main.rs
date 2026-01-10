@@ -241,6 +241,10 @@ async fn main() -> std::io::Result<()> {
                                 web::get().to(handlers::admin_list_sponsorship_orders),
                             )
                             .route(
+                                "/payments/orders/action",
+                                web::post().to(handlers::admin_sponsorship_order_action),
+                            )
+                            .route(
                                 "/payments/summary",
                                 web::get().to(handlers::admin_get_payments_summary),
                             )

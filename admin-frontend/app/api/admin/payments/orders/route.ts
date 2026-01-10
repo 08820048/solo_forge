@@ -71,3 +71,42 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    await requireAdmin(request);
+
+    const body = (await request.json().catch(() => null)) as
+      | {
+          action?: string;
+          order_id?: string;
+          provider_order_id?: string | null;
+          paid_months?: number | null;
+          amount_usd_cents?: number | null;
+        }
+      | null;
+
+    const response = await fetch(`${BACKEND_API_URL}/admin/payments/orders/action`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept-Language': request.headers.get('Accept-Language') || 'zh',
+        'x-admin-token': getBackendAdminToken(),
+      },
+      body: JSON.stringify(body || {}),
+      cache: 'no-store',
+    });
+
+    const json = await readJsonSafe<ApiResponse<unknown>>(response);
+    if (!response.ok || !json?.success) {
+      return NextResponse.json<ApiResponse<null>>(
+        { success: false, message: json?.message || 'Failed to update order' },
+        { status: response.status || 502 }
+      );
+    }
+    return NextResponse.json(json);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Unauthorized';
+    const status = message === 'Forbidden' ? 403 : 401;
+    return NextResponse.json<ApiResponse<null>>({ success: false, message }, { status });
+  }
+}

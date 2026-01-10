@@ -172,7 +172,7 @@ export default function AdminSponsorshipPage() {
         });
         const json = (await res.json().catch(() => null)) as ApiResponse<HomeModuleState> | null;
         if (!res.ok || !json?.success) {
-          setMessage(json?.message || '加载免费赞助队列失败。');
+          setMessage(json?.message || '加载免费定价队列失败。');
           return;
         }
         const data = json.data ?? null;
@@ -191,7 +191,7 @@ export default function AdminSponsorshipPage() {
         });
         const json = (await res.json().catch(() => null)) as ApiResponse<SponsorshipGrant[]> | null;
         if (!res.ok || !json?.success) {
-          setMessage(json?.message || '加载赞助队列失败。');
+          setMessage(json?.message || '加载定价队列失败。');
           return;
         }
         setGrants(Array.isArray(json.data) ? json.data : []);
@@ -208,7 +208,7 @@ export default function AdminSponsorshipPage() {
       });
       const json = (await res.json().catch(() => null)) as ApiResponse<SponsorshipRequest[]> | null;
       if (!res.ok || !json?.success) {
-        setMessage(json?.message || '加载赞助请求失败。');
+        setMessage(json?.message || '加载定价请求失败。');
         return;
       }
       setRequests(Array.isArray(json.data) ? json.data : []);
@@ -297,7 +297,7 @@ export default function AdminSponsorshipPage() {
         setMessage(json?.message || '保存失败。');
         return;
       }
-      setHint('已更新免费赞助队列（manual 模式）');
+      setHint('已更新免费定价队列（manual 模式）');
       await load();
     } catch {
       setMessage('网络错误，请稍后重试。');
@@ -438,7 +438,7 @@ export default function AdminSponsorshipPage() {
    * 删除已生成的 sponsorship_grant 记录。
    */
   const deleteGrant = async (id: number) => {
-    const ok = window.confirm(`确认删除赞助记录 #${id} ?`);
+    const ok = window.confirm(`确认删除定价记录 #${id} ?`);
     if (!ok) return;
 
     const token = await getAccessToken();
@@ -460,7 +460,7 @@ export default function AdminSponsorshipPage() {
         setMessage(json?.message || '删除失败。');
         return;
       }
-      setHint(`已删除赞助记录 #${id}`);
+      setHint(`已删除定价记录 #${id}`);
       await load();
     } catch {
       setMessage('网络错误，请稍后重试。');
@@ -500,7 +500,7 @@ export default function AdminSponsorshipPage() {
                 全部请求
               </Button>
               <Button variant={tab === 'grants' ? 'default' : 'outline'} onClick={() => setTab('grants')} disabled={loading}>
-                赞助队列
+                定价队列
               </Button>
               <Button variant={tab === 'free' ? 'default' : 'outline'} onClick={() => setTab('free')} disabled={loading}>
                 免费队列
@@ -543,7 +543,7 @@ export default function AdminSponsorshipPage() {
                         {canAct ? (
                           <>
                             <Button size="sm" disabled={processing || rejecting} onClick={() => void processRequest(r)}>
-                              {processing ? '处理中...' : '处理并生成赞助'}
+                              {processing ? '处理中...' : '处理并生成定价位'}
                             </Button>
                             <Button size="sm" variant="outline" disabled={processing || rejecting} onClick={() => void rejectRequest(r)}>
                               {rejecting ? '拒绝中...' : '拒绝'}
@@ -562,7 +562,7 @@ export default function AdminSponsorshipPage() {
                             onChange={(e) =>
                               setDrafts((m) => ({ ...m, [r.id]: { ...m[r.id], product_id: e.target.value } }))
                             }
-                            placeholder="用于生成 sponsorship_grant"
+                            placeholder="用于生成展示记录"
                           />
                         </div>
                         <div className="space-y-2">
@@ -624,7 +624,7 @@ export default function AdminSponsorshipPage() {
                             className="min-h-[90px] w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
                             value={draft.note}
                             onChange={(e) => setDrafts((m) => ({ ...m, [r.id]: { ...m[r.id], note: e.target.value } }))}
-                            placeholder="会写入 sponsorship_requests.note / reject note"
+                            placeholder="可用于记录处理备注/拒绝原因"
                           />
                         </div>
                       </div>
@@ -698,7 +698,7 @@ export default function AdminSponsorshipPage() {
           {!loading && tab === 'free' ? (
             <div className="space-y-4">
               <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-                <div className="text-sm font-medium">免费赞助队列（48 小时窗口）</div>
+                <div className="text-sm font-medium">免费定价队列（48 小时窗口）</div>
                 <div className="text-xs text-muted-foreground break-all">
                   key: {freeState?.key || 'home_sponsored_free_queue'} {freeState?.mode ? `| mode: ${freeState.mode}` : ''}
                 </div>
@@ -753,7 +753,7 @@ export default function AdminSponsorshipPage() {
       </Card>
 
       <div className="text-xs text-muted-foreground">
-        说明：赞助位生成逻辑由后端根据 placement + slot_index 自动排队（starts_at 可能被顺延）。
+        说明：定价位生成逻辑由后端根据 placement + slot_index 自动排队（starts_at 可能被顺延）。
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
 use crate::models::{
     Category, CreateProductRequest, CreateSponsorshipGrantFromRequest, CreateSponsorshipRequest,
-    Developer, DeveloperCenterStats, DeveloperPopularity, DeveloperWithFollowers, Product,
-    PaymentsSummary, PricingPlan, QueryParams, SponsorshipGrant, SponsorshipOrder,
-    SponsorshipRequest, UpsertPricingPlanRequest, UpdateProductRequest,
+    Developer, DeveloperCenterStats, DeveloperPopularity, DeveloperWithFollowers, PaymentsSummary,
+    PricingPlan, Product, QueryParams, SponsorshipGrant, SponsorshipOrder, SponsorshipRequest,
+    UpdateProductRequest, UpsertPricingPlanRequest,
 };
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
@@ -307,7 +307,10 @@ fn map_sponsorship_order_row(row: SponsorshipOrderRow) -> (String, String) {
  * map_pricing_plan_row_to_model
  * 将 pricing_plans + pricing_plan_benefits 行映射为对外返回的 PricingPlan。
  */
-fn map_pricing_plan_row_to_model(mut row: PricingPlanRow, benefit_rows: Vec<PricingPlanBenefitRow>) -> PricingPlan {
+fn map_pricing_plan_row_to_model(
+    mut row: PricingPlanRow,
+    benefit_rows: Vec<PricingPlanBenefitRow>,
+) -> PricingPlan {
     strip_nul_in_place(&mut row.plan_key);
     strip_nul_in_place_opt(&mut row.placement);
     strip_nul_in_place_opt(&mut row.creem_product_id);
@@ -541,12 +544,11 @@ async fn ensure_pricing_tables(pool: &PgPool) -> Result<()> {
     .execute(pool)
     .await?;
 
-    let existing_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(1) FROM pricing_plans")
-            .persistent(false)
-            .fetch_one(pool)
-            .await
-            .unwrap_or(0);
+    let existing_count: i64 = sqlx::query_scalar("SELECT COUNT(1) FROM pricing_plans")
+        .persistent(false)
+        .fetch_one(pool)
+        .await
+        .unwrap_or(0);
     if existing_count == 0 {
         let free_id = uuid::Uuid::new_v4();
         let top_id = uuid::Uuid::new_v4();
@@ -3157,6 +3159,7 @@ impl Database {
         }))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_sponsorship_order(
         &self,
         user_email: &str,
@@ -3165,6 +3168,7 @@ impl Database {
         placement: &str,
         slot_index: Option<i32>,
         requested_months: i32,
+        provider: &str,
         pricing: Option<(&str, &str, Option<i32>, Option<i32>)>,
     ) -> Result<String> {
         let pool = self
@@ -3187,12 +3191,13 @@ impl Database {
             .filter(|v| !v.is_empty());
         let monthly_usd_cents = pricing.as_ref().and_then(|(_, _, cents, _)| *cents);
         let discount_percent_off = pricing.as_ref().and_then(|(_, _, _, pct)| *pct);
+        let provider = strip_nul_str(provider.trim());
 
         let mut last_err: Option<anyhow::Error> = None;
         for _attempt_idx in 0..2 {
             let attempt = sqlx::query_as::<_, SponsorshipOrderRow>(
                 "INSERT INTO sponsorship_orders (id, user_email, user_id, product_id, placement, slot_index, requested_months, status, provider, pricing_plan_id, pricing_plan_key, monthly_usd_cents, discount_percent_off) \
-                 VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, 'created', 'creem', $8, $9, $10, $11) \
+                 VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, 'created', $8, $9, $10, $11, $12) \
                  RETURNING id, user_email, user_id, product_id::text as product_id, placement, slot_index, requested_months, paid_months, status, provider, provider_checkout_id, provider_order_id, amount_usd_cents, grant_id, created_at, updated_at",
             )
             .persistent(false)
@@ -3203,6 +3208,7 @@ impl Database {
             .bind(placement.as_ref())
             .bind(slot_index)
             .bind(requested_months)
+            .bind(provider.as_ref())
             .bind(pricing_plan_id)
             .bind(pricing_plan_key.as_deref())
             .bind(monthly_usd_cents)
@@ -3422,7 +3428,17 @@ impl Database {
     pub async fn get_sponsorship_order_basic(
         &self,
         order_id: &str,
-    ) -> Result<Option<(String, String, String, String, Option<i32>, i32, Option<i64>)>> {
+    ) -> Result<
+        Option<(
+            String,
+            String,
+            String,
+            String,
+            Option<i32>,
+            i32,
+            Option<i64>,
+        )>,
+    > {
         #[derive(sqlx::FromRow)]
         struct Row {
             status: String,
@@ -3494,6 +3510,24 @@ impl Database {
         amount_usd_cents: i32,
         paid_months: i32,
     ) -> Result<SponsorshipGrant> {
+        self.create_sponsorship_grant_and_mark_order_paid(
+            order_id,
+            provider_order_id,
+            amount_usd_cents,
+            paid_months,
+            "creem",
+        )
+        .await
+    }
+
+    pub async fn create_sponsorship_grant_and_mark_order_paid(
+        &self,
+        order_id: &str,
+        provider_order_id: Option<&str>,
+        amount_usd_cents: i32,
+        paid_months: i32,
+        source: &str,
+    ) -> Result<SponsorshipGrant> {
         #[derive(sqlx::FromRow)]
         struct OrderRow {
             status: String,
@@ -3515,6 +3549,10 @@ impl Database {
             .filter(|v| !v.is_empty());
         let paid_months = paid_months.clamp(1, 120);
         let duration_days = paid_months.saturating_mul(30).max(1);
+        let source = strip_nul_str(source.trim()).into_owned();
+        if source.is_empty() {
+            return Err(anyhow::anyhow!("Invalid source"));
+        }
 
         let mut last_err: Option<anyhow::Error> = None;
         for _attempt_idx in 0..2 {
@@ -3553,6 +3591,11 @@ impl Database {
                             .await?,
                         );
                     }
+                } else if status != "created" {
+                    return Err(anyhow::anyhow!(
+                        "Sponsorship order is not payable (status = {})",
+                        status
+                    ));
                 }
 
                 if let Some(existing) = sqlx::query_as::<_, SponsorshipGrantFullRow>(
@@ -3567,7 +3610,7 @@ impl Database {
                     let _ = sqlx::query(
                         "UPDATE sponsorship_orders \
                          SET status = 'paid', provider_order_id = $2, amount_usd_cents = $3, paid_months = $4, grant_id = $5, updated_at = NOW() \
-                         WHERE id = $1 AND status = 'created'",
+                         WHERE id = $1 AND status IN ('created', 'paid')",
                     )
                     .persistent(false)
                     .bind(order_uuid)
@@ -3599,7 +3642,7 @@ impl Database {
 
                 let inserted = sqlx::query_as::<_, SponsorshipGrantFullRow>(
                     "INSERT INTO sponsorship_grants (order_id, product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents) \
-                     VALUES ($1, $2::uuid, $3, $4, $5, $6, 'creem', $7) \
+                     VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8) \
                      RETURNING id, product_id::text as product_id, placement, slot_index, starts_at, ends_at, source, amount_usd_cents, created_at",
                 )
                 .persistent(false)
@@ -3609,6 +3652,7 @@ impl Database {
                 .bind(slot_index)
                 .bind(starts_at)
                 .bind(ends_at)
+                .bind(source.as_str())
                 .bind(amount_usd_cents)
                 .fetch_one(&mut *tx)
                 .await?;
@@ -3616,7 +3660,7 @@ impl Database {
                 let updated = sqlx::query(
                     "UPDATE sponsorship_orders \
                      SET status = 'paid', provider_order_id = $2, amount_usd_cents = $3, paid_months = $4, grant_id = $5, updated_at = NOW() \
-                     WHERE id = $1 AND status = 'created'",
+                     WHERE id = $1 AND status IN ('created', 'paid')",
                 )
                 .persistent(false)
                 .bind(order_uuid)
@@ -3667,8 +3711,97 @@ impl Database {
         }
 
         Err(last_err.unwrap_or_else(|| {
-            anyhow::anyhow!("Failed to create sponsorship grant from creem webhook")
+            anyhow::anyhow!("Failed to create sponsorship grant from paid order")
         }))
+    }
+
+    pub async fn admin_mark_sponsorship_order_paid(
+        &self,
+        order_id: &str,
+        provider_order_id: Option<&str>,
+        amount_usd_cents: Option<i32>,
+        paid_months: Option<i32>,
+    ) -> Result<SponsorshipGrant> {
+        #[derive(sqlx::FromRow)]
+        struct OrderPricingRow {
+            status: String,
+            provider: String,
+            requested_months: i32,
+            monthly_usd_cents: Option<i32>,
+            discount_percent_off: Option<i32>,
+        }
+
+        let pool = self
+            .postgres
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
+
+        let order_uuid = uuid::Uuid::parse_str(order_id.trim())
+            .map_err(|_| anyhow::anyhow!("Invalid order_id"))?;
+
+        let row = sqlx::query_as::<_, OrderPricingRow>(
+            "SELECT status, provider, requested_months, monthly_usd_cents, discount_percent_off \
+             FROM sponsorship_orders WHERE id = $1",
+        )
+        .persistent(false)
+        .bind(order_uuid)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Sponsorship order not found"))?;
+
+        let mut status = row.status;
+        let mut provider = row.provider;
+        strip_nul_in_place(&mut status);
+        strip_nul_in_place(&mut provider);
+
+        if status == "paid" {
+            let months = paid_months.unwrap_or(row.requested_months).clamp(1, 120);
+            let computed_amount = {
+                let unit = row.monthly_usd_cents.unwrap_or(0) as i64;
+                let gross = unit.saturating_mul(months as i64);
+                let pct = row.discount_percent_off.unwrap_or(0).clamp(0, 100) as i64;
+                let discount = gross.saturating_mul(pct) / 100;
+                let net = gross.saturating_sub(discount).max(0);
+                i32::try_from(net.min(i32::MAX as i64)).unwrap_or(i32::MAX)
+            };
+            let amount = amount_usd_cents.unwrap_or(computed_amount);
+            return self
+                .create_sponsorship_grant_and_mark_order_paid(
+                    order_id,
+                    provider_order_id,
+                    amount,
+                    months,
+                    provider.as_str(),
+                )
+                .await;
+        }
+
+        if status != "created" {
+            return Err(anyhow::anyhow!(
+                "Sponsorship order is not payable (status = {})",
+                status
+            ));
+        }
+
+        let months = paid_months.unwrap_or(row.requested_months).clamp(1, 120);
+        let computed_amount = {
+            let unit = row.monthly_usd_cents.unwrap_or(0) as i64;
+            let gross = unit.saturating_mul(months as i64);
+            let pct = row.discount_percent_off.unwrap_or(0).clamp(0, 100) as i64;
+            let discount = gross.saturating_mul(pct) / 100;
+            let net = gross.saturating_sub(discount).max(0);
+            i32::try_from(net.min(i32::MAX as i64)).unwrap_or(i32::MAX)
+        };
+        let amount = amount_usd_cents.unwrap_or(computed_amount);
+
+        self.create_sponsorship_grant_and_mark_order_paid(
+            order_id,
+            provider_order_id,
+            amount,
+            months,
+            provider.as_str(),
+        )
+        .await
     }
 
     pub async fn list_sponsorship_grants(
@@ -3858,7 +3991,6 @@ impl Database {
             match attempt {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    let e: anyhow::Error = e.into();
                     if (is_missing_relation_error(&e, "pricing_plans")
                         || is_missing_relation_error(&e, "pricing_plan_benefits"))
                         && !PRICING_TABLES_READY.load(Ordering::Relaxed)
@@ -3879,7 +4011,10 @@ impl Database {
      * upsert_pricing_plan
      * 新增或更新定价方案，并同步权益列表；若标记为 default，会清理同 placement 的其它 default。
      */
-    pub async fn upsert_pricing_plan(&self, input: UpsertPricingPlanRequest) -> Result<PricingPlan> {
+    pub async fn upsert_pricing_plan(
+        &self,
+        input: UpsertPricingPlanRequest,
+    ) -> Result<PricingPlan> {
         let pool = self
             .postgres
             .as_ref()
@@ -4106,7 +4241,6 @@ impl Database {
                 }
                 Err(e) => {
                     let _ = tx.rollback().await;
-                    let e: anyhow::Error = e.into();
                     if (is_missing_relation_error(&e, "pricing_plans")
                         || is_missing_relation_error(&e, "pricing_plan_benefits"))
                         && !PRICING_TABLES_READY.load(Ordering::Relaxed)
@@ -4133,8 +4267,8 @@ impl Database {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
 
-        let plan_id = uuid::Uuid::parse_str(id.trim())
-            .map_err(|_| anyhow::anyhow!("Invalid id"))?;
+        let plan_id =
+            uuid::Uuid::parse_str(id.trim()).map_err(|_| anyhow::anyhow!("Invalid id"))?;
 
         let mut last_err: Option<anyhow::Error> = None;
         for _attempt_idx in 0..2 {
@@ -4169,8 +4303,8 @@ impl Database {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
 
-        let plan_id = uuid::Uuid::parse_str(id.trim())
-            .map_err(|_| anyhow::anyhow!("Invalid id"))?;
+        let plan_id =
+            uuid::Uuid::parse_str(id.trim()).map_err(|_| anyhow::anyhow!("Invalid id"))?;
 
         let mut last_err: Option<anyhow::Error> = None;
         for _attempt_idx in 0..2 {
@@ -4209,7 +4343,6 @@ impl Database {
             match attempt {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    let e: anyhow::Error = e.into();
                     if (is_missing_relation_error(&e, "pricing_plans")
                         || is_missing_relation_error(&e, "pricing_plan_benefits"))
                         && !PRICING_TABLES_READY.load(Ordering::Relaxed)
@@ -4274,7 +4407,6 @@ impl Database {
             match attempt {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    let e: anyhow::Error = e.into();
                     if (is_missing_relation_error(&e, "pricing_plans")
                         || is_missing_relation_error(&e, "pricing_plan_benefits"))
                         && !PRICING_TABLES_READY.load(Ordering::Relaxed)
@@ -4344,7 +4476,6 @@ impl Database {
             match attempt {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    let e: anyhow::Error = e.into();
                     if (is_missing_relation_error(&e, "pricing_plans")
                         || is_missing_relation_error(&e, "pricing_plan_benefits"))
                         && !PRICING_TABLES_READY.load(Ordering::Relaxed)
@@ -4413,7 +4544,12 @@ impl Database {
             };
 
             match attempt {
-                Ok(rows) => return Ok(rows.into_iter().map(map_sponsorship_order_row_to_model).collect()),
+                Ok(rows) => {
+                    return Ok(rows
+                        .into_iter()
+                        .map(map_sponsorship_order_row_to_model)
+                        .collect())
+                }
                 Err(e) => {
                     let e: anyhow::Error = e.into();
                     if is_missing_relation_error(&e, "sponsorship_orders")
@@ -4530,7 +4666,6 @@ impl Database {
             match attempt {
                 Ok(v) => return Ok(v),
                 Err(e) => {
-                    let e: anyhow::Error = e.into();
                     if is_missing_relation_error(&e, "sponsorship_orders")
                         && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
                         && ensure_sponsorship_tables(pool).await.is_ok()

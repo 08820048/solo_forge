@@ -445,6 +445,42 @@ export default function AdminPricingPage() {
     }
   };
 
+  const markOrderPaid = async (order: SponsorshipOrder) => {
+    const key = `markPaid:${order.id}`;
+    if (busy[key]) return;
+    if (!order.id.trim()) return;
+    const ok = window.confirm(`确认将该订单标记为已支付并发放定价位？\n${order.id}`);
+    if (!ok) return;
+    setBusy((m) => ({ ...m, [key]: true }));
+    setMessage(null);
+    setHint(null);
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setMessage('未检测到登录会话，请先登录。');
+        return;
+      }
+      const res = await fetch('/api/admin/payments/orders', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Accept-Language': 'zh', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mark_paid', order_id: order.id }),
+        cache: 'no-store',
+      });
+      const json = (await res.json().catch(() => null)) as ApiResponse<unknown> | null;
+      if (!res.ok || !json?.success) {
+        setMessage(json?.message || '操作失败。');
+        return;
+      }
+      setHint('已标记为已支付。');
+      await loadOrders();
+      await loadPayments();
+    } catch {
+      setMessage('网络错误，请稍后重试。');
+    } finally {
+      setBusy((m) => ({ ...m, [key]: false }));
+    }
+  };
+
   const canEdit = Boolean(editingId && draft);
 
   return (
@@ -622,11 +658,11 @@ export default function AdminPricingPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">Creem 产品 ID</div>
+                    <div className="text-sm text-muted-foreground">支付产品 ID / 外部支付链接</div>
                     <Input
                       value={draft?.creem_product_id ?? ''}
                       onChange={(e) => setDraft((d) => (d ? { ...d, creem_product_id: e.target.value } : d))}
-                      placeholder="e.g. prod_..."
+                      placeholder="prod_... 或 https://...（支持 {{ORDER_ID}} 等占位符）"
                     />
                   </div>
 
@@ -868,7 +904,7 @@ export default function AdminPricingPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <div className="text-sm text-muted-foreground">活动 Creem 产品 ID（可选）</div>
+                      <div className="text-sm text-muted-foreground">活动支付产品 ID / 外部支付链接（可选）</div>
                       <Input
                         value={draft?.campaign?.creem_product_id ?? ''}
                         onChange={(e) =>
@@ -876,7 +912,7 @@ export default function AdminPricingPage() {
                             d ? { ...d, campaign: { ...d.campaign, creem_product_id: e.target.value } } : d
                           )
                         }
-                        placeholder="e.g. prod_..."
+                        placeholder="prod_... 或 https://...（支持 {{ORDER_ID}} 等占位符）"
                       />
                     </div>
                     <div className="space-y-2">
@@ -1024,9 +1060,11 @@ export default function AdminPricingPage() {
                       <th className="py-2 text-left font-medium">用户</th>
                       <th className="py-2 text-left font-medium">product_id</th>
                       <th className="py-2 text-left font-medium">位置</th>
+                      <th className="py-2 text-left font-medium">渠道</th>
                       <th className="py-2 text-right font-medium">金额</th>
                       <th className="py-2 text-left font-medium">状态</th>
                       <th className="py-2 text-left font-medium">时间</th>
+                      <th className="py-2 text-left font-medium">操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1039,14 +1077,29 @@ export default function AdminPricingPage() {
                           {o.placement}
                           {typeof o.slot_index === 'number' ? <span className="text-xs text-muted-foreground"> #{o.slot_index}</span> : null}
                         </td>
+                        <td className="py-2 text-muted-foreground">{o.provider}</td>
                         <td className="py-2 text-right tabular-nums">{formatUsd(o.amount_usd_cents ?? null)}</td>
                         <td className="py-2">{o.status}</td>
                         <td className="py-2 text-muted-foreground">{String(o.created_at).slice(0, 19).replace('T', ' ')}</td>
+                        <td className="py-2">
+                          {o.status === 'created' && o.provider !== 'creem' ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={Boolean(busy[`markPaid:${o.id}`])}
+                              onClick={() => void markOrderPaid(o)}
+                            >
+                              标记已支付
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                     {orders.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-6 text-muted-foreground">
+                        <td colSpan={9} className="py-6 text-muted-foreground">
                           暂无订单
                         </td>
                       </tr>
@@ -1061,4 +1114,3 @@ export default function AdminPricingPage() {
     </div>
   );
 }
-

@@ -85,8 +85,8 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '5. 付费服务与退款' : '5. Paid Services & Refunds'}</h2>
           <p>
             {isZh
-              ? '我们可能提供可选的付费服务（例如赞助位展示）。价格与权益以页面展示为准；付款可能由第三方支付服务商处理。'
-              : 'We may offer optional paid services (e.g., sponsorship placements). Pricing and benefits are as shown on the website; payments may be processed by third-party payment providers.'}
+              ? '我们可能提供可选的付费服务（例如定价位展示）。价格与权益以页面展示为准；付款可能由第三方支付服务商处理。'
+              : 'We may offer optional paid services (e.g., pricing placements). Pricing and benefits are as shown on the website; payments may be processed by third-party payment providers.'}
           </p>
           <p>
             {isZh

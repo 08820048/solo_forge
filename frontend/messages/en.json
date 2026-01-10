@@ -58,7 +58,7 @@
     "benefits": {
       "title": "Benefits",
       "items": [
-        "Unified sponsor identity badge",
+        "Unified pricing identity badge",
         "Highest priority exposure in homepage top/right slots",
         "Recommended in X (Twitter) posts",
         "Up to 3 newsletter mentions per month"
@@ -431,7 +431,7 @@
     "unfollow": "Following",
     "selfLabel": "It's you",
     "visitWebsite": "Visit website",
-    "sponsorBadge": "Sponsor",
+    "sponsorBadge": "Pricing",
     "tabs": {
       "products": "Products",
       "favorites": "Favorites"
@@ -477,13 +477,13 @@
     "tags": "Tags",
     "createdAt": "Added on",
     "description": "Description",
-    "sponsorBadge": "Sponsor"
+    "sponsorBadge": "Pricing"
   },
   "common": {
     "appName": "SoloForge",
     "slogan": "The Forge for Solo Makers' Products",
     "viewMore": "View more",
-    "sponsorBadge": "Sponsor",
+    "sponsorBadge": "Pricing",
     "search": {
       "title": "Search",
       "placeholder": "Search products, developers...",
@@ -506,15 +506,15 @@
       "ctaStory": "Our Story"
     },
     "sponsored": {
-      "title": "Sponsored",
-      "badge": "Sponsor",
-      "subtitle": "Sponsor slots on the homepage.",
-      "cta": "Apply for sponsor",
-      "itemBadge": "Sponsored",
+      "title": "Pricing",
+      "badge": "Pricing slot",
+      "subtitle": "Pricing slots on the homepage.",
+      "cta": "Buy a pricing slot",
+      "itemBadge": "Pricing",
       "visit": "Visit website",
       "refreshIn": "Next refresh in {time}",
       "loading": "Loading...",
-      "empty": "No sponsored product yet.",
+      "empty": "No pricing slot product yet.",
       "previewTip": "Tip: if embedding is blocked, use “Visit website” to open in a new tab.",
       "invalidUrl": "Invalid website URL."
     },

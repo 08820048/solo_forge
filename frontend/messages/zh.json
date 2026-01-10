@@ -431,7 +431,7 @@
     "unfollow": "已关注",
     "selfLabel": "这是你",
     "visitWebsite": "访问网站",
-    "sponsorBadge": "赞助者",
+    "sponsorBadge": "定价位",
     "tabs": {
       "products": "作品",
       "favorites": "收藏"
@@ -477,13 +477,13 @@
     "tags": "标签",
     "createdAt": "收录于",
     "description": "产品描述",
-    "sponsorBadge": "赞助者"
+    "sponsorBadge": "定价位"
   },
   "common": {
     "appName": "SoloForge",
     "slogan": "单人开发者锻造的产品宝库",
     "viewMore": "查看更多",
-    "sponsorBadge": "赞助者",
+    "sponsorBadge": "定价位",
     "search": {
       "title": "全站搜索",
       "placeholder": "搜索产品、开发者...",
@@ -506,15 +506,15 @@
       "ctaStory": "我们的故事"
     },
     "sponsored": {
-      "title": "赞助",
-      "badge": "赞助位",
-      "subtitle": "这里展示首页赞助位产品。",
-      "cta": "申请赞助位",
-      "itemBadge": "赞助",
+      "title": "定价位",
+      "badge": "定价位",
+      "subtitle": "这里展示首页定价位产品。",
+      "cta": "购买定价位",
+      "itemBadge": "定价位",
       "visit": "访问官网",
       "refreshIn": "下次刷新 {time}",
       "loading": "加载中...",
-      "empty": "暂无赞助位产品。",
+      "empty": "暂无定价位产品。",
       "previewTip": "提示：若官网禁止嵌入预览，请点击「访问官网」在新标签打开。",
       "invalidUrl": "官网链接无效，无法预览。"
     },

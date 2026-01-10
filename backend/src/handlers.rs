@@ -3,8 +3,7 @@ use crate::models::{
     ApiError, ApiResponse, Category, CreateProductRequest, CreateSponsorshipGrantFromRequest,
     CreateSponsorshipRequest, DeveloperCenterStats, EmptyApiResponse, NewsletterSubscribeRequest,
     Product, ProductApiResponse, ProductsApiResponse, QueryParams, SearchApiResponse, SearchResult,
-    SponsorshipRequest, UpsertPricingPlanRequest,
-    UpdateProductRequest,
+    SponsorshipRequest, UpdateProductRequest, UpsertPricingPlanRequest,
 };
 use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
 use base64::{engine::general_purpose, Engine as _};
@@ -162,7 +161,7 @@ pub async fn create_sponsorship_request(
             _ => {
                 return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                     if lang.starts_with("zh") {
-                        "顶部赞助位必须指定 slot_index=0(左) 或 1(右)".to_string()
+                        "顶部定价位必须指定 slot_index=0(左) 或 1(右)".to_string()
                     } else {
                         "home_top requires slot_index 0 (left) or 1 (right)".to_string()
                     },
@@ -177,7 +176,7 @@ pub async fn create_sponsorship_request(
             _ => {
                 return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                     if lang.starts_with("zh") {
-                        "右侧赞助位必须指定 slot_index=0/1/2（对应 1/2/3 槽位）".to_string()
+                        "右侧定价位必须指定 slot_index=0/1/2（对应 1/2/3 槽位）".to_string()
                     } else {
                         "home_right requires slot_index 0/1/2".to_string()
                     },
@@ -282,6 +281,38 @@ fn locale_from_accept_language(lang: &str) -> &'static str {
     } else {
         "en"
     }
+}
+
+fn is_http_url_spec(value: &str) -> bool {
+    let v = value.trim().to_ascii_lowercase();
+    v.starts_with("https://") || v.starts_with("http://")
+}
+
+struct CheckoutTemplateContext<'a> {
+    order_id: &'a str,
+    user_email: &'a str,
+    user_id: Option<&'a str>,
+    product_id: &'a str,
+    placement: &'a str,
+    slot_index: Option<i32>,
+    months: i32,
+    plan_id: Option<&'a str>,
+    plan_key: Option<&'a str>,
+}
+
+fn render_checkout_url_template(template: &str, ctx: &CheckoutTemplateContext<'_>) -> String {
+    let slot_index = ctx.slot_index.map(|v| v.to_string()).unwrap_or_default();
+    let months = ctx.months.to_string();
+    template
+        .replace("{{ORDER_ID}}", ctx.order_id)
+        .replace("{{USER_EMAIL}}", ctx.user_email)
+        .replace("{{USER_ID}}", ctx.user_id.unwrap_or(""))
+        .replace("{{PRODUCT_ID}}", ctx.product_id)
+        .replace("{{PLACEMENT}}", ctx.placement)
+        .replace("{{SLOT_INDEX}}", slot_index.as_str())
+        .replace("{{MONTHS}}", months.as_str())
+        .replace("{{PLAN_ID}}", ctx.plan_id.unwrap_or(""))
+        .replace("{{PLAN_KEY}}", ctx.plan_key.unwrap_or(""))
 }
 
 #[derive(Debug, Serialize)]
@@ -422,7 +453,7 @@ pub async fn create_creem_sponsorship_checkout(
             if lang.starts_with("zh") {
                 "仅支持对已通过审核的产品购买定价位。".to_string()
             } else {
-                "Only approved products can be sponsored.".to_string()
+                "Only approved products can purchase a pricing slot.".to_string()
             },
         ));
     }
@@ -431,7 +462,7 @@ pub async fn create_creem_sponsorship_checkout(
             if lang.starts_with("zh") {
                 "只能为自己提交的产品购买定价位。".to_string()
             } else {
-                "You can only sponsor products you submitted.".to_string()
+                "You can only purchase a pricing slot for products you submitted.".to_string()
             },
         ));
     }
@@ -443,8 +474,16 @@ pub async fn create_creem_sponsorship_checkout(
      * 为本次支付解析对应的定价方案（优先 plan_id/plan_key，其次 placement 默认方案）。
      */
     let pricing_plan = {
-        let plan_id = body.plan_id.as_deref().map(|v| v.trim()).filter(|v| !v.is_empty());
-        let plan_key = body.plan_key.as_deref().map(|v| v.trim()).filter(|v| !v.is_empty());
+        let plan_id = body
+            .plan_id
+            .as_deref()
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty());
+        let plan_key = body
+            .plan_key
+            .as_deref()
+            .map(|v| v.trim())
+            .filter(|v| !v.is_empty());
 
         if let Some(id) = plan_id {
             match db.get_pricing_plan_by_id(id).await {
@@ -471,7 +510,10 @@ pub async fn create_creem_sponsorship_checkout(
                 }
             }
         } else {
-            match db.get_default_pricing_plan_for_placement(Some(&placement)).await {
+            match db
+                .get_default_pricing_plan_for_placement(Some(&placement))
+                .await
+            {
                 Ok(v) => v,
                 Err(e) => {
                     return HttpResponse::InternalServerError()
@@ -483,8 +525,9 @@ pub async fn create_creem_sponsorship_checkout(
 
     if let Some(ref plan) = pricing_plan {
         if !plan.is_active {
-            return HttpResponse::BadRequest()
-                .json(ApiResponse::<()>::error("Pricing plan is inactive".to_string()));
+            return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                "Pricing plan is inactive".to_string(),
+            ));
         }
         if plan
             .placement
@@ -499,38 +542,6 @@ pub async fn create_creem_sponsorship_checkout(
         }
     }
 
-    let order_id = match db
-        .create_sponsorship_order(
-            &user_email,
-            user_id.as_deref(),
-            &product_id,
-            &placement,
-            body.slot_index,
-            months,
-            pricing_plan
-                .as_ref()
-                .map(|p| (p.id.as_str(), p.plan_key.as_str(), p.monthly_usd_cents, p.campaign.percent_off)),
-        )
-        .await
-    {
-        Ok(id) => id,
-        Err(e) => {
-            return HttpResponse::InternalServerError()
-                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
-        }
-    };
-
-    let creem_api_key = env::var("CREEM_API_KEY").ok().unwrap_or_default();
-    if creem_api_key.trim().is_empty() {
-        return HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
-            if lang.starts_with("zh") {
-                "支付未配置：缺少 Creem API Key（CREEM_API_KEY）。".to_string()
-            } else {
-                "Payment is not configured: missing CREEM_API_KEY.".to_string()
-            },
-        ));
-    }
-
     /*
      * resolveCreemProductId
      * 根据定价方案（含活动）选择 Creem product_id；若缺失则回退到旧的环境变量。
@@ -543,7 +554,12 @@ pub async fn create_creem_sponsorship_checkout(
             let within = (campaign.starts_at.is_none() || campaign.starts_at.unwrap() <= now)
                 && (campaign.ends_at.is_none() || campaign.ends_at.unwrap() >= now);
             if campaign.active && within {
-                if let Some(v) = campaign.creem_product_id.as_deref().map(|v| v.trim()).filter(|v| !v.is_empty()) {
+                if let Some(v) = campaign
+                    .creem_product_id
+                    .as_deref()
+                    .map(|v| v.trim())
+                    .filter(|v| !v.is_empty())
+                {
                     selected = Some(v.to_string());
                 }
             }
@@ -579,13 +595,90 @@ pub async fn create_creem_sponsorship_checkout(
                 } else {
                     "支付未配置：缺少 Creem 产品 ID（CREEM_PRODUCT_ID_HOME_TOP / CREEM_PRODUCT_ID_HOME_RIGHT）。".to_string()
                 }
+            } else if pricing_plan.is_some() {
+                "Payment is not configured: the selected pricing plan has no Creem product id."
+                    .to_string()
             } else {
-                if pricing_plan.is_some() {
-                    "Payment is not configured: the selected pricing plan has no Creem product id.".to_string()
+                "Payment is not configured: missing CREEM_PRODUCT_ID_HOME_TOP / CREEM_PRODUCT_ID_HOME_RIGHT."
+                    .to_string()
+            },
+        ));
+    }
+
+    let provider = if is_http_url_spec(&creem_product_id) {
+        "external"
+    } else {
+        "creem"
+    };
+
+    let order_id = match db
+        .create_sponsorship_order(
+            &user_email,
+            user_id.as_deref(),
+            &product_id,
+            &placement,
+            body.slot_index,
+            months,
+            provider,
+            pricing_plan.as_ref().map(|p| {
+                (
+                    p.id.as_str(),
+                    p.plan_key.as_str(),
+                    p.monthly_usd_cents,
+                    p.campaign.percent_off,
+                )
+            }),
+        )
+        .await
+    {
+        Ok(id) => id,
+        Err(e) => {
+            return HttpResponse::InternalServerError()
+                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
+        }
+    };
+
+    if provider == "external" {
+        let ctx = CheckoutTemplateContext {
+            order_id: order_id.as_str(),
+            user_email: user_email.as_str(),
+            user_id: user_id.as_deref(),
+            product_id: product_id.as_str(),
+            placement: placement.as_str(),
+            slot_index: body.slot_index,
+            months,
+            plan_id: pricing_plan.as_ref().map(|p| p.id.as_str()),
+            plan_key: pricing_plan.as_ref().map(|p| p.plan_key.as_str()),
+        };
+        let checkout_url = render_checkout_url_template(creem_product_id.trim(), &ctx);
+
+        if checkout_url.trim().is_empty() {
+            return HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                if lang.starts_with("zh") {
+                    "支付未配置：外部支付链接为空。".to_string()
                 } else {
-                    "Payment is not configured: missing CREEM_PRODUCT_ID_HOME_TOP / CREEM_PRODUCT_ID_HOME_RIGHT."
-                        .to_string()
-                }
+                    "Payment is not configured: external checkout url is empty.".to_string()
+                },
+            ));
+        }
+
+        let _ = db
+            .set_sponsorship_order_provider_checkout_id(&order_id, checkout_url.trim())
+            .await;
+
+        return HttpResponse::Ok().json(ApiResponse::success(CreateSponsorshipCheckoutPayload {
+            order_id,
+            checkout_url,
+        }));
+    }
+
+    let creem_api_key = env::var("CREEM_API_KEY").ok().unwrap_or_default();
+    if creem_api_key.trim().is_empty() {
+        return HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+            if lang.starts_with("zh") {
+                "支付未配置：缺少 CREEM_API_KEY。你可以在管理后台把定价方案的 creem_product_id 配置为外部支付链接（例如 Stripe Payment Link）。".to_string()
+            } else {
+                "Payment is not configured: missing CREEM_API_KEY. You can set pricing plan creem_product_id to an external checkout URL.".to_string()
             },
         ));
     }
@@ -881,7 +974,11 @@ pub async fn creem_webhook(
                     order_requested_months,
                     grant_id,
                 ))) => {
-                    let paid_months = if months > 0 { months } else { order_requested_months };
+                    let paid_months = if months > 0 {
+                        months
+                    } else {
+                        order_requested_months
+                    };
                     if paid_months <= 0 {
                         processing_error = Some("Invalid requested months".to_string());
                     } else if !is_same_user_email(&order_email, &user_email)
@@ -893,7 +990,8 @@ pub async fn creem_webhook(
                             Some("Checkout metadata does not match order record".to_string());
                     } else if status == "paid" && grant_id.is_some() {
                         let _ = db.mark_creem_webhook_event_succeeded(&event_id).await;
-                        return HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true }));
+                        return HttpResponse::Ok()
+                            .json(ApiResponse::success(OkPayload { ok: true }));
                     } else if let Err(e) = db
                         .upsert_developer_sponsor(&user_email, Some("sponsor"), true)
                         .await
@@ -913,7 +1011,8 @@ pub async fn creem_webhook(
                             Ok(_grant) => {}
                             Err(e) => {
                                 transient_error = true;
-                                processing_error = Some(format!("Failed to finalize order: {:?}", e));
+                                processing_error =
+                                    Some(format!("Failed to finalize order: {:?}", e));
                             }
                         }
                     }
@@ -3538,7 +3637,7 @@ pub async fn admin_sponsorship_request_action(
             _ => {
                 return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                     if lang.starts_with("zh") {
-                        "顶部赞助位必须指定 slot_index=0(左) 或 1(右)".to_string()
+                        "顶部定价位必须指定 slot_index=0(左) 或 1(右)".to_string()
                     } else {
                         "home_top requires slot_index 0 (left) or 1 (right)".to_string()
                     },
@@ -3552,7 +3651,7 @@ pub async fn admin_sponsorship_request_action(
             _ => {
                 return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                     if lang.starts_with("zh") {
-                        "右侧赞助位必须指定 slot_index=0/1/2".to_string()
+                        "右侧定价位必须指定 slot_index=0/1/2".to_string()
                     } else {
                         "home_right requires slot_index 0/1/2".to_string()
                     },
@@ -3789,6 +3888,52 @@ pub async fn admin_list_sponsorship_orders(
         Ok(list) => HttpResponse::Ok().json(ApiResponse::success(list)),
         Err(e) => HttpResponse::InternalServerError()
             .json(ApiResponse::<()>::error(format!("Database error: {:?}", e))),
+    }
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminSponsorshipOrderActionBody {
+    pub action: String,
+    pub order_id: String,
+    pub provider_order_id: Option<String>,
+    pub paid_months: Option<i32>,
+    pub amount_usd_cents: Option<i32>,
+}
+
+pub async fn admin_sponsorship_order_action(
+    req: HttpRequest,
+    body: web::Json<AdminSponsorshipOrderActionBody>,
+    db: web::Data<Arc<Database>>,
+) -> impl Responder {
+    if let Err(resp) = validate_admin_token(&req) {
+        return resp;
+    }
+
+    let input = body.into_inner();
+    let action = input.action.trim().to_ascii_lowercase();
+    if action != "mark_paid" {
+        return HttpResponse::BadRequest()
+            .json(ApiResponse::<()>::error("Invalid action".to_string()));
+    }
+
+    let order_id = input.order_id.trim().to_string();
+    if order_id.is_empty() {
+        return HttpResponse::BadRequest()
+            .json(ApiResponse::<()>::error("Missing order_id".to_string()));
+    }
+
+    match db
+        .admin_mark_sponsorship_order_paid(
+            &order_id,
+            input.provider_order_id.as_deref(),
+            input.amount_usd_cents,
+            input.paid_months,
+        )
+        .await
+    {
+        Ok(grant) => HttpResponse::Ok().json(ApiResponse::success(grant)),
+        Err(e) => HttpResponse::BadRequest()
+            .json(ApiResponse::<()>::error(format!("Invalid input: {:?}", e))),
     }
 }
 
