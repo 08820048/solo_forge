@@ -188,7 +188,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-border mt-8 pt-8 text-sm text-center text-muted-foreground font-sans">
-          <span>© 2025 Welight. Made with love by </span>
+          <span>© 2026 SoloForge. Made with love by </span>
           <a
             href="https://x.com/xuyixff"
             target="_blank"
