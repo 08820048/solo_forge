@@ -4,7 +4,7 @@ import { Link, useRouter } from '@/i18n/routing';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import Image from 'next/image';
-import { Globe, Sun, Moon, User, Palette } from 'lucide-react';
+import { Mail, Lock, Sun, Moon, User, Palette } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,10 @@ import type { Provider, SupabaseClient, User as SupabaseUser } from '@supabase/s
 type StoredUser = { name?: string; email?: string; avatarUrl?: string };
 
 type ThemeVars = Record<`--sf-${string}`, string>;
+
+type NotifyTone = 'info' | 'error';
+
+type AppNotice = { id: string; message: string; tone: NotifyTone };
 
 const THEME_VARS_KEY = 'sf_theme_vars_v1';
 const THEME_PRESET_KEY = 'sf_theme_preset_v1';
@@ -339,6 +343,7 @@ export default function Header() {
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [authEnabled, setAuthEnabled] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [notices, setNotices] = useState<AppNotice[]>([]);
   const userMenuRootRef = useRef<HTMLDivElement | null>(null);
   const menuAnimationMs = 200;
 
@@ -367,6 +372,29 @@ export default function Header() {
     const timer = window.setTimeout(() => setThemeMenuMounted(false), menuAnimationMs);
     return () => window.clearTimeout(timer);
   }, [menuAnimationMs, themeMenuMounted, themeMenuOpen]);
+
+  useEffect(() => {
+    const onNotify = (event: Event) => {
+      const detail = event instanceof CustomEvent ? ((event as CustomEvent).detail as unknown) : null;
+      const message = typeof (detail as { message?: unknown } | null)?.message === 'string' ? String((detail as { message?: unknown }).message).trim() : '';
+      if (!message) return;
+      const tone: NotifyTone = (detail as { tone?: unknown } | null)?.tone === 'error' ? 'error' : 'info';
+      const id =
+        typeof (detail as { id?: unknown } | null)?.id === 'string' && String((detail as { id?: unknown }).id).trim()
+          ? String((detail as { id?: unknown }).id).trim()
+          : typeof crypto !== 'undefined' && typeof (crypto as { randomUUID?: unknown }).randomUUID === 'function'
+            ? (crypto as { randomUUID: () => string }).randomUUID()
+            : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+      setNotices((cur) => [...cur, { id, message, tone }].slice(-3));
+      window.setTimeout(() => {
+        setNotices((cur) => cur.filter((n) => n.id !== id));
+      }, 2600);
+    };
+
+    window.addEventListener('sf_notify', onNotify as EventListener);
+    return () => window.removeEventListener('sf_notify', onNotify as EventListener);
+  }, []);
 
   function applyThemeVarsToRoot(vars: ThemeVars | null) {
     const root = document.documentElement;
@@ -430,13 +458,6 @@ export default function Header() {
   }
 
   useEffect(() => {
-    // 初始化 spotlight 背景中心点，保持与 ui.html 行为一致
-    const spotlightBg = document.querySelector('.bg-spotlight');
-    if (spotlightBg) {
-      (spotlightBg as HTMLElement).style.setProperty('--mouse-x', `50%`);
-      (spotlightBg as HTMLElement).style.setProperty('--mouse-y', `50%`);
-    }
-
     const syncUser = () => setUser(readUserFromStorage());
     syncUser();
     const initialStorage = getSupabaseAuthStoragePreference();
@@ -845,7 +866,6 @@ export default function Header() {
     if (nextRemember && savedEmail) setAuthEmail(savedEmail);
     if (!authEnabled) {
       setAuthError(tAuth('notConfigured'));
-      return;
     }
     setAuthOpen(true);
   }
@@ -898,18 +918,10 @@ export default function Header() {
   return (
     <nav className="fixed top-6 z-50 left-3 right-3 sm:left-4 sm:right-4 lg:left-6 lg:right-6 xl:left-8 xl:right-8 2xl:left-10 2xl:right-10">
       <div className="flex justify-center">
-        <div className="w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl shrink-0 rounded-full border border-border bg-background/70 backdrop-blur-xl shadow-lg shadow-black/5 px-4 md:px-5 h-14 flex items-center justify-between gap-4 md:gap-10 transition-all duration-300">
+        <div className="w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl shrink-0 rounded-full border border-border bg-background shadow-lg shadow-black/5 px-4 md:px-5 h-14 flex items-center justify-between gap-4 md:gap-10 transition-all duration-300">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/docs/imgs/image.jpg"
-            alt="SoloForge"
-            width={20}
-            height={20}
-            className="rounded-sm"
-            priority
-          />
-          <span className="text-sm font-medium tracking-tight text-foreground">
+        <Link href="/" className="flex items-center">
+          <span className="text-sm font-medium tracking-tight text-foreground [font-family:'Typestar-OCR',ui-monospace,monospace]">
             SoloForge
           </span>
         </Link>
@@ -923,6 +935,10 @@ export default function Header() {
           <Link href="/leaderboard" className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
             <i className="ri-skip-up-line text-sm" aria-hidden="true" />
             {tNav('leaderboard')}
+          </Link>
+          <Link href="/pricing" className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <i className="ri-price-tag-3-line text-sm" aria-hidden="true" />
+            {tNav('pricing')}
           </Link>
           <button
             type="button"
@@ -983,7 +999,7 @@ export default function Header() {
                           }}
                           className={[
                             'flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition-colors',
-                            isActive ? 'border-primary/40 bg-accent/30' : 'border-border bg-background/60 hover:bg-accent/20',
+                            isActive ? 'border-primary/40 bg-accent/30' : 'border-border bg-background hover:bg-accent/20',
                           ].join(' ')}
                         >
                           <span
@@ -1062,6 +1078,12 @@ export default function Header() {
             <Sun className="hidden dark:block" size={16} strokeWidth={1.5} />
           <Moon className="block dark:hidden" size={16} strokeWidth={1.5} />
           </button>
+          <Link
+            href="/pricing"
+            className="md:hidden text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {tNav('pricing')}
+          </Link>
           <button
             type="button"
             onClick={onSubmitClick}
@@ -1077,7 +1099,7 @@ export default function Header() {
                   setUserMenuOpen((v) => !v);
                   setThemeMenuOpen(false);
                 }}
-                className="rounded-full w-8 h-8 flex items-center justify-center overflow-hidden border border-border bg-background/70"
+                className="rounded-full w-8 h-8 flex items-center justify-center overflow-hidden border border-border bg-background"
                 aria-label="User menu"
               >
                 {user.avatarUrl ? (
@@ -1155,7 +1177,7 @@ export default function Header() {
             <button
               type="button"
               onClick={onLoginClick}
-              className="rounded-full w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors border border-border bg-background/70"
+              className="rounded-full w-8 h-8 flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors border border-border bg-background"
               aria-label={tNav('login')}
             >
               <User size={16} strokeWidth={1.5} />
@@ -1164,6 +1186,26 @@ export default function Header() {
         </div>
         </div>
       </div>
+
+      {notices.length ? (
+        <div
+          aria-live="polite"
+          className="fixed top-4 right-4 z-[60] w-[min(360px,calc(100vw-2rem))] space-y-2 pointer-events-none"
+        >
+          {notices.map((notice) => (
+            <div
+              key={notice.id}
+              className={[
+                'rounded-xl border border-border bg-card px-4 py-3 shadow-lg shadow-black/5',
+                'animate-in fade-in-0 slide-in-from-top-2 duration-200',
+                notice.tone === 'error' ? 'text-destructive' : 'text-foreground',
+              ].join(' ')}
+            >
+              <div className="text-sm leading-relaxed">{notice.message}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} locale={locale} tCommon={tCommon} />
       <AuthDialog
@@ -1335,7 +1377,7 @@ function SearchDialog({
                     key={p.id}
                     href={{ pathname: '/products/[slug]', params: { slug: p.id } }}
                     onClick={() => onOpenChange(false)}
-                    className="block rounded-lg border border-border bg-background/40 px-3 py-2 hover:bg-accent/30 transition-colors"
+                    className="block rounded-lg border border-border bg-background px-3 py-2 hover:bg-accent/30 transition-colors"
                   >
                     <div className="text-sm font-medium text-foreground truncate">{p.name}</div>
                     <div className="mt-0.5 text-xs text-muted-foreground truncate">
@@ -1360,7 +1402,7 @@ function SearchDialog({
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => onOpenChange(false)}
-                      className="block rounded-lg border border-border bg-background/40 px-3 py-2 hover:bg-accent/30 transition-colors"
+                      className="block rounded-lg border border-border bg-background px-3 py-2 hover:bg-accent/30 transition-colors"
                     >
                       <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
                       <div className="mt-0.5 text-xs text-muted-foreground truncate">{d.website}</div>
@@ -1368,7 +1410,7 @@ function SearchDialog({
                   ) : (
                     <div
                       key={d.email}
-                      className="rounded-lg border border-border bg-background/40 px-3 py-2"
+                      className="rounded-lg border border-border bg-background px-3 py-2"
                     >
                       <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
                       <div className="mt-0.5 text-xs text-muted-foreground truncate">{d.email}</div>
@@ -1427,144 +1469,35 @@ function AuthDialog({
   onOAuthLogin: (provider: Provider) => Promise<void>;
   tAuth: ReturnType<typeof useTranslations>;
 }) {
-  const [orbitActive, setOrbitActive] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    const timer = window.setTimeout(() => setOrbitActive(true), 1500);
-    return () => window.clearTimeout(timer);
-  }, [open]);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden">
+      <DialogContent showCloseButton={false} className="sm:max-w-md p-0 overflow-hidden border-0 bg-transparent shadow-none">
         <DialogHeader className="sr-only">
           <DialogTitle>{tAuth('title')}</DialogTitle>
           <DialogDescription>{tAuth('subtitle')}</DialogDescription>
         </DialogHeader>
-        <div
-          className="w-full bg-white dark:bg-card rounded-2xl shadow-xl overflow-hidden opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-          style={{ animationDelay: '0.2s' }}
-        >
-          <div className="p-8">
-            <div className="text-center mb-8">
-              <div
-                className="text-4xl md:text-5xl font-semibold text-foreground mb-2 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                style={{ animationDelay: '0.4s' }}
-              >
-                {tAuth('title')}
-              </div>
-              <div
-                className="text-muted-foreground text-base opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                style={{ animationDelay: '0.6s' }}
-              >
-                {tAuth('subtitle')}
-              </div>
-            </div>
-
-            <div className="flex justify-center mb-10">
-              <div className="relative w-[220px] h-[220px]">
-                <div
-                  className="absolute inset-0 m-auto rounded-full border border-primary/20 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                  style={{ width: 220, height: 220, animationDelay: '0.8s' }}
-                />
-                <div
-                  className="absolute inset-0 m-auto rounded-full border border-primary/20 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                  style={{ width: 160, height: 160, animationDelay: '0.9s' }}
-                />
-                <div
-                  className="absolute inset-0 m-auto rounded-full border border-primary/20 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                  style={{ width: 100, height: 100, animationDelay: '1s' }}
-                />
-
-                <div
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70px] h-[70px] rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center z-10 opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards] animate-[sf-pulse_2s_infinite]"
-                  style={{ animationDelay: '1.1s' }}
-                >
-                  <Globe size={28} strokeWidth={1.5} />
-                </div>
-
-                <div
-                  className="absolute top-1/2 left-1/2"
-                  style={{
-                    transformOrigin: '0 0',
-                    opacity: orbitActive ? 1 : 0,
-                    animation: 'sf-orbit 20s linear infinite',
-                    animationDelay: '-0s',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onOAuthLogin('github')}
-                    disabled={loading || !enabled}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-background shadow flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"
-                    aria-label={tAuth('continueWith', { provider: 'GitHub' })}
-                  >
-                    <i className="ri-github-fill text-[18px] text-primary" aria-hidden="true" />
-                  </button>
-                </div>
-
-                <div
-                  className="absolute top-1/2 left-1/2"
-                  style={{
-                    transformOrigin: '0 0',
-                    opacity: orbitActive ? 1 : 0,
-                    animation: 'sf-orbit 20s linear infinite',
-                    animationDelay: '-6.67s',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onOAuthLogin('google')}
-                    disabled={loading || !enabled}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-background shadow flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"
-                    aria-label={tAuth('continueWith', { provider: 'Google' })}
-                  >
-                    <i className="ri-google-fill text-[18px] text-primary" aria-hidden="true" />
-                  </button>
-                </div>
-
-                <div
-                  className="absolute top-1/2 left-1/2"
-                  style={{
-                    transformOrigin: '0 0',
-                    opacity: orbitActive ? 1 : 0,
-                    animation: 'sf-orbit 20s linear infinite',
-                    animationDelay: '-13.34s',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onOAuthLogin('discord')}
-                    disabled={loading || !enabled}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white dark:bg-background shadow flex items-center justify-center transition-transform hover:scale-110 disabled:opacity-50"
-                    aria-label={tAuth('continueWith', { provider: 'Discord' })}
-                  >
-                    <i className="ri-discord-fill text-[18px] text-primary" aria-hidden="true" />
-                  </button>
-                </div>
-              </div>
-            </div>
+        <div className="w-full min-h-[520px] flex items-center justify-center bg-transparent px-2 sm:px-0">
+          <div className="w-full max-w-sm bg-gradient-to-b from-sky-50 to-white dark:from-card dark:to-card rounded-3xl shadow-xl shadow-black/10 p-8 flex flex-col items-center border border-blue-100/80 dark:border-border text-foreground">
+            <h2 className="text-2xl font-semibold mb-2 text-center">{tAuth('title')}</h2>
+            <p className="text-muted-foreground text-sm mb-6 text-center">{tAuth('subtitle')}</p>
 
             <form
-              className="space-y-6"
+              className="w-full"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (mode === 'signUp') void onEmailSignUp();
                 else void onEmailSignIn();
               }}
             >
-              <div
-                className="opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                style={{ animationDelay: '1.15s' }}
-              >
-                <div className="grid grid-cols-2 rounded-lg border border-border bg-background/60 p-1">
+              <div className="w-full flex flex-col gap-3">
+                <div className="grid grid-cols-2 rounded-2xl border border-border bg-background p-1">
                   <button
                     type="button"
                     onClick={() => setMode('signIn')}
-                    className={`h-9 rounded-md text-sm font-medium transition-colors ${
-                      mode === 'signIn' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                    className={[
+                      'h-9 rounded-xl text-sm font-medium transition-colors',
+                      mode === 'signIn' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
+                    ].join(' ')}
                     disabled={loading}
                   >
                     {tAuth('signIn')}
@@ -1572,109 +1505,109 @@ function AuthDialog({
                   <button
                     type="button"
                     onClick={() => setMode('signUp')}
-                    className={`h-9 rounded-md text-sm font-medium transition-colors ${
-                      mode === 'signUp' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                    className={[
+                      'h-9 rounded-xl text-sm font-medium transition-colors',
+                      mode === 'signUp' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
+                    ].join(' ')}
                     disabled={loading}
                   >
                     {tAuth('signUp')}
                   </button>
                 </div>
-              </div>
 
-              <div
-                className="opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                style={{ animationDelay: '1.2s' }}
-              >
-                <Label htmlFor="sf-auth-email" className="block text-sm font-medium text-muted-foreground mb-1">
-                  {tAuth('email')}
-                </Label>
                 <div className="relative">
-                  <i
-                    className="ri-mail-fill pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-muted-foreground"
-                    aria-hidden="true"
-                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    <Mail className="w-4 h-4" />
+                  </span>
                   <Input
                     id="sf-auth-email"
+                    placeholder={tAuth('emailPlaceholder')}
                     type="email"
                     autoComplete="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={tAuth('emailPlaceholder')}
                     disabled={loading || !enabled}
-                    className="h-11 rounded-lg pl-10"
+                    className="w-full h-10 pl-10 pr-3 rounded-xl border border-border focus-visible:ring-ring/40 bg-background text-sm"
+                    onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
-              </div>
 
-              <div
-                className="opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                style={{ animationDelay: '1.3s' }}
-              >
-                <Label htmlFor="sf-auth-password" className="block text-sm font-medium text-muted-foreground mb-1">
-                  {tAuth('password')}
-                </Label>
                 <div className="relative">
-                  <i
-                    className="ri-lock-fill pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-muted-foreground"
-                    aria-hidden="true"
-                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    <Lock className="w-4 h-4" />
+                  </span>
                   <Input
                     id="sf-auth-password"
+                    placeholder={tAuth('passwordPlaceholder')}
                     type="password"
                     autoComplete={mode === 'signUp' ? 'new-password' : 'current-password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={tAuth('passwordPlaceholder')}
                     disabled={loading || !enabled}
-                    className="h-11 rounded-lg pl-10"
+                    className="w-full h-10 pl-10 pr-3 rounded-xl border border-border focus-visible:ring-ring/40 bg-background text-sm"
+                    onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
-              </div>
 
-              <div
-                className="flex items-center opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                style={{ animationDelay: '1.4s' }}
-              >
-                <label className="inline-flex items-center gap-2 text-sm text-muted-foreground select-none cursor-pointer">
-                  <span className="relative inline-flex h-4 w-4 items-center justify-center">
+                <div className="w-full flex items-center justify-between gap-3">
+                  <label className="inline-flex items-center gap-2 text-xs text-muted-foreground select-none cursor-pointer">
                     <input
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="peer h-4 w-4 appearance-none rounded border border-border bg-background/60 shadow-sm transition-colors checked:bg-primary checked:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
-                      aria-label="记住我"
+                      className="h-4 w-4 rounded border border-border bg-background"
                     />
-                    <svg
-                      viewBox="0 0 20 20"
-                      fill="none"
-                      className="pointer-events-none absolute h-3.5 w-3.5 opacity-0 peer-checked:opacity-100 text-primary-foreground"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M16.704 5.292a1 1 0 0 1 0 1.416l-7.6 7.6a1 1 0 0 1-1.416 0l-3.6-3.6a1 1 0 1 1 1.416-1.416l2.892 2.892 6.892-6.892a1 1 0 0 1 1.416 0Z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                  </span>
-                  <span>记住我</span>
-                </label>
-              </div>
+                    <span>Remember me</span>
+                  </label>
+                  <button type="button" className="text-xs hover:underline font-medium text-muted-foreground" disabled>
+                    Forgot password?
+                  </button>
+                </div>
 
-              {error ? <div className="text-sm text-destructive">{error}</div> : null}
-              {notice ? <div className="text-sm text-muted-foreground">{notice}</div> : null}
+                {error ? <div className="text-sm text-destructive">{error}</div> : null}
+                {notice ? <div className="text-sm text-muted-foreground">{notice}</div> : null}
 
-              <div
-                className="opacity-0 animate-[sf-scale-in_0.5s_ease-in-out_forwards]"
-                style={{ animationDelay: '1.5s' }}
-              >
                 <Button
                   type="submit"
                   disabled={loading || !enabled || !email || !password}
-                  className="w-full h-11 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground"
+                  className="w-full bg-gradient-to-b from-gray-700 to-gray-900 text-white font-medium py-2 rounded-xl shadow hover:brightness-105 transition"
                 >
                   {loading ? tAuth('loading') : mode === 'signUp' ? tAuth('signUp') : tAuth('signIn')}
                 </Button>
+
+                <div className="flex items-center w-full my-2">
+                  <div className="flex-grow border-t border-dashed border-border"></div>
+                  <span className="mx-2 text-xs text-muted-foreground">{tAuth('or')}</span>
+                  <div className="flex-grow border-t border-dashed border-border"></div>
+                </div>
+
+                <div className="flex gap-3 w-full justify-center">
+                  <button
+                    type="button"
+                    onClick={() => void onOAuthLogin('google')}
+                    disabled={loading || !enabled}
+                    className="flex items-center justify-center w-12 h-12 rounded-xl border border-border bg-background hover:bg-accent transition grow disabled:opacity-50"
+                    aria-label={tAuth('continueWith', { provider: 'Google' })}
+                  >
+                    <i className="ri-google-fill text-[18px] text-foreground" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onOAuthLogin('github')}
+                    disabled={loading || !enabled}
+                    className="flex items-center justify-center w-12 h-12 rounded-xl border border-border bg-background hover:bg-accent transition grow disabled:opacity-50"
+                    aria-label={tAuth('continueWith', { provider: 'GitHub' })}
+                  >
+                    <i className="ri-github-fill text-[18px] text-foreground" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void onOAuthLogin('discord')}
+                    disabled={loading || !enabled}
+                    className="flex items-center justify-center w-12 h-12 rounded-xl border border-border bg-background hover:bg-accent transition grow disabled:opacity-50"
+                    aria-label={tAuth('continueWith', { provider: 'Discord' })}
+                  >
+                    <i className="ri-discord-fill text-[18px] text-foreground" aria-hidden="true" />
+                  </button>
+                </div>
               </div>
             </form>
           </div>

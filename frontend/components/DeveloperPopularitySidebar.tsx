@@ -349,7 +349,7 @@ export default function DeveloperPopularitySidebar() {
   return (
     <div className="animate-on-scroll lg:sticky lg:top-24">
       <div className="space-y-6">
-        <div className="sf-wash rounded-xl border border-border bg-card/50">
+        <div className="rounded-xl border border-border bg-card">
           <div className="px-5 py-4 border-b border-border">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold text-foreground">{tTop('title')}</div>
@@ -363,7 +363,7 @@ export default function DeveloperPopularitySidebar() {
                 {Array.from({ length: 3 }).map((_, idx) => (
                   <div
                     key={idx}
-                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3 animate-pulse"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background px-3 py-3 animate-pulse"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="h-4 w-8 rounded bg-muted" />
@@ -389,7 +389,7 @@ export default function DeveloperPopularitySidebar() {
                 {topList.map((d, idx) => (
                   <div
                     key={d.email}
-                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background px-3 py-3"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center">{renderRank(idx + 1)}</div>
@@ -440,7 +440,7 @@ export default function DeveloperPopularitySidebar() {
                       disabled={isSameUserEmail(d.email, currentUserEmail)}
                       onClick={() => void toggleFollowDeveloper(d.email)}
                       className={[
-                        'shrink-0 rounded-md border border-border bg-background/70 px-2.5 py-1.5 text-xs text-foreground transition-all duration-200 active:scale-95',
+                        'shrink-0 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground transition-all duration-200 active:scale-95',
                         isSameUserEmail(d.email, currentUserEmail)
                           ? 'opacity-50 cursor-not-allowed'
                           : 'hover:bg-accent hover:text-accent-foreground',
@@ -460,7 +460,7 @@ export default function DeveloperPopularitySidebar() {
           </div>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card/50">
+        <div className="rounded-xl border border-border bg-card">
           <div className="px-5 py-4 border-b border-border">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold text-foreground">{t('title')}</div>
@@ -477,7 +477,7 @@ export default function DeveloperPopularitySidebar() {
                 {Array.from({ length: 4 }).map((_, idx) => (
                   <div
                     key={idx}
-                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3 animate-pulse"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background px-3 py-3 animate-pulse"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="h-4 w-8 rounded bg-muted" />
@@ -503,7 +503,7 @@ export default function DeveloperPopularitySidebar() {
                 {list.map((d, idx) => (
                   <div
                     key={d.email}
-                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
+                    className="flex items-start justify-between gap-3 rounded-xl border border-border bg-background px-3 py-3"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center">{renderRank(idx + 1)}</div>

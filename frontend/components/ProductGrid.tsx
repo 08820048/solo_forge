@@ -2,11 +2,11 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import Image from 'next/image';
-import { Link, useRouter } from '@/i18n/routing';
-import { useEffect, useState } from 'react';
+import { Link } from '@/i18n/routing';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import FlipClockCountdown from '@/components/ui/flip-clock-countdown';
 import { plainTextFromMarkdown } from '@/lib/utils';
+import { LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 
 /**
  * SloganText
@@ -87,19 +87,27 @@ function getAuthenticatedUserEmail(): string | null {
   return null;
 }
 
-/**
- * requestAuth
- * 触发全局登录弹窗，并记录登录后回跳路径。
- */
-function requestAuth(redirectPath: string) {
+function notify(message: string) {
+  const text = (message || '').trim();
+  if (!text) return;
   try {
-    sessionStorage.setItem('sf_post_login_redirect', redirectPath);
+    window.dispatchEvent(new CustomEvent('sf_notify', { detail: { message: text } }));
   } catch {}
-  try {
-    window.dispatchEvent(new CustomEvent('sf_require_auth', { detail: { redirectPath } }));
-  } catch {
-    window.dispatchEvent(new Event('sf_require_auth'));
-  }
+}
+
+/**
+ * sortProductsByPopularity
+ * 按后端 popularity 规则（likes + favorites）排序，保证名次交换动画可见。
+ */
+function sortProductsByPopularity(products: Product[]): Product[] {
+  return [...products].sort((a, b) => {
+    const scoreA = (a.likes ?? 0) + (a.favorites ?? 0);
+    const scoreB = (b.likes ?? 0) + (b.favorites ?? 0);
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    if ((a.favorites ?? 0) !== (b.favorites ?? 0)) return (b.favorites ?? 0) - (a.favorites ?? 0);
+    if ((a.likes ?? 0) !== (b.likes ?? 0)) return (b.likes ?? 0) - (a.likes ?? 0);
+    return a.id.localeCompare(b.id);
+  });
 }
 
 interface Product {
@@ -115,14 +123,6 @@ interface Product {
   favorites: number;
 }
 
-type DeveloperWithFollowers = {
-  email: string;
-  name: string;
-  avatar_url?: string | null;
-  website?: string | null;
-  followers: number;
-};
-
 type ApiError = {
   code: string;
   trace_id: string;
@@ -132,6 +132,21 @@ type ApiError = {
 };
 
 type ApiResponse<T> = { success: boolean; data?: T; message?: string; error?: ApiError | null };
+
+type UmamiCoreStats = {
+  pageviews: number;
+  visitors: number;
+  visits: number;
+  bounces: number;
+  totaltime: number;
+  comparison?: {
+    pageviews: number;
+    visitors: number;
+    visits: number;
+    bounces: number;
+    totaltime: number;
+  } | null;
+};
 
 /**
  * appendTraceIdToMessage
@@ -158,6 +173,56 @@ function isSameUserEmail(a?: string | null, b?: string | null): boolean {
   return left === right;
 }
 
+/**
+ * formatDurationSeconds
+ * 将秒数格式化为 hh:mm:ss 或 mm:ss 的可读文本。
+ */
+function formatDurationSeconds(totalSeconds: number): string {
+  const safe = Number.isFinite(totalSeconds) ? Math.max(0, Math.floor(totalSeconds)) : 0;
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m ${seconds}s`;
+}
+
+/**
+ * calcPercentChange
+ * 计算相对变化百分比（prev 为 0 时返回 null）。
+ */
+function calcPercentChange(current: number, previous: number): number | null {
+  const cur = Number.isFinite(current) ? current : 0;
+  const prev = Number.isFinite(previous) ? previous : 0;
+  if (prev === 0) return cur === 0 ? 0 : null;
+  return ((cur - prev) / prev) * 100;
+}
+
+/**
+ * formatChangeText
+ * 将变化百分比格式化为可展示文本。
+ */
+function formatChangeText(value: number | null): string {
+  if (value === null) return '—';
+  const rounded = Math.round(value);
+  const sign = rounded > 0 ? '+' : '';
+  return `${sign}${rounded}%`;
+}
+
+function ChangeIndicator({ value, positiveIsGood }: { value: number | null; positiveIsGood: boolean }) {
+  if (value === null) return <span className="text-xs text-muted-foreground tabular-nums">—</span>;
+  const rounded = Math.round(value);
+  if (rounded === 0) return <span className="text-xs text-muted-foreground tabular-nums">0%</span>;
+  const isUp = rounded > 0;
+  const isGood = isUp === positiveIsGood;
+  const colorClass = isGood ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+  return (
+    <span className={['inline-flex items-center gap-1 text-xs font-medium tabular-nums', colorClass].join(' ')}>
+      <i className={[isUp ? 'ri-arrow-up-line' : 'ri-arrow-down-line', 'text-[13px]'].join(' ')} aria-hidden="true" />
+      <span>{formatChangeText(Math.abs(rounded)).replace(/^\+/, '')}</span>
+    </span>
+  );
+}
+
 type FeaturedProductsPayload = {
   products: Product[];
   next_refresh_at: string;
@@ -169,32 +234,26 @@ interface ProductGridProps {
 
 /**
  * ProductGrid
- * 首页产品区块：featured 展示「潜力新星」+ 产品卡片，recent 展示最新上架列表。
+ * 首页产品区块：featured 展示 Umami 统计 + 产品卡片，recent 展示最新上架列表。
  */
 export default function ProductGrid({ section }: ProductGridProps) {
   const t = useTranslations(`home.${section}`);
   const commonT = useTranslations('common');
   const categoryT = useTranslations('categories');
-  const devT = useTranslations('home.risingStars');
+  const umamiT = useTranslations('home.umamiStats');
   const locale = useLocale();
-  const router = useRouter();
+  const reduceMotion = useReducedMotion();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [listMessage, setListMessage] = useState<string | null>(null);
-  const [risingStars, setRisingStars] = useState<DeveloperWithFollowers[]>([]);
-  const [risingStarsLoading, setRisingStarsLoading] = useState(false);
+  const [umamiStats, setUmamiStats] = useState<UmamiCoreStats | null>(null);
+  const [umamiLoading, setUmamiLoading] = useState(false);
+  const [umamiMessage, setUmamiMessage] = useState<string | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => readFavoritesFromStorage());
   const [likeIds, setLikeIds] = useState<string[]>(() => readLikesFromStorage());
-  const [developersVersion, setDevelopersVersion] = useState(0);
-  const [nextRefreshAt, setNextRefreshAt] = useState<string | null>(null);
   const [recentDir, setRecentDir] = useState<'desc' | 'asc'>('desc');
-
-  const openMakerProfile = (email: string) => {
-    const normalized = (email || '').trim().toLowerCase();
-    if (!normalized) return;
-    router.push({ pathname: '/makers/[email]', params: { email: normalized } });
-  };
+  const refetchFeaturedRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -203,9 +262,11 @@ export default function ProductGrid({ section }: ProductGridProps) {
      * fetchProducts
      * 拉取产品列表（精选/最新），用于首页产品展示。
      */
-    async function fetchProducts() {
-      setLoading(true);
-      setListMessage(null);
+    async function fetchProducts(silent?: boolean) {
+      if (!silent) {
+        setLoading(true);
+        setListMessage(null);
+      }
       const maxAttempts = 3;
       const isRetryableMessage = (msg?: string | null) => {
         const m = (msg || '').toLowerCase();
@@ -228,7 +289,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         if (section === 'featured') {
-          const response = await fetch(`/api/home/featured?language=${encodeURIComponent(locale)}`, {
+          const response = await fetch(`/api/home/featured?language=${encodeURIComponent(locale)}&limit=10`, {
             headers: { 'Accept-Language': locale },
             cache: 'no-store',
           });
@@ -241,10 +302,11 @@ export default function ProductGrid({ section }: ProductGridProps) {
               await delay(attempt);
               continue;
             }
-            setProducts([]);
-            setListMessage(appendTraceIdToMessage(json.message ?? null, json.error?.trace_id ?? null));
-            setNextRefreshAt(null);
-            setLoading(false);
+            if (!silent) {
+              setProducts([]);
+              setListMessage(appendTraceIdToMessage(json.message ?? null, json.error?.trace_id ?? null));
+              setLoading(false);
+            }
             return;
           }
 
@@ -264,11 +326,12 @@ export default function ProductGrid({ section }: ProductGridProps) {
           }
 
           setProducts(nextProducts);
-          setListMessage(
-            nextProducts.length === 0 ? appendTraceIdToMessage(json.message ?? null, json.error?.trace_id ?? null) : null
-          );
-          setNextRefreshAt(json.data?.next_refresh_at ?? null);
-          setLoading(false);
+          if (!silent) {
+            setListMessage(
+              nextProducts.length === 0 ? appendTraceIdToMessage(json.message ?? null, json.error?.trace_id ?? null) : null
+            );
+            setLoading(false);
+          }
           return;
         }
 
@@ -291,7 +354,6 @@ export default function ProductGrid({ section }: ProductGridProps) {
             }
             setProducts([]);
             setListMessage(appendTraceIdToMessage(json.message ?? null, json.error?.trace_id ?? null));
-            setNextRefreshAt(null);
             setLoading(false);
             return;
           }
@@ -315,14 +377,13 @@ export default function ProductGrid({ section }: ProductGridProps) {
           setListMessage(
             nextProducts.length === 0 ? appendTraceIdToMessage(json.message ?? null, json.error?.trace_id ?? null) : null
           );
-          setNextRefreshAt(null);
           setLoading(false);
           return;
         }
 
         const fetchWithOffset = async (nextOffset: number) => {
           const response = await fetch(
-            `/api/products?status=approved&language=${locale}&limit=6&offset=${nextOffset}`,
+            `/api/products?status=approved&language=${locale}&limit=10&offset=${nextOffset}`,
             { headers: { 'Accept-Language': locale }, cache: 'no-store' }
           );
           const json: ApiResponse<unknown> = await response.json();
@@ -342,7 +403,6 @@ export default function ProductGrid({ section }: ProductGridProps) {
         if (cancelled) return;
         setProducts(nextProducts);
         setListMessage(null);
-        setNextRefreshAt(null);
         setLoading(false);
         return;
       } catch {
@@ -350,10 +410,9 @@ export default function ProductGrid({ section }: ProductGridProps) {
           await delay(attempt);
           continue;
         }
-        if (!cancelled) {
+        if (!cancelled && !silent) {
           setProducts([]);
           setListMessage(null);
-          setNextRefreshAt(null);
           setLoading(false);
         }
         return;
@@ -361,10 +420,21 @@ export default function ProductGrid({ section }: ProductGridProps) {
       }
     }
 
-    fetchProducts();
+    refetchFeaturedRef.current = section === 'featured' ? () => void fetchProducts(true) : null;
+
+    void fetchProducts();
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+    if (section === 'featured') {
+      timer = setInterval(() => {
+        if (!cancelled) void fetchProducts(true);
+      }, 15_000);
+    }
 
     return () => {
       cancelled = true;
+      refetchFeaturedRef.current = null;
+      if (timer) clearInterval(timer);
     };
   }, [locale, recentDir, section]);
 
@@ -381,48 +451,53 @@ export default function ProductGrid({ section }: ProductGridProps) {
   }, []);
 
   useEffect(() => {
-    const onDevelopersUpdated = () => setDevelopersVersion((v) => v + 1);
-    window.addEventListener('sf_developers_updated', onDevelopersUpdated as EventListener);
-    return () => window.removeEventListener('sf_developers_updated', onDevelopersUpdated as EventListener);
-  }, []);
-
-  useEffect(() => {
     if (section !== 'featured') return;
     let cancelled = false;
 
     /**
-     * fetchRisingStars
-     * 拉取最近加入的开发者（前 4 位），用于「潜力新星」模块。
+     * fetchUmamiStats
+     * 拉取 Umami 核心统计数据，用于首页展示。
      */
-    async function fetchRisingStars() {
-      setRisingStarsLoading(true);
+    async function fetchUmamiStats() {
+      setUmamiLoading(true);
+      setUmamiMessage(null);
       try {
-        const response = await fetch(`/api/developers?kind=recent&limit=4`, { headers: { 'Accept-Language': locale } });
-        const json: ApiResponse<DeveloperWithFollowers[]> = await response.json();
+        const response = await fetch(`/api/umami/core-stats?range=24h`, { headers: { 'Accept-Language': locale }, cache: 'no-store' });
+        const json: ApiResponse<UmamiCoreStats> = await response.json();
         if (cancelled) return;
-        setRisingStars(json.success ? (json.data ?? []) : []);
+        if (!json.success) {
+          setUmamiStats(null);
+          setUmamiMessage(json.message || null);
+          return;
+        }
+        setUmamiStats(json.data ?? null);
       } catch {
-        if (!cancelled) setRisingStars([]);
+        if (!cancelled) {
+          setUmamiStats(null);
+          setUmamiMessage(null);
+        }
       } finally {
-        if (!cancelled) setRisingStarsLoading(false);
+        if (!cancelled) setUmamiLoading(false);
       }
     }
 
-    fetchRisingStars();
+    fetchUmamiStats();
 
     return () => {
       cancelled = true;
     };
-  }, [developersVersion, locale, section]);
+  }, [locale, section]);
 
   const adjustProductCount = (productId: string, field: 'likes' | 'favorites', delta: number) => {
-    setProducts((cur) =>
-      cur.map((p) => {
+    setProducts((cur) => {
+      const next = cur.map((p) => {
         if (p.id !== productId) return p;
         const nextValue = Math.max(0, (p[field] ?? 0) + delta);
         return { ...p, [field]: nextValue };
-      })
-    );
+      });
+      if (section !== 'featured') return next;
+      return sortProductsByPopularity(next);
+    });
   };
 
   /**
@@ -435,7 +510,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
 
     const userEmail = getAuthenticatedUserEmail();
     if (!userEmail) {
-      requestAuth('/');
+      notify(commonT('loginRequiredAction'));
       return;
     }
     const product = products.find((p) => p.id === normalizedId);
@@ -470,6 +545,8 @@ export default function ProductGrid({ section }: ProductGridProps) {
         setFavoriteIds(prev);
         writeFavoritesToStorage(prev);
         adjustProductCount(normalizedId, 'favorites', -delta);
+      } else {
+        refetchFeaturedRef.current?.();
       }
     } catch {
       setFavoriteIds(prev);
@@ -488,7 +565,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
 
     const userEmail = getAuthenticatedUserEmail();
     if (!userEmail) {
-      requestAuth('/');
+      notify(commonT('loginRequiredAction'));
       return;
     }
     const product = products.find((p) => p.id === normalizedId);
@@ -523,6 +600,8 @@ export default function ProductGrid({ section }: ProductGridProps) {
         setLikeIds(prev);
         writeLikesToStorage(prev);
         adjustProductCount(normalizedId, 'likes', -delta);
+      } else {
+        refetchFeaturedRef.current?.();
       }
     } catch {
       setLikeIds(prev);
@@ -547,7 +626,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
                 'rounded-md border px-3 py-1.5 text-xs transition-colors',
                 recentDir === 'desc'
                   ? 'border-primary/20 bg-primary text-primary-foreground'
-                  : 'border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-accent',
+                  : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-accent',
               ].join(' ')}
             >
               {t('sortNewest')}
@@ -559,7 +638,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
                 'rounded-md border px-3 py-1.5 text-xs transition-colors',
                 recentDir === 'asc'
                   ? 'border-primary/20 bg-primary text-primary-foreground'
-                  : 'border-border bg-background/70 text-muted-foreground hover:text-foreground hover:bg-accent',
+                  : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-accent',
               ].join(' ')}
             >
               {t('sortOldest')}
@@ -574,7 +653,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
         </div>
 
         {loading ? (
-          <div className="sf-wash rounded-xl border border-border bg-card/50 animate-in fade-in-0 duration-300 animate-pulse">
+          <div className="rounded-xl border border-border bg-card animate-in fade-in-0 duration-300 animate-pulse">
             <div className="px-5 py-4 border-b border-border">
               <div className="h-4 w-32 bg-muted rounded" />
             </div>
@@ -601,7 +680,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
             {listMessage || t('empty')}
           </div>
         ) : (
-          <div className="sf-wash rounded-xl border border-border bg-card/50 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
+          <div className="rounded-xl border border-border bg-card animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">{t('title')}</h3>
               <span className="text-xs text-muted-foreground">{t('subtitle')}</span>
@@ -654,7 +733,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
                         disabled={selfActionDisabled}
                         onClick={() => void toggleFavorite(p.id)}
                         className={[
-                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background transition-all duration-200 active:scale-95',
                           selfActionDisabled
                             ? 'opacity-50 cursor-not-allowed'
                             : 'hover:bg-accent hover:text-accent-foreground',
@@ -682,7 +761,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
                         disabled={selfActionDisabled}
                         onClick={() => void toggleLike(p.id)}
                         className={[
-                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background transition-all duration-200 active:scale-95',
                           selfActionDisabled
                             ? 'opacity-50 cursor-not-allowed'
                             : 'hover:bg-accent hover:text-accent-foreground',
@@ -706,13 +785,13 @@ export default function ProductGrid({ section }: ProductGridProps) {
                         href={p.website}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                        className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
                         aria-label="访问官网"
                       >
                         <i className="ri-global-line text-base" aria-hidden="true" />
                       </a>
                     ) : (
-                      <span className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 text-muted-foreground">
+                      <span className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background text-muted-foreground">
                         <i className="ri-global-line text-base" aria-hidden="true" />
                       </span>
                     )}
@@ -739,58 +818,75 @@ export default function ProductGrid({ section }: ProductGridProps) {
   return (
     <div className="animate-on-scroll">
       <div className="mb-12 space-y-6">
-        <div className="sf-wash rounded-xl border border-border bg-card/50 px-5 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="text-sm font-semibold text-foreground">{devT('title')}</div>
-            <div className="text-xs text-muted-foreground">{devT('subtitle')}</div>
-          </div>
-          {risingStarsLoading ? (
-            <div className="mt-4 text-sm text-muted-foreground">{devT('loading')}</div>
-          ) : risingStars.length === 0 ? (
-            <div className="mt-4 text-sm text-muted-foreground">{devT('empty')}</div>
-          ) : (
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {risingStars.map((d) => {
-                return (
-                <div
-                  key={d.email}
-                  className="rounded-lg border border-border bg-background/40 px-3 py-3 hover:bg-accent/30 transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => openMakerProfile(d.email)}
-                      className="flex items-center gap-3 min-w-0 flex-1 text-left hover:opacity-90 transition-opacity"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center overflow-hidden text-sm font-semibold text-muted-foreground">
-                        {d.avatar_url ? (
-                          <Image
-                            src={d.avatar_url}
-                            alt={d.name || d.email}
-                            width={40}
-                            height={40}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            unoptimized
-                            loader={({ src }) => src}
-                          />
-                        ) : (
-                          (d.name || d.email).trim().charAt(0).toUpperCase()
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-foreground truncate">{d.name || d.email}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">{devT('followers', { count: d.followers })}</div>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-                );
-              })}
+        {section === 'featured' ? (
+          <div className="rounded-xl border border-border bg-card px-5 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-sm font-semibold text-foreground">{umamiT('title')}</div>
+              <div className="text-xs text-muted-foreground">{umamiT('subtitle')}</div>
             </div>
-          )}
-        </div>
+            {umamiLoading ? (
+              <div className="mt-4 text-sm text-muted-foreground">{umamiT('loading')}</div>
+            ) : !umamiStats ? (
+              <div className="mt-4 text-sm text-muted-foreground">{umamiMessage || umamiT('empty')}</div>
+            ) : (
+              (() => {
+                const prev = umamiStats.comparison ?? null;
+                const bounceRate = umamiStats.visits > 0 ? (umamiStats.bounces / umamiStats.visits) * 100 : 0;
+                const avgVisitSeconds = umamiStats.visits > 0 ? umamiStats.totaltime / umamiStats.visits : 0;
+                const prevBounceRate =
+                  prev && prev.visits > 0 ? (prev.bounces / prev.visits) * 100 : prev ? 0 : null;
+                const prevAvgVisitSeconds = prev && prev.visits > 0 ? prev.totaltime / prev.visits : prev ? 0 : null;
+                const pageviewsChange = prev ? calcPercentChange(umamiStats.pageviews, prev.pageviews) : null;
+                const visitorsChange = prev ? calcPercentChange(umamiStats.visitors, prev.visitors) : null;
+                const bounceRateChange =
+                  prevBounceRate === null ? null : calcPercentChange(bounceRate, prevBounceRate);
+                const avgVisitSecondsChange =
+                  prevAvgVisitSeconds === null ? null : calcPercentChange(avgVisitSeconds, prevAvgVisitSeconds);
+
+                return (
+                  <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-xl border border-border bg-background px-4 py-4">
+                      <div className="text-xs text-muted-foreground">{umamiT('visitors')}</div>
+                      <div className="mt-1 flex items-end justify-between gap-2">
+                        <div className="text-lg font-semibold text-foreground tabular-nums">
+                          {umamiStats.visitors.toLocaleString(locale)}
+                        </div>
+                        <ChangeIndicator value={visitorsChange} positiveIsGood />
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-background px-4 py-4">
+                      <div className="text-xs text-muted-foreground">{umamiT('pageviews')}</div>
+                      <div className="mt-1 flex items-end justify-between gap-2">
+                        <div className="text-lg font-semibold text-foreground tabular-nums">
+                          {umamiStats.pageviews.toLocaleString(locale)}
+                        </div>
+                        <ChangeIndicator value={pageviewsChange} positiveIsGood />
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-background px-4 py-4">
+                      <div className="text-xs text-muted-foreground">{umamiT('bounceRate')}</div>
+                      <div className="mt-1 flex items-end justify-between gap-2">
+                        <div className="text-lg font-semibold text-foreground tabular-nums">
+                          {Math.round(bounceRate)}%
+                        </div>
+                        <ChangeIndicator value={bounceRateChange} positiveIsGood={false} />
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border bg-background px-4 py-4">
+                      <div className="text-xs text-muted-foreground">{umamiT('avgVisitDuration')}</div>
+                      <div className="mt-1 flex items-end justify-between gap-2">
+                        <div className="text-lg font-semibold text-foreground tabular-nums">
+                          {formatDurationSeconds(avgVisitSeconds)}
+                        </div>
+                        <ChangeIndicator value={avgVisitSecondsChange} positiveIsGood />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
+            )}
+          </div>
+        ) : null}
 
         <div className="flex items-end justify-between gap-6">
           <div>
@@ -800,12 +896,6 @@ export default function ProductGrid({ section }: ProductGridProps) {
             </div>
           </div>
           <div className="hidden sm:flex items-end gap-3">
-            {section === 'featured' ? (
-              <div className="flex items-end gap-2">
-                <span className="text-xs leading-none text-muted-foreground pb-1">{t('countdownLabel')}</span>
-                <FlipClockCountdown target={nextRefreshAt} showDays={false} scale={0.28} className="shrink-0 origin-top-right" />
-              </div>
-            ) : null}
             <Link
               href="/products"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -817,7 +907,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
       </div>
 
       {loading ? (
-        <div className="sf-wash rounded-xl border border-border bg-card/50 animate-in fade-in-0 duration-300 animate-pulse">
+        <div className="rounded-xl border border-border bg-card animate-in fade-in-0 duration-300 animate-pulse">
           <div className="px-5 py-4 border-b border-border">
             <div className="h-4 w-32 bg-muted rounded" />
           </div>
@@ -844,16 +934,31 @@ export default function ProductGrid({ section }: ProductGridProps) {
           {listMessage || t('empty')}
         </div>
       ) : (
-        <div className="sf-wash rounded-xl border border-border bg-card/50 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
+        <div className="rounded-xl border border-border bg-card animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">{t('title')}</h3>
             <span className="text-xs text-muted-foreground">{t('subtitle')}</span>
           </div>
-          <div className="divide-y divide-border">
-            {products.map((p) => {
-              const selfActionDisabled = isSameUserEmail(p.maker_email ?? null, getAuthenticatedUserEmail());
-              return (
-                <div key={p.id} className="px-5 py-4 flex items-center gap-4">
+          <LayoutGroup id="featured-ranking">
+            <motion.div layout initial={false} className="divide-y divide-border">
+              {products.map((p) => {
+                const selfActionDisabled = isSameUserEmail(p.maker_email ?? null, getAuthenticatedUserEmail());
+                return (
+                  <motion.div
+                    key={p.id}
+                    layout
+                    transition={
+                      reduceMotion
+                        ? { duration: 0 }
+                        : {
+                            type: 'spring',
+                            stiffness: 520,
+                            damping: 44,
+                            mass: 0.9,
+                          }
+                    }
+                    className="px-5 py-4 flex items-center gap-4"
+                  >
                   <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                     {p.logo_url ? (
                       <Image
@@ -897,7 +1002,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
                         disabled={selfActionDisabled}
                         onClick={() => void toggleFavorite(p.id)}
                         className={[
-                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background transition-all duration-200 active:scale-95',
                           selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
                         ].join(' ')}
                       >
@@ -921,7 +1026,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
                         disabled={selfActionDisabled}
                         onClick={() => void toggleLike(p.id)}
                         className={[
-                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                          'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background transition-all duration-200 active:scale-95',
                           selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
                         ].join(' ')}
                       >
@@ -943,21 +1048,22 @@ export default function ProductGrid({ section }: ProductGridProps) {
                         href={p.website}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                        className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
                         aria-label="访问官网"
                       >
                         <i className="ri-global-line text-base" aria-hidden="true" />
                       </a>
                     ) : (
-                      <span className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 text-muted-foreground">
+                      <span className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background text-muted-foreground">
                         <i className="ri-global-line text-base" aria-hidden="true" />
                       </span>
                     )}
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          </LayoutGroup>
         </div>
       )}
 

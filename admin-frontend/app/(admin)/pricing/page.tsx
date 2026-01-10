@@ -21,7 +21,6 @@ type PricingPlanCampaign = {
   percent_off?: number | null;
   title_en?: string | null;
   title_zh?: string | null;
-  creem_product_id?: string | null;
   starts_at?: string | null;
   ends_at?: string | null;
 };
@@ -31,7 +30,6 @@ type PricingPlan = {
   plan_key: string;
   placement?: string | null;
   monthly_usd_cents?: number | null;
-  creem_product_id?: string | null;
   title_en: string;
   title_zh: string;
   badge_en?: string | null;
@@ -60,7 +58,6 @@ type UpsertPricingPlanRequest = {
   plan_key: string;
   placement?: string | null;
   monthly_usd_cents?: number | null;
-  creem_product_id?: string | null;
   title_en: string;
   title_zh: string;
   badge_en?: string | null;
@@ -139,7 +136,6 @@ function toUpsertDraft(plan?: PricingPlan | null): UpsertPricingPlanRequest {
       plan_key: '',
       placement: 'home_right',
       monthly_usd_cents: 9900,
-      creem_product_id: null,
       title_en: '',
       title_zh: '',
       badge_en: null,
@@ -153,7 +149,7 @@ function toUpsertDraft(plan?: PricingPlan | null): UpsertPricingPlanRequest {
         { sort_order: 1, text_en: 'Priority placement', text_zh: '优先展示', available: true },
         { sort_order: 2, text_en: 'Support development', text_zh: '支持开发', available: true },
       ],
-      campaign: { active: false, percent_off: null, title_en: null, title_zh: null, creem_product_id: null, starts_at: null, ends_at: null },
+      campaign: { active: false, percent_off: null, title_en: null, title_zh: null, starts_at: null, ends_at: null },
     };
   }
 
@@ -162,7 +158,6 @@ function toUpsertDraft(plan?: PricingPlan | null): UpsertPricingPlanRequest {
     plan_key: plan.plan_key,
     placement: plan.placement ?? null,
     monthly_usd_cents: plan.monthly_usd_cents ?? null,
-    creem_product_id: plan.creem_product_id ?? null,
     title_en: plan.title_en,
     title_zh: plan.title_zh,
     badge_en: plan.badge_en ?? null,
@@ -184,7 +179,6 @@ function toUpsertDraft(plan?: PricingPlan | null): UpsertPricingPlanRequest {
       percent_off: plan.campaign?.percent_off ?? null,
       title_en: plan.campaign?.title_en ?? null,
       title_zh: plan.campaign?.title_zh ?? null,
-      creem_product_id: plan.campaign?.creem_product_id ?? null,
       starts_at: plan.campaign?.starts_at ?? null,
       ends_at: plan.campaign?.ends_at ?? null,
     },
@@ -350,7 +344,6 @@ export default function AdminPricingPage() {
         title_en: String(draft.title_en || '').trim(),
         title_zh: String(draft.title_zh || '').trim(),
         placement: normalizeOptionalString(draft.placement),
-        creem_product_id: normalizeOptionalString(draft.creem_product_id),
         badge_en: normalizeOptionalString(draft.badge_en),
         badge_zh: normalizeOptionalString(draft.badge_zh),
         description_en: normalizeOptionalString(draft.description_en),
@@ -373,7 +366,6 @@ export default function AdminPricingPage() {
           percent_off: parseOptionalInt(draft.campaign?.percent_off),
           title_en: normalizeOptionalString(draft.campaign?.title_en),
           title_zh: normalizeOptionalString(draft.campaign?.title_zh),
-          creem_product_id: normalizeOptionalString(draft.campaign?.creem_product_id),
           starts_at: normalizeOptionalString(draft.campaign?.starts_at),
           ends_at: normalizeOptionalString(draft.campaign?.ends_at),
         },
@@ -557,7 +549,6 @@ export default function AdminPricingPage() {
                         <th className="py-2 text-left font-medium">plan_key</th>
                         <th className="py-2 text-left font-medium">placement</th>
                         <th className="py-2 text-left font-medium">价格</th>
-                        <th className="py-2 text-left font-medium">Creem 产品</th>
                         <th className="py-2 text-left font-medium">状态</th>
                         <th className="py-2 text-right font-medium">操作</th>
                       </tr>
@@ -572,7 +563,6 @@ export default function AdminPricingPage() {
                           </td>
                           <td className="py-2">{p.placement || '—'}</td>
                           <td className="py-2 tabular-nums">{formatUsd(p.monthly_usd_cents ?? null)}</td>
-                          <td className="py-2">{p.creem_product_id || '—'}</td>
                           <td className="py-2">
                             <span className={p.is_active ? 'text-foreground' : 'text-muted-foreground'}>
                               {p.is_active ? '启用' : '停用'}
@@ -604,7 +594,7 @@ export default function AdminPricingPage() {
                       ))}
                       {sortedPlans.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-6 text-muted-foreground">
+                          <td colSpan={6} className="py-6 text-muted-foreground">
                             暂无方案
                           </td>
                         </tr>
@@ -654,15 +644,6 @@ export default function AdminPricingPage() {
                         setDraft((d) => (d ? { ...d, monthly_usd_cents: Number.parseInt(e.target.value || '', 10) } : d))
                       }
                       placeholder="e.g. 9900"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-sm text-muted-foreground">支付产品 ID / 外部支付链接</div>
-                    <Input
-                      value={draft?.creem_product_id ?? ''}
-                      onChange={(e) => setDraft((d) => (d ? { ...d, creem_product_id: e.target.value } : d))}
-                      placeholder="prod_... 或 https://...（支持 {{ORDER_ID}} 等占位符）"
                     />
                   </div>
 
@@ -904,18 +885,6 @@ export default function AdminPricingPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <div className="text-sm text-muted-foreground">活动支付产品 ID / 外部支付链接（可选）</div>
-                      <Input
-                        value={draft?.campaign?.creem_product_id ?? ''}
-                        onChange={(e) =>
-                          setDraft((d) =>
-                            d ? { ...d, campaign: { ...d.campaign, creem_product_id: e.target.value } } : d
-                          )
-                        }
-                        placeholder="prod_... 或 https://...（支持 {{ORDER_ID}} 等占位符）"
-                      />
-                    </div>
-                    <div className="space-y-2">
                       <div className="text-sm text-muted-foreground">活动标题（英文）</div>
                       <Input
                         value={draft?.campaign?.title_en ?? ''}
@@ -1082,7 +1051,7 @@ export default function AdminPricingPage() {
                         <td className="py-2">{o.status}</td>
                         <td className="py-2 text-muted-foreground">{String(o.created_at).slice(0, 19).replace('T', ' ')}</td>
                         <td className="py-2">
-                          {o.status === 'created' && o.provider !== 'creem' ? (
+                          {o.status === 'created' ? (
                             <Button
                               variant="outline"
                               size="sm"

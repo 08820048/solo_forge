@@ -12,6 +12,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#000"/><text x="32" y="41" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="32" font-weight="700" fill="#fff">S</text></svg>`;
+const faviconUrl = `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`;
+
 function getSiteUrl(): URL {
   const explicit = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
   if (explicit) {
@@ -66,8 +69,8 @@ export const metadata: Metadata = {
     images: ['/docs/imgs/image.jpg'],
   },
   icons: {
-    icon: '/docs/imgs/image.jpg',
-    apple: '/docs/imgs/image.jpg',
+    icon: faviconUrl,
+    apple: faviconUrl,
   },
   robots: {
     index: true,
@@ -83,6 +86,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link href="https://db.onlinewebfonts.com/c/28f54a645f59f262c99d58905dc51476?family=Typestar-OCR" rel="stylesheet" />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/remixicon@4.6.0/fonts/remixicon.css"

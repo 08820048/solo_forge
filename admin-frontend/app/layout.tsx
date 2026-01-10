@@ -12,12 +12,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#000"/><text x="32" y="41" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="32" font-weight="700" fill="#fff">S</text></svg>`;
+const faviconUrl = `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`;
+
 export const metadata: Metadata = {
   title: "SoloForge Admin",
   description: "SoloForge 管理后台",
   icons: {
-    icon: '/docs/logo.png',
-    apple: '/docs/logo.png',
+    icon: faviconUrl,
+    apple: faviconUrl,
   },
 };
 

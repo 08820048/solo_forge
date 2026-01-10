@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import Image from 'next/image';
 import { Link as I18nLink } from '@/i18n/routing';
 import LanguageSwitcher from './LanguageSwitcher';
+import KofiSponsorDialog from '@/components/KofiSponsorDialog';
 
 export default function Footer() {
   const t = useTranslations('footer');
   const tNav = useTranslations('nav');
   const currentYear = new Date().getFullYear();
+  const contactEmail = 'ilikexff@gmail.com';
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -87,8 +88,10 @@ export default function Footer() {
           {/* Brand + Newsletter */}
           <div className="col-span-1 md:col-span-2">
             <div className="mb-4">
-              <div className="inline-flex items-center gap-2 text-xl font-semibold text-foreground bg-spotlight">
-                <Image src="/docs/imgs/image.jpg" alt="SoloForge" width={22} height={22} className="rounded-sm" />
+              <div className="inline-flex items-center gap-2 text-xl font-semibold text-foreground">
+                <div className="size-[22px] shrink-0 rounded-full bg-black text-white flex items-center justify-center text-xs font-semibold leading-none select-none">
+                  S
+                </div>
                 <span>SoloForge</span>
               </div>
               <p className="mt-2 text-sm text-muted-foreground max-w-md font-sans">
@@ -105,7 +108,7 @@ export default function Footer() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t('newsletter.placeholder')}
-                  className="flex-1 rounded-md border border-border bg-background/80 px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60 font-sans"
+                  className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/60 font-sans"
                 />
                 <button
                   type="button"
@@ -139,8 +142,8 @@ export default function Footer() {
                 </I18nLink>
               </li>
               <li>
-                <a href="mailto:ilikexff@gmail.com" className="text-sm hover:text-foreground transition-colors font-sans">
-                  {t('links.contact')} - ilikexff@gmail.com
+                <a href={`mailto:${contactEmail}`} className="text-sm hover:text-foreground transition-colors font-sans">
+                  {t('links.contact')}
                 </a>
               </li>
               <li>
@@ -164,6 +167,19 @@ export default function Footer() {
                 <I18nLink href="/feedback" className="text-sm hover:text-foreground transition-colors font-sans">
                   {tNav('feedback')}
                 </I18nLink>
+              </li>
+              <li>
+                <KofiSponsorDialog
+                  trigger={
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 text-sm hover:text-foreground transition-colors font-sans bg-transparent p-0"
+                    >
+                      <i className="ri-cup-line text-base" aria-hidden="true" />
+                      <span>Ko-fi</span>
+                    </button>
+                  }
+                />
               </li>
               <li>
                 <a href="https://x.com/xuyixff" target="_blank" rel="noopener noreferrer" className="text-sm hover:text-foreground transition-colors font-sans">

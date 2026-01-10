@@ -354,7 +354,7 @@ export default function DeveloperCenterPage() {
     return (
       <div className="min-h-screen">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 pb-12">
-          <div className="sf-wash rounded-2xl border border-border bg-card/50 p-10 text-center animate-on-scroll">
+          <div className="rounded-2xl border border-border bg-card p-10 text-center animate-on-scroll">
             <h1 className="text-3xl font-bold text-foreground tracking-tight">{t('title')}</h1>
             <p className="mt-3 text-muted-foreground">{t('loginRequired')}</p>
             <div className="mt-8 flex items-center justify-center gap-3">
@@ -398,7 +398,7 @@ export default function DeveloperCenterPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 animate-on-scroll">
-          <Card className="lg:col-span-2 bg-card/50">
+          <Card className="lg:col-span-2 bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">{t('profile.title')}</CardTitle>
             </CardHeader>
@@ -453,43 +453,43 @@ export default function DeveloperCenterPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-card/50">
+          <Card className="bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">{t('stats.title')}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('stats.total')}</div>
                   <div className="mt-1 text-2xl font-bold text-foreground">{stats.total}</div>
                 </div>
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('stats.pending')}</div>
                   <div className="mt-1 text-2xl font-bold text-foreground">{stats.pending}</div>
                 </div>
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('stats.approved')}</div>
                   <div className="mt-1 text-2xl font-bold text-foreground">{stats.approved}</div>
                 </div>
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('stats.rejected')}</div>
                   <div className="mt-1 text-2xl font-bold text-foreground">{stats.rejected}</div>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('stats.followers')}</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">
                     {centerStatsLoading && !centerStats ? '…' : fmt(centerStats?.followers)}
                   </div>
                 </div>
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('stats.totalLikes')}</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">
                     {centerStatsLoading && !centerStats ? '…' : fmt(centerStats?.total_likes)}
                   </div>
                 </div>
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('stats.totalFavorites')}</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">
                     {centerStatsLoading && !centerStats ? '…' : fmt(centerStats?.total_favorites)}
@@ -512,7 +512,7 @@ export default function DeveloperCenterPage() {
 
           <TabsContent value="overview" className="mt-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-2 bg-card/50">
+              <Card className="lg:col-span-2 bg-card">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">{t('overview.recentTitle')}</CardTitle>
                 </CardHeader>
@@ -594,7 +594,7 @@ export default function DeveloperCenterPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-card/50">
+              <Card className="bg-card">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">{t('overview.favoritesTitle')}</CardTitle>
                 </CardHeader>
@@ -659,7 +659,7 @@ export default function DeveloperCenterPage() {
           </TabsContent>
 
           <TabsContent value="submit" className="mt-6">
-            <div className="sf-wash rounded-2xl border border-border bg-card/50 p-6">
+            <div className="rounded-2xl border border-border bg-card p-6">
               {editingProduct ? (
                 <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
@@ -712,7 +712,7 @@ export default function DeveloperCenterPage() {
           </TabsContent>
 
           <TabsContent value="products" className="mt-6">
-            <div className="sf-wash rounded-2xl border border-border bg-card/50">
+            <div className="rounded-2xl border border-border bg-card">
               <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold text-foreground">{t('products.title')}</div>
@@ -824,7 +824,7 @@ export default function DeveloperCenterPage() {
           </TabsContent>
 
           <TabsContent value="favorites" className="mt-6">
-            <div className="sf-wash rounded-2xl border border-border bg-card/50">
+            <div className="rounded-2xl border border-border bg-card">
               <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                 <div>
                   <div className="text-sm font-semibold text-foreground">{t('favorites.title')}</div>
@@ -890,7 +890,7 @@ export default function DeveloperCenterPage() {
 
           <TabsContent value="stats" className="mt-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="lg:col-span-2 bg-card/50">
+              <Card className="lg:col-span-2 bg-card">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">{t('statsBreakdown.title')}</CardTitle>
                 </CardHeader>
@@ -900,7 +900,7 @@ export default function DeveloperCenterPage() {
                   ) : (
                     <div className="space-y-3">
                       {stats.topCategories.map(([cat, count]) => (
-                        <div key={cat} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background/40 px-4 py-3">
+                        <div key={cat} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background px-4 py-3">
                           <div className="text-sm text-foreground">{categoryT(cat)}</div>
                           <div className="text-sm text-muted-foreground">{t('statsBreakdown.count', { count })}</div>
                         </div>
@@ -910,7 +910,7 @@ export default function DeveloperCenterPage() {
                 </CardContent>
               </Card>
 
-              <Card className="bg-card/50">
+              <Card className="bg-card">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm">{t('tips.title')}</CardTitle>
                 </CardHeader>

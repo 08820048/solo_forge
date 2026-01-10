@@ -224,7 +224,7 @@ export default async function ProductDetailPage({
           </div>
 
           {/* Description */}
-          <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-6 mb-6">
+          <div className="rounded-xl border border-border bg-card text-card-foreground p-6 mb-6">
             <h2 className="text-2xl font-bold text-foreground mb-4">
               {t('description')}
             </h2>
@@ -275,7 +275,7 @@ export default async function ProductDetailPage({
 
         {/* Sidebar */}
         <div className="lg:col-span-1">
-          <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-6 sticky top-20">
+          <div className="rounded-xl border border-border bg-card text-card-foreground p-6 sticky top-20">
             {/* Maker Info */}
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-foreground mb-3">

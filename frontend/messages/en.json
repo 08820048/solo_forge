@@ -14,7 +14,19 @@
   },
   "pricing": {
     "title": "Pricing",
-    "subtitle": "Choose a pricing plan for top exposure on the homepage.",
+    "subtitle": "SoloForge is currently 100% free to use.",
+    "policy": {
+      "introTitle": "Current policy",
+      "intro": "SoloForge is currently completely free. You can submit and manage your indie products without paying anything.",
+      "first50Title": "First 50 submitted products",
+      "first50Desc": "The first 50 submitted products get opportunities to appear in the high-exposure homepage slots (top and right).",
+      "after50Title": "After 50",
+      "after50Desc": "After that, we randomly pick some products from yesterday’s most popular ones (likes + favorites) to fill the slots.",
+      "kofiTitle": "Get a slot via Ko-fi sponsorship",
+      "kofiDesc": "You can also sponsor via Ko-fi to request a specific slot for your product. Email ilikexff@gmail.com for details.",
+      "priorityTitle": "Priority",
+      "priorityDesc": "Sponsored products are displayed with the highest priority."
+    },
     "tiers": {
       "free": {
         "title": "Free",
@@ -484,6 +496,7 @@
     "slogan": "The Forge for Solo Makers' Products",
     "viewMore": "View more",
     "sponsorBadge": "Pricing",
+    "loginRequiredAction": "Please log in to continue.",
     "search": {
       "title": "Search",
       "placeholder": "Search products, developers...",
@@ -552,9 +565,22 @@
       "follow": "Follow",
       "unfollow": "Following"
     },
+    "umamiStats": {
+      "title": "Site Stats",
+      "subtitle": "Last 24 hours",
+      "loading": "Loading...",
+      "empty": "No stats available.",
+      "pageviews": "Pageviews",
+      "visitors": "Visitors",
+      "visits": "Visits",
+      "bounces": "Bounces",
+      "bounceRate": "Bounce rate",
+      "avgVisitDuration": "Avg visit time",
+      "totaltime": "Time spent"
+    },
     "categoryRanking": {
       "title": "Top Categories",
-      "subtitle": "Ranked by approved product count",
+      "subtitle": "Sorted by approved products",
       "loading": "Loading...",
       "empty": "No ranking data yet.",
       "count": "{count} products"

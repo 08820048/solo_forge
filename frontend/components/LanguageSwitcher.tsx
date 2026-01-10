@@ -65,7 +65,7 @@ export default function LanguageSwitcher() {
           setIsMounted(true);
           setIsOpen(!isOpen);
         }}
-        className="flex items-center space-x-2 px-3 py-2 text-xs font-medium rounded-full text-muted-foreground hover:text-foreground border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-colors"
+        className="flex items-center space-x-2 px-3 py-2 text-xs font-medium rounded-full text-muted-foreground hover:text-foreground border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
         disabled={isPending}
       >
         <span className="hidden sm:inline">{currentLanguage?.name}</span>

@@ -14,18 +14,30 @@
   },
   "pricing": {
     "title": "定价",
-    "subtitle": "通过定价把你的产品优先展示在首页定价位。",
+    "subtitle": "SoloForge 目前完全免费使用。",
+    "policy": {
+      "introTitle": "当前策略",
+      "intro": "SoloForge 目前完全免费使用，无需支付任何费用即可提交与管理你的独立产品。",
+      "first50Title": "前 50 个提交的产品",
+      "first50Desc": "前 50 个提交的产品将获得首页顶部与右侧高曝光赞助位的展示机会。",
+      "after50Title": "超过 50 之后",
+      "after50Desc": "这之后，我们将从前一日最受欢迎的产品（点赞 + 收藏综合计算）中随机选取部分，填充到赞助位进行展示。",
+      "kofiTitle": "通过 Ko-fi 赞助获得展示",
+      "kofiDesc": "你也可以通过 Ko-fi 赞助，指定任意一个赞助位展示你的产品。可以通过下方的邮件联系我们。",
+      "priorityTitle": "展示优先级",
+      "priorityDesc": "我们将优先展示赞助者提供的产品。"
+    },
     "tiers": {
       "free": {
         "title": "Free",
         "badge": "限量",
         "price": "免费",
-        "desc": "限前 50 个提交的产品享 48 小时定价位展示机会，每天随机出现在顶部/右侧位置。",
+        "desc": "限前 50 个提交的产品享 48 小时赞助位展示机会，每天随机出现在顶部/右侧位置。",
         "benefits": [
           "限前 50 个提交的产品",
           "赠完为止",
           "每个产品最多 48 小时展示机会",
-          "每天随机出现在首页顶部/右侧定价位"
+          "每天随机出现在首页顶部/右侧赞助位"
         ]
       },
       "top": {
@@ -34,8 +46,8 @@
         "price": "$10 / 月",
         "desc": "展示在首页顶部定价模块（最高曝光）。",
         "benefits": [
-          { "text": "固定展示在首页顶部定价位（左/右）", "available": true },
-          { "text": "固定展示在首页右侧定价位（1/2/3 槽位）", "available": true },
+          { "text": "固定展示在首页顶部赞助位（左/右）", "available": true },
+          { "text": "固定展示在首页右侧赞助位（1/2/3 槽位）", "available": true },
           { "text": "统一的「定价者」身份认证标识", "available": true },
           { "text": "X（Twitter）社交平台帖子推荐", "available": true },
           { "text": "每月最多 3 次邮件简报推广", "available": true }
@@ -47,8 +59,8 @@
         "price": "$5 / 位 / 月",
         "desc": "展示在首页右侧栏定价模块（最多 3 个）。",
         "benefits": [
-          { "text": "固定展示在首页顶部定价位（左/右）", "available": false },
-          { "text": "固定展示在首页右侧定价位（1/2/3 槽位）", "available": true },
+          { "text": "固定展示在首页顶部赞助位（左/右）", "available": false },
+          { "text": "固定展示在首页右侧赞助位（1/2/3 槽位）", "available": true },
           { "text": "统一的「定价者」身份认证标识", "available": true },
           { "text": "X（Twitter）社交平台帖子推荐", "available": false },
           { "text": "每月最多 1 次邮件简报推广", "available": true }
@@ -59,7 +71,7 @@
       "title": "定价权益",
       "items": [
         "统一的「定价者」身份认证标识",
-        "首页顶部/右侧定价位最高优先级曝光",
+        "首页顶部/右侧赞助位最高优先级曝光",
         "X（Twitter）社交平台帖子推荐",
         "每月最多 3 次邮件简报推广"
       ]
@@ -431,7 +443,7 @@
     "unfollow": "已关注",
     "selfLabel": "这是你",
     "visitWebsite": "访问网站",
-    "sponsorBadge": "定价位",
+    "sponsorBadge": "赞助位",
     "tabs": {
       "products": "作品",
       "favorites": "收藏"
@@ -477,13 +489,14 @@
     "tags": "标签",
     "createdAt": "收录于",
     "description": "产品描述",
-    "sponsorBadge": "定价位"
+    "sponsorBadge": "赞助位"
   },
   "common": {
     "appName": "SoloForge",
     "slogan": "单人开发者锻造的产品宝库",
     "viewMore": "查看更多",
-    "sponsorBadge": "定价位",
+    "sponsorBadge": "赞助位",
+    "loginRequiredAction": "请先登录后再进行此操作。",
     "search": {
       "title": "全站搜索",
       "placeholder": "搜索产品、开发者...",
@@ -506,15 +519,15 @@
       "ctaStory": "我们的故事"
     },
     "sponsored": {
-      "title": "定价位",
-      "badge": "定价位",
-      "subtitle": "这里展示首页定价位产品。",
-      "cta": "购买定价位",
-      "itemBadge": "定价位",
+      "title": "赞助位",
+      "badge": "赞助位",
+      "subtitle": "这里展示首页赞助位产品。",
+      "cta": "购买赞助位",
+      "itemBadge": "赞助位",
       "visit": "访问官网",
       "refreshIn": "下次刷新 {time}",
       "loading": "加载中...",
-      "empty": "暂无定价位产品。",
+      "empty": "暂无赞助位产品。",
       "previewTip": "提示：若官网禁止嵌入预览，请点击「访问官网」在新标签打开。",
       "invalidUrl": "官网链接无效，无法预览。"
     },
@@ -551,6 +564,19 @@
       "followers": "{count} 关注",
       "follow": "关注",
       "unfollow": "已关注"
+    },
+    "umamiStats": {
+      "title": "网站数据",
+      "subtitle": "最近 24 小时",
+      "loading": "加载中...",
+      "empty": "暂无统计数据。",
+      "pageviews": "浏览量",
+      "visitors": "访客",
+      "visits": "访问次数",
+      "bounces": "跳出",
+      "bounceRate": "跳出率",
+      "avgVisitDuration": "平均访问时长",
+      "totaltime": "停留时长"
     },
     "categoryRanking": {
       "title": "热门分类排行",

@@ -231,819 +231,6 @@ pub async fn create_sponsorship_request(
     }
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct CreateSponsorshipCheckoutBody {
-    pub product_ref: String,
-    pub placement: String,
-    pub slot_index: Option<i32>,
-    pub months: i32,
-    pub note: Option<String>,
-    pub plan_id: Option<String>,
-    pub plan_key: Option<String>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct CreateSponsorshipCheckoutPayload {
-    pub order_id: String,
-    pub checkout_url: String,
-}
-
-fn creem_base_url() -> String {
-    if let Ok(v) = env::var("CREEM_API_BASE_URL") {
-        let trimmed = v.trim();
-        if !trimmed.is_empty() {
-            return trimmed.trim_end_matches('/').to_string();
-        }
-    }
-    let test_mode = matches!(
-        env::var("CREEM_TEST_MODE").ok().as_deref(),
-        Some("1" | "true" | "TRUE")
-    );
-    if test_mode {
-        "https://test-api.creem.io".to_string()
-    } else {
-        "https://api.creem.io".to_string()
-    }
-}
-
-fn frontend_base_url() -> String {
-    env::var("FRONTEND_BASE_URL")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| "http://localhost:3000".to_string())
-        .trim_end_matches('/')
-        .to_string()
-}
-
-fn locale_from_accept_language(lang: &str) -> &'static str {
-    if lang.to_ascii_lowercase().starts_with("zh") {
-        "zh"
-    } else {
-        "en"
-    }
-}
-
-fn is_http_url_spec(value: &str) -> bool {
-    let v = value.trim().to_ascii_lowercase();
-    v.starts_with("https://") || v.starts_with("http://")
-}
-
-struct CheckoutTemplateContext<'a> {
-    order_id: &'a str,
-    user_email: &'a str,
-    user_id: Option<&'a str>,
-    product_id: &'a str,
-    placement: &'a str,
-    slot_index: Option<i32>,
-    months: i32,
-    plan_id: Option<&'a str>,
-    plan_key: Option<&'a str>,
-}
-
-fn render_checkout_url_template(template: &str, ctx: &CheckoutTemplateContext<'_>) -> String {
-    let slot_index = ctx.slot_index.map(|v| v.to_string()).unwrap_or_default();
-    let months = ctx.months.to_string();
-    template
-        .replace("{{ORDER_ID}}", ctx.order_id)
-        .replace("{{USER_EMAIL}}", ctx.user_email)
-        .replace("{{USER_ID}}", ctx.user_id.unwrap_or(""))
-        .replace("{{PRODUCT_ID}}", ctx.product_id)
-        .replace("{{PLACEMENT}}", ctx.placement)
-        .replace("{{SLOT_INDEX}}", slot_index.as_str())
-        .replace("{{MONTHS}}", months.as_str())
-        .replace("{{PLAN_ID}}", ctx.plan_id.unwrap_or(""))
-        .replace("{{PLAN_KEY}}", ctx.plan_key.unwrap_or(""))
-}
-
-#[derive(Debug, Serialize)]
-struct CreemCreateCheckoutRequest<'a> {
-    product_id: &'a str,
-    request_id: &'a str,
-    units: i32,
-    success_url: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    customer: Option<CreemCustomer<'a>>,
-    metadata: serde_json::Value,
-}
-
-#[derive(Debug, Serialize)]
-struct CreemCustomer<'a> {
-    email: &'a str,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct CreemCreateCheckoutResponse {
-    id: Option<String>,
-    checkout_url: Option<String>,
-    status: Option<String>,
-}
-
-pub async fn create_creem_sponsorship_checkout(
-    req: HttpRequest,
-    body: web::Json<CreateSponsorshipCheckoutBody>,
-    db: web::Data<Arc<Database>>,
-) -> impl Responder {
-    let lang = get_language_from_request(&req);
-    let body = body.into_inner();
-
-    let token = match extract_bearer_token(&req) {
-        Some(v) => v,
-        None => {
-            return HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-                "Missing Authorization bearer token".to_string(),
-            ))
-        }
-    };
-    let (user_email, user_id) = match resolve_supabase_user_from_bearer(&token).await {
-        Some(v) => v,
-        None => {
-            return HttpResponse::Unauthorized()
-                .json(ApiResponse::<()>::error("Invalid session".to_string()))
-        }
-    };
-
-    let placement = body.placement.trim().to_string();
-    if placement != "home_top" && placement != "home_right" {
-        return HttpResponse::BadRequest()
-            .json(ApiResponse::<()>::error("Invalid placement".to_string()));
-    }
-    if placement == "home_top" {
-        match body.slot_index {
-            Some(0 | 1) => {}
-            _ => {
-                return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                    if lang.starts_with("zh") {
-                        "顶部定价位必须指定 slot_index=0(左) 或 1(右)".to_string()
-                    } else {
-                        "home_top requires slot_index 0 (left) or 1 (right)".to_string()
-                    },
-                ))
-            }
-        }
-    }
-    if placement == "home_right" {
-        match body.slot_index {
-            Some(0..=2) => {}
-            _ => {
-                return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                    if lang.starts_with("zh") {
-                        "右侧定价位必须指定 slot_index=0/1/2（对应 1/2/3 槽位）".to_string()
-                    } else {
-                        "home_right requires slot_index 0/1/2".to_string()
-                    },
-                ))
-            }
-        }
-    }
-
-    let product_ref = body.product_ref.trim();
-    if product_ref.is_empty() {
-        return HttpResponse::BadRequest()
-            .json(ApiResponse::<()>::error("Missing product_ref".to_string()));
-    }
-
-    let product_id = match db.resolve_product_id_by_ref(product_ref).await {
-        Ok(Some(id)) => id,
-        Ok(None) => {
-            return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                if lang.starts_with("zh") {
-                    "无法匹配到产品，请填写产品链接 / 产品名称 / 产品 ID".to_string()
-                } else {
-                    "Cannot resolve product. Please provide product URL/name/id.".to_string()
-                },
-            ))
-        }
-        Err(e) => {
-            if is_db_unavailable_error(&e) {
-                return HttpResponse::Ok().json(make_db_degraded_response(
-                    "POST /api/sponsorship/checkout",
-                    CreateSponsorshipCheckoutPayload {
-                        order_id: String::new(),
-                        checkout_url: String::new(),
-                    },
-                    if lang.starts_with("zh") {
-                        "数据库连接不可用，暂无法创建支付。".to_string()
-                    } else {
-                        "Database is unavailable. Cannot create checkout in degraded mode."
-                            .to_string()
-                    },
-                    &e,
-                ));
-            }
-            return HttpResponse::InternalServerError()
-                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
-        }
-    };
-
-    let product = match db.get_product_by_id(&product_id).await {
-        Ok(Some(v)) => v,
-        Ok(None) => {
-            return HttpResponse::BadRequest()
-                .json(ApiResponse::<()>::error("Product not found".to_string()))
-        }
-        Err(e) => {
-            return HttpResponse::InternalServerError()
-                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
-        }
-    };
-
-    if !matches!(product.status, crate::models::ProductStatus::Approved) {
-        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            if lang.starts_with("zh") {
-                "仅支持对已通过审核的产品购买定价位。".to_string()
-            } else {
-                "Only approved products can purchase a pricing slot.".to_string()
-            },
-        ));
-    }
-    if !is_same_user_email(&product.maker_email, &user_email) {
-        return HttpResponse::Forbidden().json(ApiResponse::<()>::error(
-            if lang.starts_with("zh") {
-                "只能为自己提交的产品购买定价位。".to_string()
-            } else {
-                "You can only purchase a pricing slot for products you submitted.".to_string()
-            },
-        ));
-    }
-
-    let months = body.months.clamp(1, 24);
-
-    /*
-     * resolvePricingPlanForCheckout
-     * 为本次支付解析对应的定价方案（优先 plan_id/plan_key，其次 placement 默认方案）。
-     */
-    let pricing_plan = {
-        let plan_id = body
-            .plan_id
-            .as_deref()
-            .map(|v| v.trim())
-            .filter(|v| !v.is_empty());
-        let plan_key = body
-            .plan_key
-            .as_deref()
-            .map(|v| v.trim())
-            .filter(|v| !v.is_empty());
-
-        if let Some(id) = plan_id {
-            match db.get_pricing_plan_by_id(id).await {
-                Ok(Some(plan)) => Some(plan),
-                Ok(None) => {
-                    return HttpResponse::BadRequest()
-                        .json(ApiResponse::<()>::error("Invalid plan_id".to_string()))
-                }
-                Err(e) => {
-                    return HttpResponse::InternalServerError()
-                        .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
-                }
-            }
-        } else if let Some(key) = plan_key {
-            match db.get_pricing_plan_by_key(key).await {
-                Ok(Some(plan)) => Some(plan),
-                Ok(None) => {
-                    return HttpResponse::BadRequest()
-                        .json(ApiResponse::<()>::error("Invalid plan_key".to_string()))
-                }
-                Err(e) => {
-                    return HttpResponse::InternalServerError()
-                        .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
-                }
-            }
-        } else {
-            match db
-                .get_default_pricing_plan_for_placement(Some(&placement))
-                .await
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    return HttpResponse::InternalServerError()
-                        .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
-                }
-            }
-        }
-    };
-
-    if let Some(ref plan) = pricing_plan {
-        if !plan.is_active {
-            return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                "Pricing plan is inactive".to_string(),
-            ));
-        }
-        if plan
-            .placement
-            .as_deref()
-            .map(|v| v.trim())
-            .filter(|v| !v.is_empty())
-            != Some(placement.as_str())
-        {
-            return HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                "Pricing plan placement mismatch".to_string(),
-            ));
-        }
-    }
-
-    /*
-     * resolveCreemProductId
-     * 根据定价方案（含活动）选择 Creem product_id；若缺失则回退到旧的环境变量。
-     */
-    let creem_product_id = {
-        let now = Utc::now();
-        let mut selected: Option<String> = None;
-        if let Some(ref plan) = pricing_plan {
-            let campaign = &plan.campaign;
-            let within = (campaign.starts_at.is_none() || campaign.starts_at.unwrap() <= now)
-                && (campaign.ends_at.is_none() || campaign.ends_at.unwrap() >= now);
-            if campaign.active && within {
-                if let Some(v) = campaign
-                    .creem_product_id
-                    .as_deref()
-                    .map(|v| v.trim())
-                    .filter(|v| !v.is_empty())
-                {
-                    selected = Some(v.to_string());
-                }
-            }
-            if selected.is_none() {
-                if let Some(v) = plan
-                    .creem_product_id
-                    .as_deref()
-                    .map(|v| v.trim())
-                    .filter(|v| !v.is_empty())
-                {
-                    selected = Some(v.to_string());
-                }
-            }
-        }
-
-        if let Some(v) = selected {
-            v
-        } else if placement == "home_top" {
-            env::var("CREEM_PRODUCT_ID_HOME_TOP")
-                .ok()
-                .unwrap_or_default()
-        } else {
-            env::var("CREEM_PRODUCT_ID_HOME_RIGHT")
-                .ok()
-                .unwrap_or_default()
-        }
-    };
-    if creem_product_id.trim().is_empty() {
-        return HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
-            if lang.starts_with("zh") {
-                if pricing_plan.is_some() {
-                    "支付未配置：当前定价方案未设置 Creem 产品 ID，请在管理后台的「定价管理」为该方案配置 creem_product_id。".to_string()
-                } else {
-                    "支付未配置：缺少 Creem 产品 ID（CREEM_PRODUCT_ID_HOME_TOP / CREEM_PRODUCT_ID_HOME_RIGHT）。".to_string()
-                }
-            } else if pricing_plan.is_some() {
-                "Payment is not configured: the selected pricing plan has no Creem product id."
-                    .to_string()
-            } else {
-                "Payment is not configured: missing CREEM_PRODUCT_ID_HOME_TOP / CREEM_PRODUCT_ID_HOME_RIGHT."
-                    .to_string()
-            },
-        ));
-    }
-
-    let provider = if is_http_url_spec(&creem_product_id) {
-        "external"
-    } else {
-        "creem"
-    };
-
-    let order_id = match db
-        .create_sponsorship_order(
-            &user_email,
-            user_id.as_deref(),
-            &product_id,
-            &placement,
-            body.slot_index,
-            months,
-            provider,
-            pricing_plan.as_ref().map(|p| {
-                (
-                    p.id.as_str(),
-                    p.plan_key.as_str(),
-                    p.monthly_usd_cents,
-                    p.campaign.percent_off,
-                )
-            }),
-        )
-        .await
-    {
-        Ok(id) => id,
-        Err(e) => {
-            return HttpResponse::InternalServerError()
-                .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)))
-        }
-    };
-
-    if provider == "external" {
-        let ctx = CheckoutTemplateContext {
-            order_id: order_id.as_str(),
-            user_email: user_email.as_str(),
-            user_id: user_id.as_deref(),
-            product_id: product_id.as_str(),
-            placement: placement.as_str(),
-            slot_index: body.slot_index,
-            months,
-            plan_id: pricing_plan.as_ref().map(|p| p.id.as_str()),
-            plan_key: pricing_plan.as_ref().map(|p| p.plan_key.as_str()),
-        };
-        let checkout_url = render_checkout_url_template(creem_product_id.trim(), &ctx);
-
-        if checkout_url.trim().is_empty() {
-            return HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
-                if lang.starts_with("zh") {
-                    "支付未配置：外部支付链接为空。".to_string()
-                } else {
-                    "Payment is not configured: external checkout url is empty.".to_string()
-                },
-            ));
-        }
-
-        let _ = db
-            .set_sponsorship_order_provider_checkout_id(&order_id, checkout_url.trim())
-            .await;
-
-        return HttpResponse::Ok().json(ApiResponse::success(CreateSponsorshipCheckoutPayload {
-            order_id,
-            checkout_url,
-        }));
-    }
-
-    let creem_api_key = env::var("CREEM_API_KEY").ok().unwrap_or_default();
-    if creem_api_key.trim().is_empty() {
-        return HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
-            if lang.starts_with("zh") {
-                "支付未配置：缺少 CREEM_API_KEY。你可以在管理后台把定价方案的 creem_product_id 配置为外部支付链接（例如 Stripe Payment Link）。".to_string()
-            } else {
-                "Payment is not configured: missing CREEM_API_KEY. You can set pricing plan creem_product_id to an external checkout URL.".to_string()
-            },
-        ));
-    }
-
-    let locale = locale_from_accept_language(lang);
-    let success_url = format!(
-        "{}/{}/pricing?paid=1&order_id={}",
-        frontend_base_url(),
-        locale,
-        urlencoding::encode(&order_id)
-    );
-
-    let metadata = serde_json::json!({
-        "sf_kind": "sponsorship",
-        "sf_order_id": order_id,
-        "sf_user_email": user_email,
-        "sf_user_id": user_id,
-        "sf_product_id": product_id,
-        "sf_placement": placement,
-        "sf_slot_index": body.slot_index,
-        "sf_requested_months": months,
-        "sf_note": body.note.as_deref().unwrap_or("").trim(),
-        "sf_plan_id": pricing_plan.as_ref().map(|p| p.id.as_str()).unwrap_or(""),
-        "sf_plan_key": pricing_plan.as_ref().map(|p| p.plan_key.as_str()).unwrap_or(""),
-    });
-
-    let creem_req = CreemCreateCheckoutRequest {
-        product_id: creem_product_id.trim(),
-        request_id: &order_id,
-        units: months,
-        success_url: &success_url,
-        customer: Some(CreemCustomer { email: &user_email }),
-        metadata,
-    };
-
-    let client = Client::builder()
-        .timeout(StdDuration::from_secs(12))
-        .connect_timeout(StdDuration::from_secs(4))
-        .http1_only()
-        .build()
-        .unwrap_or_else(|_| Client::new());
-
-    let url = format!("{}/v1/checkouts", creem_base_url());
-    let resp = match client
-        .post(url)
-        .header("x-api-key", creem_api_key)
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json")
-        .json(&creem_req)
-        .send()
-        .await
-    {
-        Ok(v) => v,
-        Err(e) => {
-            return HttpResponse::BadGateway().json(ApiResponse::<()>::error(format!(
-                "Creem request failed: {}",
-                e
-            )));
-        }
-    };
-
-    let status = resp.status();
-    let parsed = resp.json::<CreemCreateCheckoutResponse>().await.ok();
-    let checkout_id = parsed
-        .as_ref()
-        .and_then(|v| v.id.as_deref())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-    let checkout_url = parsed
-        .as_ref()
-        .and_then(|v| v.checkout_url.as_deref())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-
-    if !status.is_success() || checkout_url.is_empty() {
-        return HttpResponse::BadGateway().json(ApiResponse::<()>::error(
-            if lang.starts_with("zh") {
-                "创建支付失败，请稍后重试。".to_string()
-            } else {
-                "Failed to create checkout. Please try again later.".to_string()
-            },
-        ));
-    }
-
-    if !checkout_id.is_empty() {
-        let _ = db
-            .set_sponsorship_order_provider_checkout_id(&order_id, &checkout_id)
-            .await;
-    }
-
-    HttpResponse::Ok().json(ApiResponse::success(CreateSponsorshipCheckoutPayload {
-        order_id,
-        checkout_url,
-    }))
-}
-
-fn hex_lower(bytes: &[u8]) -> String {
-    const CHARS: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        out.push(CHARS[(b >> 4) as usize] as char);
-        out.push(CHARS[(b & 0x0f) as usize] as char);
-    }
-    out
-}
-
-fn decode_hex_bytes(hex: &str) -> Option<Vec<u8>> {
-    let s = hex.trim();
-    if s.len() % 2 != 0 {
-        return None;
-    }
-    let mut out = Vec::with_capacity(s.len() / 2);
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let hi = bytes[i];
-        let lo = bytes[i + 1];
-        let hi = (hi as char).to_digit(16)? as u8;
-        let lo = (lo as char).to_digit(16)? as u8;
-        out.push((hi << 4) | lo);
-        i += 2;
-    }
-    Some(out)
-}
-
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff: u8 = 0;
-    for (x, y) in a.iter().zip(b.iter()) {
-        diff |= x ^ y;
-    }
-    diff == 0
-}
-
-fn verify_creem_signature(payload: &[u8], signature_hex: &str, secret: &str) -> bool {
-    let signature_hex = signature_hex.trim().to_ascii_lowercase();
-    if signature_hex.is_empty() || secret.trim().is_empty() {
-        return false;
-    }
-    type HmacSha256 = Hmac<Sha256>;
-    let mut mac = match HmacSha256::new_from_slice(secret.as_bytes()) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    mac.update(payload);
-    let computed = mac.finalize().into_bytes();
-    if let Some(sig) = decode_hex_bytes(&signature_hex) {
-        constant_time_eq(&computed, &sig)
-    } else {
-        hex_lower(&computed) == signature_hex
-    }
-}
-
-fn get_json_string_field<'a>(v: &'a serde_json::Value, key: &str) -> Option<&'a str> {
-    v.get(key)
-        .and_then(|vv| vv.as_str())
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-}
-
-fn get_json_i64_field(v: &serde_json::Value, key: &str) -> Option<i64> {
-    v.get(key).and_then(|vv| vv.as_i64())
-}
-
-fn get_json_object<'a>(v: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
-    v.get(key).filter(|vv| vv.is_object())
-}
-
-fn extract_creem_event_envelope(
-    payload: &serde_json::Value,
-) -> (String, String, serde_json::Value) {
-    let event_id = get_json_string_field(payload, "id")
-        .unwrap_or("")
-        .to_string();
-    let event_type = get_json_string_field(payload, "eventType")
-        .or_else(|| get_json_string_field(payload, "type"))
-        .unwrap_or("")
-        .to_string();
-
-    if let Some(obj) = get_json_object(payload, "object") {
-        return (event_id, event_type, obj.clone());
-    }
-    if let Some(data) = get_json_object(payload, "data") {
-        if let Some(obj) = get_json_object(data, "object") {
-            return (event_id, event_type, obj.clone());
-        }
-    }
-    (event_id, event_type, serde_json::Value::Null)
-}
-
-pub async fn creem_webhook(
-    req: HttpRequest,
-    body: web::Bytes,
-    db: web::Data<Arc<Database>>,
-) -> impl Responder {
-    let secret = env::var("CREEM_WEBHOOK_SECRET").ok().unwrap_or_default();
-    if secret.trim().is_empty() {
-        return HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
-            "CREEM_WEBHOOK_SECRET is not configured".to_string(),
-        ));
-    }
-    let signature = req
-        .headers()
-        .get("creem-signature")
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("")
-        .to_string();
-    if !verify_creem_signature(&body, &signature, &secret) {
-        return HttpResponse::BadRequest()
-            .json(ApiResponse::<()>::error("Invalid signature".to_string()));
-    }
-
-    let payload: serde_json::Value = match serde_json::from_slice(&body) {
-        Ok(v) => v,
-        Err(_) => {
-            return HttpResponse::BadRequest()
-                .json(ApiResponse::<()>::error("Invalid JSON payload".to_string()))
-        }
-    };
-    let (event_id, event_type, object) = extract_creem_event_envelope(&payload);
-    if event_id.trim().is_empty() {
-        return HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true }));
-    }
-
-    let _ = db
-        .insert_creem_webhook_event_if_absent(&event_id, &event_type, &payload)
-        .await;
-
-    let mut processing_error: Option<String> = None;
-    let mut transient_error = false;
-
-    if event_type != "checkout.completed" {
-        let _ = db.mark_creem_webhook_event_succeeded(&event_id).await;
-        return HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true }));
-    }
-
-    if event_type == "checkout.completed" {
-        let metadata = object
-            .get("metadata")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
-        let order_id = get_json_string_field(&metadata, "sf_order_id")
-            .unwrap_or("")
-            .to_string();
-        let user_email = get_json_string_field(&metadata, "sf_user_email")
-            .unwrap_or("")
-            .to_string();
-        let product_id = get_json_string_field(&metadata, "sf_product_id")
-            .unwrap_or("")
-            .to_string();
-        let placement = get_json_string_field(&metadata, "sf_placement")
-            .unwrap_or("")
-            .to_string();
-        let slot_index = metadata
-            .get("sf_slot_index")
-            .and_then(|v| v.as_i64())
-            .map(|v| v as i32);
-
-        let order_obj = object
-            .get("order")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
-        let amount_paid = get_json_i64_field(&order_obj, "amount_paid")
-            .or_else(|| get_json_i64_field(&order_obj, "amount_due"))
-            .or_else(|| get_json_i64_field(&order_obj, "amount"))
-            .unwrap_or(0);
-        let currency = get_json_string_field(&order_obj, "currency").unwrap_or("USD");
-        let provider_order_id = get_json_string_field(&order_obj, "id").map(|s| s.to_string());
-
-        let months = get_json_i64_field(&metadata, "sf_requested_months")
-            .map(|v| v.clamp(1, 24) as i32)
-            .unwrap_or(0);
-
-        if order_id.trim().is_empty()
-            || user_email.trim().is_empty()
-            || product_id.trim().is_empty()
-            || amount_paid <= 0
-            || !currency.eq_ignore_ascii_case("USD")
-        {
-            processing_error = Some("Invalid checkout metadata or amount".to_string());
-        } else {
-            match db.get_sponsorship_order_basic(&order_id).await {
-                Ok(Some((
-                    status,
-                    order_email,
-                    order_product_id,
-                    order_placement,
-                    order_slot_index,
-                    order_requested_months,
-                    grant_id,
-                ))) => {
-                    let paid_months = if months > 0 {
-                        months
-                    } else {
-                        order_requested_months
-                    };
-                    if paid_months <= 0 {
-                        processing_error = Some("Invalid requested months".to_string());
-                    } else if !is_same_user_email(&order_email, &user_email)
-                        || order_product_id.trim() != product_id.trim()
-                        || order_placement.trim() != placement.trim()
-                        || order_slot_index != slot_index
-                    {
-                        processing_error =
-                            Some("Checkout metadata does not match order record".to_string());
-                    } else if status == "paid" && grant_id.is_some() {
-                        let _ = db.mark_creem_webhook_event_succeeded(&event_id).await;
-                        return HttpResponse::Ok()
-                            .json(ApiResponse::success(OkPayload { ok: true }));
-                    } else if let Err(e) = db
-                        .upsert_developer_sponsor(&user_email, Some("sponsor"), true)
-                        .await
-                    {
-                        transient_error = true;
-                        processing_error = Some(format!("Failed to update sponsor: {:?}", e));
-                    } else {
-                        match db
-                            .create_sponsorship_grant_and_mark_order_paid_from_creem(
-                                &order_id,
-                                provider_order_id.as_deref(),
-                                amount_paid as i32,
-                                paid_months,
-                            )
-                            .await
-                        {
-                            Ok(_grant) => {}
-                            Err(e) => {
-                                transient_error = true;
-                                processing_error =
-                                    Some(format!("Failed to finalize order: {:?}", e));
-                            }
-                        }
-                    }
-                }
-                Ok(None) => {
-                    processing_error = Some("Sponsorship order not found".to_string());
-                }
-                Err(e) => {
-                    transient_error = true;
-                    processing_error = Some(format!("Failed to fetch order: {:?}", e));
-                }
-            }
-        }
-    }
-
-    if let Some(err) = processing_error.as_deref() {
-        let _ = db
-            .mark_creem_webhook_event_failed(&event_id, err, !transient_error)
-            .await;
-        if transient_error {
-            return HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
-                "Temporary processing error".to_string(),
-            ));
-        }
-        return HttpResponse::BadRequest().json(ApiResponse::<()>::error(err.to_string()));
-    }
-
-    let _ = db.mark_creem_webhook_event_succeeded(&event_id).await;
-    HttpResponse::Ok().json(ApiResponse::success(OkPayload { ok: true }))
-}
-
 #[derive(Debug, Serialize, ToSchema)]
 pub struct HealthCheckResponse {
     pub status: String,
@@ -2623,6 +1810,7 @@ pub async fn get_leaderboard(
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct HomeModuleQuery {
     pub language: Option<String>,
+    pub limit: Option<i64>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -2696,68 +1884,45 @@ async fn get_or_refresh_free_sponsor_queue_ids(
     now: chrono::DateTime<Utc>,
     language: Option<&str>,
 ) -> anyhow::Result<(Vec<String>, chrono::DateTime<Utc>)> {
-    let window_seconds: i64 = 48 * 60 * 60;
-    let window_start_ts = (now.timestamp() / window_seconds) * window_seconds;
-    let window_key = window_start_ts.to_string();
-    let next_refresh = start_of_next_window_utc(now, window_seconds);
+    let day_key = now.date_naive();
+    let next_day = day_key.succ_opt().unwrap_or(day_key);
+    let next_refresh = chrono::DateTime::<Utc>::from_naive_utc_and_offset(
+        next_day.and_hms_opt(0, 0, 0).unwrap_or_default(),
+        Utc,
+    );
+    let mode_key = day_key.to_string();
 
     let state_key = "home_sponsored_free_queue";
     if let Ok(Some(state)) = db.get_home_module_state(state_key).await {
         if state.mode.as_deref() == Some("manual") && state.today_ids.len() == 5 {
             return Ok((state.today_ids, next_refresh));
         }
-        if state.mode.as_deref() == Some(window_key.as_str()) && state.today_ids.len() == 5 {
+        if state.mode.as_deref() == Some(mode_key.as_str()) && state.today_ids.len() == 5 {
             return Ok((state.today_ids, next_refresh));
         }
     }
 
-    let eligible = db
-        .get_first_product_ids_by_created_at(100, language)
-        .await?;
+    let total = db.count_products_for_sponsorship_rotation(language).await?;
+    let eligible = if total <= 50 {
+        db.get_first_product_ids_by_created_at(50, language).await?
+    } else {
+        let prev_day = day_key.pred_opt().unwrap_or(day_key);
+        db.get_popular_product_ids_by_day(prev_day, 200, language)
+            .await?
+    };
     if eligible.is_empty() {
         return Ok((Vec::new(), next_refresh));
     }
 
-    let mut remaining: Vec<String> = Vec::new();
-    if let Ok(Some(state)) = db.get_home_module_state(state_key).await {
-        if state.mode.as_deref() != Some("manual") {
-            let set: std::collections::HashSet<&String> = eligible.iter().collect();
-            remaining = state
-                .remaining_ids
-                .into_iter()
-                .filter(|id| set.contains(id))
-                .collect();
-        }
-    }
-    if remaining.is_empty() {
-        remaining = eligible.clone();
-    }
-
-    let mut today_ids: Vec<String> = Vec::new();
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-    while today_ids.len() < 5 && !remaining.is_empty() {
-        let id = remaining.remove(0);
-        if seen.insert(id.clone()) {
-            today_ids.push(id);
-        }
-    }
-    if today_ids.len() < 5 {
-        for id in &eligible {
-            if today_ids.len() >= 5 {
-                break;
-            }
-            if seen.insert(id.clone()) {
-                today_ids.push(id.clone());
-            }
-        }
-    }
+    let seed = stable_seed_from_day_key(day_key, 0xD6E8FEB86659FD93);
+    let today_ids = stable_pick_ids(&eligible, 5, seed);
 
     let _ = db
         .upsert_home_module_state(crate::db::HomeModuleState {
             key: state_key.to_string(),
-            mode: Some(window_key),
-            day_key: None,
-            remaining_ids: remaining,
+            mode: Some(mode_key),
+            day_key: Some(day_key),
+            remaining_ids: Vec::new(),
             today_ids: today_ids.clone(),
         })
         .await;
@@ -2776,8 +1941,12 @@ pub async fn get_home_sponsored_top(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let now = Utc::now();
-    let next_refresh = start_of_next_window_utc(now, 48 * 60 * 60);
     let day_key = now.date_naive();
+    let next_day = day_key.succ_opt().unwrap_or(day_key);
+    let next_refresh = chrono::DateTime::<Utc>::from_naive_utc_and_offset(
+        next_day.and_hms_opt(0, 0, 0).unwrap_or_default(),
+        Utc,
+    );
 
     let key = "home_sponsored_top";
     let mut ids: Vec<String> = Vec::new();
@@ -2948,8 +2117,12 @@ pub async fn get_home_sponsored_right(
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
     let now = Utc::now();
-    let next_refresh = start_of_next_window_utc(now, 48 * 60 * 60);
     let day_key = now.date_naive();
+    let next_day = day_key.succ_opt().unwrap_or(day_key);
+    let next_refresh = chrono::DateTime::<Utc>::from_naive_utc_and_offset(
+        next_day.and_hms_opt(0, 0, 0).unwrap_or_default(),
+        Utc,
+    );
     let key = "home_sponsored_right";
 
     let mut today_ids: Vec<String> = Vec::new();
@@ -3131,83 +2304,42 @@ pub async fn get_home_featured(
     query: web::Query<HomeModuleQuery>,
     db: web::Data<Arc<Database>>,
 ) -> impl Responder {
+    let featured_limit = query.limit.unwrap_or(6).clamp(1, 10) as usize;
     let now = Utc::now();
-    let window_seconds: i64 = 2 * 60 * 60;
-    let window_start_ts = (now.timestamp() / window_seconds) * window_seconds;
-    let window_end_ts = window_start_ts + window_seconds;
-    let next_refresh = chrono::DateTime::<Utc>::from_timestamp(window_end_ts, 0)
-        .unwrap_or_else(|| now + chrono::Duration::seconds(window_seconds));
+    let next_refresh = now + chrono::Duration::seconds(15);
 
-    let key = "home_featured";
-    let window_key = window_start_ts.to_string();
-    let mut ids: Vec<String> = Vec::new();
-    if let Ok(Some(state)) = db.get_home_module_state(key).await {
-        if (state.mode.as_deref() == Some("manual")
-            || state.mode.as_deref() == Some(window_key.as_str()))
-            && state.today_ids.len() == 6
-        {
-            ids = state.today_ids;
-        }
-    }
+    let params = QueryParams {
+        category: None,
+        tags: None,
+        language: query.language.clone(),
+        status: Some("approved".to_string()),
+        search: None,
+        maker_email: None,
+        sort: Some("popularity".to_string()),
+        dir: Some("desc".to_string()),
+        limit: Some(featured_limit as i64),
+        offset: None,
+    };
 
-    if ids.is_empty() {
-        let params = QueryParams {
-            category: None,
-            tags: None,
-            language: query.language.clone(),
-            status: Some("approved".to_string()),
-            search: None,
-            maker_email: None,
-            sort: Some("popularity".to_string()),
-            dir: Some("desc".to_string()),
-            limit: Some(6),
-            offset: None,
-        };
-
-        let products = match db.get_products(params).await {
-            Ok(list) => list,
-            Err(e) => {
-                if is_db_unavailable_error(&e) {
-                    let message = if get_language_from_request(&req).starts_with("zh") {
-                        "数据库连接不可用，已降级返回空列表。"
-                    } else {
-                        "Database is unavailable. Returning empty list in degraded mode."
-                    };
-                    return HttpResponse::Ok().json(make_db_degraded_response(
-                        "GET /api/home/featured",
-                        HomeProductsPayload {
-                            products: Vec::new(),
-                            next_refresh_at: next_refresh.to_rfc3339(),
-                        },
-                        message.to_string(),
-                        &e,
-                    ));
-                }
-                return HttpResponse::InternalServerError()
-                    .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
-            }
-        };
-
-        ids = products.iter().map(|p| p.id.clone()).collect();
-        let _ = db
-            .upsert_home_module_state(crate::db::HomeModuleState {
-                key: key.to_string(),
-                mode: Some(window_key),
-                day_key: None,
-                remaining_ids: Vec::new(),
-                today_ids: ids.clone(),
-            })
-            .await;
-
-        return HttpResponse::Ok().json(ApiResponse::success(HomeProductsPayload {
-            products,
-            next_refresh_at: next_refresh.to_rfc3339(),
-        }));
-    }
-
-    let products = match db.get_products_by_ids(&ids).await {
+    let products = match db.get_products(params).await {
         Ok(list) => list,
         Err(e) => {
+            if is_db_unavailable_error(&e) {
+                let message = if get_language_from_request(&req).starts_with("zh") {
+                    "数据库连接不可用，已降级返回空列表。"
+                } else {
+                    "Database is unavailable. Returning empty list in degraded mode."
+                };
+                return HttpResponse::Ok().json(make_db_degraded_response(
+                    "GET /api/home/featured",
+                    HomeProductsPayload {
+                        products: Vec::new(),
+                        next_refresh_at: next_refresh.to_rfc3339(),
+                    },
+                    message.to_string(),
+                    &e,
+                ));
+            }
             return HttpResponse::InternalServerError()
                 .json(ApiResponse::<()>::error(format!("Database error: {:?}", e)));
         }

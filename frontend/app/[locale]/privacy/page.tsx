@@ -45,7 +45,7 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
             : 'This Privacy Policy explains how SoloForge collects, uses, and protects your information.'}
         </p>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '1. 我们收集的信息' : '1. Information We Collect'}</h2>
           <p>
             {isZh
@@ -59,7 +59,7 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '2. 我们如何使用信息' : '2. How We Use Information'}</h2>
           <p>
             {isZh
@@ -68,7 +68,7 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '3. 信息共享' : '3. Sharing'}</h2>
           <p>
             {isZh
@@ -82,7 +82,7 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '4. 数据安全' : '4. Security'}</h2>
           <p>
             {isZh
@@ -91,7 +91,7 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '5. 你的权利' : '5. Your Rights'}</h2>
           <p>
             {isZh
@@ -100,7 +100,7 @@ export default async function PrivacyPage({ params }: { params: Promise<{ locale
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '6. 政策更新' : '6. Updates'}</h2>
           <p>
             {isZh

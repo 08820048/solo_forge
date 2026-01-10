@@ -193,7 +193,7 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
     return (
       <div className="min-h-screen">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 sm:pt-24 pb-12">
-          <div className="sf-wash rounded-2xl border border-border bg-card/50 p-10 text-center animate-on-scroll">
+          <div className="rounded-2xl border border-border bg-card p-10 text-center animate-on-scroll">
             <h1 className="text-2xl font-bold text-foreground tracking-tight">{tDev('title')}</h1>
             <p className="mt-3 text-muted-foreground">{tDev('loginRequired')}</p>
             <div className="mt-8 flex items-center justify-center gap-3">
@@ -232,7 +232,7 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
           ) : null}
         </div>
 
-        <Card className="bg-card/50">
+        <Card className="bg-card">
           <CardContent className="p-6 sm:p-8">
             {loading ? (
               <div className="py-16 text-center text-muted-foreground animate-on-scroll">{tDev('loading')}</div>
@@ -279,7 +279,7 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
                 ) : null}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                  <div className="rounded-lg border border-border bg-background px-4 py-3">
                     <div className="text-xs font-semibold text-muted-foreground">{tDetail('maker')}</div>
                     <div className="mt-1 text-sm text-foreground">{product.maker_name}</div>
                     <div className="mt-1 text-xs text-muted-foreground">{product.maker_email}</div>
@@ -295,7 +295,7 @@ export default function DeveloperProductDetailPage({ params }: { params: Promise
                     ) : null}
                   </div>
 
-                  <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                  <div className="rounded-lg border border-border bg-background px-4 py-3">
                     <div className="text-xs font-semibold text-muted-foreground">{tDetail('category')}</div>
                     <div className="mt-1 text-sm text-foreground">{tCategories(product.category)}</div>
                     {product.tags?.length ? (

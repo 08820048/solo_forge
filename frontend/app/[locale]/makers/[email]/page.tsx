@@ -415,7 +415,7 @@ export default function MakerProfilePage({ params }: { params: Promise<{ email: 
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 animate-on-scroll">
-          <Card className="lg:col-span-2 bg-card/50">
+          <Card className="lg:col-span-2 bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">{t('profileTitle')}</CardTitle>
             </CardHeader>
@@ -486,21 +486,21 @@ export default function MakerProfilePage({ params }: { params: Promise<{ email: 
             </CardContent>
           </Card>
 
-          <Card className="bg-card/50">
+          <Card className="bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm">{t('statsTitle')}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('followers')}</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">{statsLoading && !stats ? '…' : fmt(stats?.followers)}</div>
                 </div>
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('totalLikes')}</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">{statsLoading && !stats ? '…' : fmt(stats?.total_likes)}</div>
                 </div>
-                <div className="rounded-lg border border-border bg-background/40 px-4 py-3">
+                <div className="rounded-lg border border-border bg-background px-4 py-3">
                   <div className="text-xs text-muted-foreground">{t('totalFavorites')}</div>
                   <div className="mt-1 text-lg font-semibold text-foreground">{statsLoading && !stats ? '…' : fmt(stats?.total_favorites)}</div>
                 </div>

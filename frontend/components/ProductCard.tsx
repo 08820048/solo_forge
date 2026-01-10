@@ -63,19 +63,12 @@ function getAuthenticatedUserEmail(): string | null {
   return null;
 }
 
-/**
- * requestAuth
- * 触发全局登录弹窗，并记录登录后回跳路径。
- */
-function requestAuth(redirectPath: string) {
+function notify(message: string) {
+  const text = (message || '').trim();
+  if (!text) return;
   try {
-    sessionStorage.setItem('sf_post_login_redirect', redirectPath);
+    window.dispatchEvent(new CustomEvent('sf_notify', { detail: { message: text } }));
   } catch {}
-  try {
-    window.dispatchEvent(new CustomEvent('sf_require_auth', { detail: { redirectPath } }));
-  } catch {
-    window.dispatchEvent(new Event('sf_require_auth'));
-  }
 }
 
 /**
@@ -217,7 +210,7 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
   const toggleFavorite = async () => {
     const userEmail = getAuthenticatedUserEmail();
     if (!userEmail) {
-      requestAuth('/');
+      notify(commonT('loginRequiredAction'));
       return;
     }
     if (isSameUserEmail(product.maker_email ?? null, userEmail)) return;
@@ -267,7 +260,7 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
   const toggleLike = async () => {
     const userEmail = getAuthenticatedUserEmail();
     if (!userEmail) {
-      requestAuth('/');
+      notify(commonT('loginRequiredAction'));
       return;
     }
     if (isSameUserEmail(product.maker_email ?? null, userEmail)) return;
@@ -319,7 +312,7 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
       href={{ pathname: '/products/[slug]', params: { slug: product.id } }}
       className="group"
     >
-      <Card className="h-full bg-card/70 backdrop-blur-sm border-border hover:bg-card transition-all duration-300 hover:shadow-2xl hover:shadow-black/5 spotlight-group">
+      <Card className="h-full bg-card border-border hover:bg-card transition-colors duration-200 hover:shadow-sm">
         <CardContent className="p-5 sm:p-6 flex flex-col h-full relative overflow-hidden">
           <div className="absolute right-3 top-3 sm:right-4 sm:top-4 z-20 flex items-start gap-3">
             <div className="flex flex-col items-center">
@@ -333,15 +326,19 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
                   void toggleLike();
                 }}
                 className={[
-                  'rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
-                  selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
+                  'rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background transition-colors duration-200 active:scale-95',
+                  selfActionDisabled
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-accent hover:text-accent-foreground',
                 ].join(' ')}
               >
                 <i
                   key={liked ? 'liked' : 'unliked'}
                   className={[
                     `${liked ? 'ri-thumb-up-fill' : 'ri-thumb-up-line'} text-[15px] sm:text-base transition-all duration-200`,
-                    liked ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
+                    liked
+                      ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
+                      : 'text-muted-foreground',
                   ].join(' ')}
                   aria-hidden="true"
                 />
@@ -359,15 +356,19 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
                   void toggleFavorite();
                 }}
                 className={[
-                  'rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
-                  selfActionDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent hover:text-accent-foreground',
+                  'rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background transition-colors duration-200 active:scale-95',
+                  selfActionDisabled
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-accent hover:text-accent-foreground',
                 ].join(' ')}
               >
                 <i
                   key={favorited ? 'favorited' : 'unfavorited'}
                   className={[
                     `${favorited ? 'ri-heart-3-fill' : 'ri-heart-3-line'} text-[15px] sm:text-base transition-all duration-200`,
-                    favorited ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]' : 'text-muted-foreground',
+                    favorited
+                      ? 'text-primary scale-110 animate-[sf-scale-in_0.18s_ease-out_forwards]'
+                      : 'text-muted-foreground',
                   ].join(' ')}
                   aria-hidden="true"
                 />
@@ -386,12 +387,12 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
                       window.open(websiteUrl, '_blank', 'noopener,noreferrer');
                     } catch {}
                   }}
-                  className="rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                  className="rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors duration-200 active:scale-95"
                 >
                   <i className="ri-global-line text-[15px] sm:text-base" aria-hidden="true" />
                 </button>
               ) : (
-                <span className="rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background/70 text-muted-foreground">
+                <span className="rounded-full w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-border bg-background text-muted-foreground">
                   <i className="ri-global-line text-[15px] sm:text-base" aria-hidden="true" />
                 </span>
               )}
@@ -399,8 +400,7 @@ export default function ProductCard({ product, variant = 'homeFeatured' }: Produ
             </div>
           </div>
 
-          {/* Logo */}
-          <div className="relative z-10 w-14 h-14 sm:w-16 sm:h-16 bg-secondary rounded-lg mb-3 sm:mb-4 flex items-center justify-center overflow-hidden transition-all duration-300 group-hover:opacity-90 spotlight-border">
+          <div className="relative z-10 w-14 h-14 sm:w-16 sm:h-16 bg-secondary rounded-lg mb-3 sm:mb-4 flex items-center justify-center overflow-hidden">
             {product.logo_url ? (
               isKnownRemoteImageUrl(product.logo_url) ? (
                 <Image

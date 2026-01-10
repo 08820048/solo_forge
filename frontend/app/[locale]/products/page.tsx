@@ -172,7 +172,7 @@ export default function ProductsPage() {
               placeholder={t('filters.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-background/60 backdrop-blur"
+              className="w-full bg-background"
             />
           </div>
 
@@ -187,7 +187,7 @@ export default function ProductsPage() {
                     'inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium transition-colors',
                     selectedCategory === opt.id
                       ? 'border-primary/20 bg-primary text-primary-foreground'
-                      : 'border-border bg-background/60 backdrop-blur text-muted-foreground hover:bg-accent hover:text-foreground',
+                      : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-foreground',
                   ].join(' ')}
                 >
                   <i className={opt.iconClass} aria-hidden="true" />

@@ -45,7 +45,7 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
             : 'Welcome to SoloForge. By using the service, you agree to these Terms. If you do not agree, please do not use the service.'}
         </p>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '1. 服务说明' : '1. Service'}</h2>
           <p>
             {isZh
@@ -54,7 +54,7 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '2. 账号与登录' : '2. Accounts'}</h2>
           <p>
             {isZh
@@ -63,7 +63,7 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '3. 用户内容与提交' : '3. User Content'}</h2>
           <p>
             {isZh
@@ -72,7 +72,7 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '4. 禁止行为' : '4. Prohibited Conduct'}</h2>
           <p>
             {isZh
@@ -81,11 +81,11 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '5. 付费服务与退款' : '5. Paid Services & Refunds'}</h2>
           <p>
             {isZh
-              ? '我们可能提供可选的付费服务（例如定价位展示）。价格与权益以页面展示为准；付款可能由第三方支付服务商处理。'
+              ? '我们可能提供可选的付费服务（例如赞助位展示）。价格与权益以页面展示为准；付款可能由第三方支付服务商处理。'
               : 'We may offer optional paid services (e.g., pricing placements). Pricing and benefits are as shown on the website; payments may be processed by third-party payment providers.'}
           </p>
           <p>
@@ -95,7 +95,7 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '6. 免责声明' : '6. Disclaimer'}</h2>
           <p>
             {isZh
@@ -104,7 +104,7 @@ export default async function TermsPage({ params }: { params: Promise<{ locale: 
           </p>
         </div>
 
-        <div className="sf-wash rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
+        <div className="rounded-xl border border-border bg-card text-card-foreground p-8 space-y-3">
           <h2 className="text-2xl font-bold text-foreground">{isZh ? '7. 条款变更' : '7. Changes'}</h2>
           <p>
             {isZh

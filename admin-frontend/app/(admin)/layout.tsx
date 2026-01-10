@@ -118,7 +118,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-[100vh] bg-background">
-      <div className="border-b border-border bg-background/70 backdrop-blur">
+      <div className="border-b border-border bg-background">
         <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-base font-semibold leading-tight">SoloForge Admin</div>

@@ -32,7 +32,7 @@ export default function CategoryList() {
             href={{ pathname: '/products', query: { category: category.id } }}
             className="group"
           >
-            <div className="bg-card/60 backdrop-blur rounded-lg border border-border hover:bg-card transition-all p-6 text-center">
+            <div className="bg-card rounded-lg border border-border hover:bg-card transition-all p-6 text-center">
               <div className="w-16 h-16 mx-auto mb-4 bg-secondary rounded-lg flex items-center justify-center text-secondary-foreground font-semibold text-sm transform group-hover:scale-110 transition-transform">
                 {category.icon}
               </div>

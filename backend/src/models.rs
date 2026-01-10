@@ -189,7 +189,6 @@ pub struct PricingPlanCampaign {
     pub percent_off: Option<i32>,
     pub title_en: Option<String>,
     pub title_zh: Option<String>,
-    pub creem_product_id: Option<String>,
     pub starts_at: Option<DateTime<Utc>>,
     pub ends_at: Option<DateTime<Utc>>,
 }
@@ -200,7 +199,6 @@ pub struct PricingPlan {
     pub plan_key: String,
     pub placement: Option<String>,
     pub monthly_usd_cents: Option<i32>,
-    pub creem_product_id: Option<String>,
     pub title_en: String,
     pub title_zh: String,
     pub badge_en: Option<String>,
@@ -222,7 +220,6 @@ pub struct UpsertPricingPlanRequest {
     pub plan_key: String,
     pub placement: Option<String>,
     pub monthly_usd_cents: Option<i32>,
-    pub creem_product_id: Option<String>,
     pub title_en: String,
     pub title_zh: String,
     pub badge_en: Option<String>,

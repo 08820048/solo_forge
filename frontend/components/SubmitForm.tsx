@@ -426,7 +426,7 @@ export default function SubmitForm({
         onSubmit={handleSubmit}
         className={cn(
           'animate-on-scroll',
-          embedded ? 'bg-transparent border-0 rounded-none p-0' : 'bg-card/60 backdrop-blur-sm border border-border rounded-xl p-8'
+          embedded ? 'bg-transparent border-0 rounded-none p-0' : 'bg-card border border-border rounded-xl p-8'
         )}
       >
         {error ? (

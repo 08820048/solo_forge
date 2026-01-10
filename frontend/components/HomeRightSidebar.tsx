@@ -272,7 +272,7 @@ export default function HomeRightSidebar() {
 
   return (
     <div className="animate-on-scroll lg:sticky lg:top-24 space-y-6">
-      <div className="sf-wash rounded-xl border border-border bg-card/50">
+      <div className="rounded-xl border border-border bg-card">
         <div className="px-5 py-4 border-b border-border">
           <div className="flex flex-wrap items-center gap-3">
             <div className="text-sm font-semibold text-foreground whitespace-nowrap">{tSponsored('title')}</div>
@@ -288,7 +288,7 @@ export default function HomeRightSidebar() {
               {Array.from({ length: 3 }).map((_, idx) => (
                 <div
                   key={idx}
-                  className="rounded-xl border border-border bg-background/40 px-4 py-4 animate-pulse"
+                  className="rounded-xl border border-border bg-background px-4 py-4 animate-pulse"
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 shrink-0 rounded-lg bg-muted" />
@@ -310,7 +310,7 @@ export default function HomeRightSidebar() {
           ) : (
             <div className="space-y-3 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
               {sponsorList.map((p) => (
-                <div key={p.id} className="rounded-xl border border-border bg-background/40 px-4 py-4">
+                <div key={p.id} className="rounded-xl border border-border bg-background px-4 py-4">
                   <div className="flex items-start gap-3">
                       <div className="w-10 h-10 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
                         {p.logo_url ? (
@@ -362,12 +362,12 @@ export default function HomeRightSidebar() {
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label={tSponsored('visit')}
-                        className="shrink-0 inline-flex items-center justify-center rounded-md w-9 h-9 border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                        className="shrink-0 inline-flex items-center justify-center rounded-md w-9 h-9 border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
                       >
                         <i className="ri-global-line text-base" aria-hidden="true" />
                       </a>
                     ) : (
-                      <span className="shrink-0 inline-flex items-center justify-center rounded-md w-9 h-9 border border-border bg-background/70 text-muted-foreground">
+                      <span className="shrink-0 inline-flex items-center justify-center rounded-md w-9 h-9 border border-border bg-background text-muted-foreground">
                         <i className="ri-global-line text-base" aria-hidden="true" />
                       </span>
                     )}
@@ -379,7 +379,7 @@ export default function HomeRightSidebar() {
         </div>
       </div>
 
-      <div className="sf-wash rounded-xl border border-border bg-card/50">
+      <div className="rounded-xl border border-border bg-card">
         <div className="px-5 py-4 border-b border-border">
           <div className="text-sm font-semibold text-foreground">{tRanking('title')}</div>
           <div className="mt-1 text-xs text-muted-foreground">{tRanking('subtitle')}</div>
@@ -391,7 +391,7 @@ export default function HomeRightSidebar() {
               {Array.from({ length: 6 }).map((_, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3 animate-pulse"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-3 animate-pulse"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-12 shrink-0 flex items-center">
@@ -421,7 +421,7 @@ export default function HomeRightSidebar() {
                 return (
                   <div
                     key={c.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/40 px-3 py-3"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-3"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-12 shrink-0 flex items-center pt-0.5">{renderRank(idx + 1)}</div>

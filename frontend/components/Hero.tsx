@@ -121,7 +121,7 @@ export default function Hero() {
   }, [locale]);
 
   return (
-    <section className="sf-wash rounded-2xl border border-border bg-card/50 overflow-hidden">
+    <section className="rounded-2xl border border-border bg-card overflow-hidden">
       <div className="px-4 sm:px-6 py-5 border-b border-border">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -139,7 +139,7 @@ export default function Hero() {
             {Array.from({ length: 2 }).map((_, idx) => (
               <div
                 key={idx}
-                className="rounded-xl border border-border bg-background/40 p-5 animate-pulse"
+                className="rounded-xl border border-border bg-card p-5 animate-pulse"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
@@ -164,7 +164,7 @@ export default function Hero() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
             {products.map((product) => (
-              <div key={product.id} className="sf-wash rounded-xl border border-border bg-background/40 p-5 relative overflow-hidden">
+              <div key={product.id} className="rounded-xl border border-border bg-card p-5 relative overflow-hidden">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3 min-w-0">
                     <div className="w-12 h-12 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
@@ -219,7 +219,7 @@ export default function Hero() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={t('visit')}
-                    className="shrink-0 rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                    className="shrink-0 rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
                   >
                     <i className="ri-global-line text-base" aria-hidden="true" />
                   </a>

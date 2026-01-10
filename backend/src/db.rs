@@ -202,7 +202,6 @@ struct PricingPlanRow {
     plan_key: String,
     placement: Option<String>,
     monthly_usd_cents: Option<i32>,
-    creem_product_id: Option<String>,
     title_en: String,
     title_zh: String,
     badge_en: Option<String>,
@@ -216,7 +215,6 @@ struct PricingPlanRow {
     campaign_percent_off: Option<i32>,
     campaign_title_en: Option<String>,
     campaign_title_zh: Option<String>,
-    campaign_creem_product_id: Option<String>,
     campaign_starts_at: Option<chrono::DateTime<chrono::Utc>>,
     campaign_ends_at: Option<chrono::DateTime<chrono::Utc>>,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -313,7 +311,6 @@ fn map_pricing_plan_row_to_model(
 ) -> PricingPlan {
     strip_nul_in_place(&mut row.plan_key);
     strip_nul_in_place_opt(&mut row.placement);
-    strip_nul_in_place_opt(&mut row.creem_product_id);
     strip_nul_in_place(&mut row.title_en);
     strip_nul_in_place(&mut row.title_zh);
     strip_nul_in_place_opt(&mut row.badge_en);
@@ -322,7 +319,6 @@ fn map_pricing_plan_row_to_model(
     strip_nul_in_place_opt(&mut row.description_zh);
     strip_nul_in_place_opt(&mut row.campaign_title_en);
     strip_nul_in_place_opt(&mut row.campaign_title_zh);
-    strip_nul_in_place_opt(&mut row.campaign_creem_product_id);
 
     let benefits = benefit_rows
         .into_iter()
@@ -344,7 +340,6 @@ fn map_pricing_plan_row_to_model(
         plan_key: row.plan_key,
         placement: row.placement,
         monthly_usd_cents: row.monthly_usd_cents,
-        creem_product_id: row.creem_product_id,
         title_en: row.title_en,
         title_zh: row.title_zh,
         badge_en: row.badge_en,
@@ -360,7 +355,6 @@ fn map_pricing_plan_row_to_model(
             percent_off: row.campaign_percent_off,
             title_en: row.campaign_title_en,
             title_zh: row.campaign_title_zh,
-            creem_product_id: row.campaign_creem_product_id,
             starts_at: row.campaign_starts_at,
             ends_at: row.campaign_ends_at,
         },
@@ -486,7 +480,6 @@ async fn ensure_pricing_tables(pool: &PgPool) -> Result<()> {
             plan_key TEXT NOT NULL UNIQUE, \
             placement TEXT CHECK (placement IN ('home_top', 'home_right')), \
             monthly_usd_cents INT, \
-            creem_product_id TEXT, \
             title_en TEXT NOT NULL, \
             title_zh TEXT NOT NULL, \
             badge_en TEXT, \
@@ -500,7 +493,6 @@ async fn ensure_pricing_tables(pool: &PgPool) -> Result<()> {
             campaign_percent_off INT, \
             campaign_title_en TEXT, \
             campaign_title_zh TEXT, \
-            campaign_creem_product_id TEXT, \
             campaign_starts_at TIMESTAMPTZ, \
             campaign_ends_at TIMESTAMPTZ, \
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), \
@@ -556,11 +548,11 @@ async fn ensure_pricing_tables(pool: &PgPool) -> Result<()> {
 
         let _ = sqlx::query(
             "INSERT INTO pricing_plans \
-             (id, plan_key, placement, monthly_usd_cents, creem_product_id, title_en, title_zh, badge_en, badge_zh, description_en, description_zh, is_active, is_default, sort_order) \
+             (id, plan_key, placement, monthly_usd_cents, title_en, title_zh, badge_en, badge_zh, description_en, description_zh, is_active, is_default, sort_order) \
              VALUES \
-             ($1, 'free', NULL, NULL, NULL, 'Free', 'Free', 'Limited', '限量', 'Limited free exposure opportunity.', '限量免费曝光机会。', TRUE, FALSE, 10), \
-             ($2, 'home_top', 'home_top', 1000, NULL, 'Pro · Top', 'Pro · 顶部', 'Pricing', '定价', 'Highest exposure in homepage top module.', '展示在首页顶部定价模块（最高曝光）。', TRUE, TRUE, 20), \
-             ($3, 'home_right', 'home_right', 500, NULL, 'Pro · Right', 'Pro · 右侧', 'Pricing', '定价', 'Stable exposure in homepage right module.', '展示在首页右侧定价模块（稳定曝光）。', TRUE, FALSE, 30)",
+             ($1, 'free', NULL, NULL, 'Free', 'Free', 'Limited', '限量', 'Limited free exposure opportunity.', '限量免费曝光机会。', TRUE, FALSE, 10), \
+             ($2, 'home_top', 'home_top', 1000, 'Pro · Top', 'Pro · 顶部', 'Pricing', '定价', 'Highest exposure in homepage top module.', '展示在首页顶部定价模块（最高曝光）。', TRUE, TRUE, 20), \
+             ($3, 'home_right', 'home_right', 500, 'Pro · Right', 'Pro · 右侧', 'Pricing', '定价', 'Stable exposure in homepage right module.', '展示在首页右侧定价模块（稳定曝光）。', TRUE, FALSE, 30)",
         )
         .persistent(false)
         .bind(free_id)
@@ -701,7 +693,7 @@ async fn ensure_sponsorship_tables(pool: &PgPool) -> Result<()> {
             requested_months INT NOT NULL, \
             paid_months INT, \
             status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created', 'paid', 'canceled', 'failed')), \
-            provider TEXT NOT NULL DEFAULT 'creem', \
+            provider TEXT NOT NULL DEFAULT 'manual', \
             provider_checkout_id TEXT, \
             provider_order_id TEXT, \
             amount_usd_cents INT, \
@@ -734,20 +726,6 @@ async fn ensure_sponsorship_tables(pool: &PgPool) -> Result<()> {
         .persistent(false)
         .execute(pool)
         .await?;
-
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS creem_webhook_events ( \
-            id TEXT PRIMARY KEY, \
-            event_type TEXT NOT NULL, \
-            payload JSONB NOT NULL, \
-            received_at TIMESTAMPTZ DEFAULT NOW(), \
-            processed_at TIMESTAMPTZ, \
-            processing_error TEXT \
-        )",
-    )
-    .persistent(false)
-    .execute(pool)
-    .await?;
 
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_sponsorship_grants_product_id ON sponsorship_grants(product_id)")
         .persistent(false)
@@ -2697,6 +2675,138 @@ impl Database {
         Ok(Vec::new())
     }
 
+    pub async fn count_products_for_sponsorship_rotation(
+        &self,
+        language: Option<&str>,
+    ) -> Result<i64> {
+        if let Some(pool) = &self.postgres {
+            let status_clause = if dev_include_pending_in_approved() {
+                "p.status::text IN ('approved','pending')"
+            } else {
+                "p.status::text = 'approved'"
+            };
+
+            let row = if let Some(language) = language {
+                let sql = format!(
+                    "SELECT COUNT(*)::bigint \
+                     FROM products p \
+                     WHERE {} AND p.language = $1",
+                    status_clause
+                );
+                sqlx::query_as::<_, (i64,)>(&sql)
+                    .persistent(false)
+                    .bind(language)
+                    .fetch_one(pool)
+                    .await?
+            } else {
+                let sql = format!(
+                    "SELECT COUNT(*)::bigint \
+                     FROM products p \
+                     WHERE {}",
+                    status_clause
+                );
+                sqlx::query_as::<_, (i64,)>(&sql)
+                    .persistent(false)
+                    .fetch_one(pool)
+                    .await?
+            };
+
+            return Ok(row.0);
+        }
+
+        Ok(0)
+    }
+
+    pub async fn get_popular_product_ids_by_day(
+        &self,
+        day: chrono::NaiveDate,
+        limit: i64,
+        language: Option<&str>,
+    ) -> Result<Vec<String>> {
+        let limit = limit.clamp(1, 5000);
+        if let Some(pool) = &self.postgres {
+            let status_clause = if dev_include_pending_in_approved() {
+                "p.status::text IN ('approved','pending')"
+            } else {
+                "p.status::text = 'approved'"
+            };
+
+            let start = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
+                day.and_hms_opt(0, 0, 0).unwrap_or_default(),
+                chrono::Utc,
+            );
+            let end = start + chrono::Duration::days(1);
+
+            let rows = if let Some(language) = language {
+                let sql = format!(
+                    "WITH likes AS ( \
+                        SELECT product_id, COUNT(*)::bigint AS likes \
+                        FROM product_likes \
+                        WHERE created_at >= $1 AND created_at < $2 \
+                        GROUP BY product_id \
+                    ), favs AS ( \
+                        SELECT product_id, COUNT(*)::bigint AS favorites \
+                        FROM product_favorites \
+                        WHERE created_at >= $1 AND created_at < $2 \
+                        GROUP BY product_id \
+                    ) \
+                    SELECT p.id::text as email \
+                    FROM products p \
+                    LEFT JOIN likes l ON l.product_id = p.id \
+                    LEFT JOIN favs f ON f.product_id = p.id \
+                    WHERE {} AND p.language = $3 \
+                    ORDER BY (COALESCE(l.likes, 0) + COALESCE(f.favorites, 0)) DESC, p.created_at DESC, p.id ASC \
+                    LIMIT $4",
+                    status_clause
+                );
+                sqlx::query_as::<_, NewsletterRecipientRow>(&sql)
+                    .persistent(false)
+                    .bind(start)
+                    .bind(end)
+                    .bind(language)
+                    .bind(limit)
+                    .fetch_all(pool)
+                    .await?
+            } else {
+                let sql = format!(
+                    "WITH likes AS ( \
+                        SELECT product_id, COUNT(*)::bigint AS likes \
+                        FROM product_likes \
+                        WHERE created_at >= $1 AND created_at < $2 \
+                        GROUP BY product_id \
+                    ), favs AS ( \
+                        SELECT product_id, COUNT(*)::bigint AS favorites \
+                        FROM product_favorites \
+                        WHERE created_at >= $1 AND created_at < $2 \
+                        GROUP BY product_id \
+                    ) \
+                    SELECT p.id::text as email \
+                    FROM products p \
+                    LEFT JOIN likes l ON l.product_id = p.id \
+                    LEFT JOIN favs f ON f.product_id = p.id \
+                    WHERE {} \
+                    ORDER BY (COALESCE(l.likes, 0) + COALESCE(f.favorites, 0)) DESC, p.created_at DESC, p.id ASC \
+                    LIMIT $3",
+                    status_clause
+                );
+                sqlx::query_as::<_, NewsletterRecipientRow>(&sql)
+                    .persistent(false)
+                    .bind(start)
+                    .bind(end)
+                    .bind(limit)
+                    .fetch_all(pool)
+                    .await?
+            };
+
+            return Ok(rows
+                .into_iter()
+                .map(|r| strip_nul_str(&r.email).into_owned())
+                .collect());
+        }
+
+        Ok(Vec::new())
+    }
+
     pub async fn get_active_sponsorship_grants(
         &self,
         placement: &str,
@@ -3287,144 +3397,6 @@ impl Database {
         }))
     }
 
-    pub async fn insert_creem_webhook_event_if_absent(
-        &self,
-        event_id: &str,
-        event_type: &str,
-        payload: &serde_json::Value,
-    ) -> Result<bool> {
-        let pool = self
-            .postgres
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
-
-        let event_id = strip_nul_str(event_id.trim());
-        let event_type = strip_nul_str(event_type.trim());
-
-        let mut last_err: Option<anyhow::Error> = None;
-        for _attempt_idx in 0..2 {
-            let attempt = sqlx::query(
-                "INSERT INTO creem_webhook_events (id, event_type, payload) VALUES ($1, $2, $3::jsonb) \
-                 ON CONFLICT (id) DO NOTHING",
-            )
-            .persistent(false)
-            .bind(event_id.as_ref())
-            .bind(event_type.as_ref())
-            .bind(payload)
-            .execute(pool)
-            .await;
-
-            match attempt {
-                Ok(res) => return Ok(res.rows_affected() > 0),
-                Err(e) => {
-                    let e: anyhow::Error = e.into();
-                    if is_missing_relation_error(&e, "creem_webhook_events")
-                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
-                        && ensure_sponsorship_tables(pool).await.is_ok()
-                    {
-                        continue;
-                    }
-                    last_err = Some(e);
-                    break;
-                }
-            }
-        }
-
-        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to insert creem webhook event")))
-    }
-
-    pub async fn mark_creem_webhook_event_succeeded(&self, event_id: &str) -> Result<()> {
-        let pool = self
-            .postgres
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
-
-        let event_id = strip_nul_str(event_id.trim());
-
-        let mut last_err: Option<anyhow::Error> = None;
-        for _attempt_idx in 0..2 {
-            let attempt = sqlx::query(
-                "UPDATE creem_webhook_events SET processed_at = NOW(), processing_error = NULL WHERE id = $1",
-            )
-            .persistent(false)
-            .bind(event_id.as_ref())
-            .execute(pool)
-            .await;
-
-            match attempt {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    let e: anyhow::Error = e.into();
-                    if is_missing_relation_error(&e, "creem_webhook_events")
-                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
-                        && ensure_sponsorship_tables(pool).await.is_ok()
-                    {
-                        continue;
-                    }
-                    last_err = Some(e);
-                    break;
-                }
-            }
-        }
-
-        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to update creem webhook event")))
-    }
-
-    pub async fn mark_creem_webhook_event_failed(
-        &self,
-        event_id: &str,
-        processing_error: &str,
-        finalized: bool,
-    ) -> Result<()> {
-        let pool = self
-            .postgres
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Postgres is not configured"))?;
-
-        let event_id = strip_nul_str(event_id.trim());
-        let processing_error = strip_nul_str(processing_error.trim());
-
-        let mut last_err: Option<anyhow::Error> = None;
-        for _attempt_idx in 0..2 {
-            let attempt = if finalized {
-                sqlx::query(
-                    "UPDATE creem_webhook_events SET processed_at = NOW(), processing_error = $2 WHERE id = $1",
-                )
-                .persistent(false)
-                .bind(event_id.as_ref())
-                .bind(processing_error.as_ref())
-                .execute(pool)
-                .await
-            } else {
-                sqlx::query(
-                    "UPDATE creem_webhook_events SET processed_at = NULL, processing_error = $2 WHERE id = $1",
-                )
-                .persistent(false)
-                .bind(event_id.as_ref())
-                .bind(processing_error.as_ref())
-                .execute(pool)
-                .await
-            };
-
-            match attempt {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    let e: anyhow::Error = e.into();
-                    if is_missing_relation_error(&e, "creem_webhook_events")
-                        && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
-                        && ensure_sponsorship_tables(pool).await.is_ok()
-                    {
-                        continue;
-                    }
-                    last_err = Some(e);
-                    break;
-                }
-            }
-        }
-
-        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to update creem webhook event")))
-    }
-
     pub async fn get_sponsorship_order_basic(
         &self,
         order_id: &str,
@@ -3501,23 +3473,6 @@ impl Database {
         }
 
         Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Failed to fetch sponsorship order")))
-    }
-
-    pub async fn create_sponsorship_grant_and_mark_order_paid_from_creem(
-        &self,
-        order_id: &str,
-        provider_order_id: Option<&str>,
-        amount_usd_cents: i32,
-        paid_months: i32,
-    ) -> Result<SponsorshipGrant> {
-        self.create_sponsorship_grant_and_mark_order_paid(
-            order_id,
-            provider_order_id,
-            amount_usd_cents,
-            paid_months,
-            "creem",
-        )
-        .await
     }
 
     pub async fn create_sponsorship_grant_and_mark_order_paid(
@@ -3697,8 +3652,7 @@ impl Database {
                 Err(e) => {
                     let _ = tx.rollback().await;
                     if (is_missing_relation_error(&e, "sponsorship_grants")
-                        || is_missing_relation_error(&e, "sponsorship_orders")
-                        || is_missing_relation_error(&e, "creem_webhook_events"))
+                        || is_missing_relation_error(&e, "sponsorship_orders"))
                         && !SPONSORSHIP_TABLES_READY.load(Ordering::Relaxed)
                         && ensure_sponsorship_tables(pool).await.is_ok()
                     {
@@ -3928,10 +3882,10 @@ impl Database {
                 let plans = if include_inactive {
                     sqlx::query_as::<_, PricingPlanRow>(
                         "SELECT \
-                            id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                            id, plan_key, placement, monthly_usd_cents, \
                             title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
                             is_active, is_default, sort_order, \
-                            campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                            campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_starts_at, campaign_ends_at, \
                             created_at, updated_at \
                          FROM pricing_plans \
                          ORDER BY sort_order ASC, created_at ASC, id ASC",
@@ -3942,10 +3896,10 @@ impl Database {
                 } else {
                     sqlx::query_as::<_, PricingPlanRow>(
                         "SELECT \
-                            id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                            id, plan_key, placement, monthly_usd_cents, \
                             title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
                             is_active, is_default, sort_order, \
-                            campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                            campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_starts_at, campaign_ends_at, \
                             created_at, updated_at \
                          FROM pricing_plans \
                          WHERE is_active = TRUE \
@@ -4088,30 +4042,18 @@ impl Database {
                     .map(|v| strip_nul_str(v.trim()).into_owned())
                     .filter(|v| !v.is_empty());
 
-                let creem_product_id = input
-                    .creem_product_id
-                    .as_deref()
-                    .map(|v| strip_nul_str(v.trim()).into_owned())
-                    .filter(|v| !v.is_empty());
-
                 let campaign = input.campaign.clone();
-                let campaign_creem_product_id = campaign
-                    .creem_product_id
-                    .as_deref()
-                    .map(|v| strip_nul_str(v.trim()).into_owned())
-                    .filter(|v| !v.is_empty());
 
                 sqlx::query(
                     "INSERT INTO pricing_plans \
-                     (id, plan_key, placement, monthly_usd_cents, creem_product_id, title_en, title_zh, badge_en, badge_zh, description_en, description_zh, is_active, is_default, sort_order, \
-                      campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, updated_at) \
+                     (id, plan_key, placement, monthly_usd_cents, title_en, title_zh, badge_en, badge_zh, description_en, description_zh, is_active, is_default, sort_order, \
+                      campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_starts_at, campaign_ends_at, updated_at) \
                      VALUES \
-                     ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,NOW()) \
+                     ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW()) \
                      ON CONFLICT (id) DO UPDATE SET \
                        plan_key = EXCLUDED.plan_key, \
                        placement = EXCLUDED.placement, \
                        monthly_usd_cents = EXCLUDED.monthly_usd_cents, \
-                       creem_product_id = EXCLUDED.creem_product_id, \
                        title_en = EXCLUDED.title_en, \
                        title_zh = EXCLUDED.title_zh, \
                        badge_en = EXCLUDED.badge_en, \
@@ -4125,7 +4067,6 @@ impl Database {
                        campaign_percent_off = EXCLUDED.campaign_percent_off, \
                        campaign_title_en = EXCLUDED.campaign_title_en, \
                        campaign_title_zh = EXCLUDED.campaign_title_zh, \
-                       campaign_creem_product_id = EXCLUDED.campaign_creem_product_id, \
                        campaign_starts_at = EXCLUDED.campaign_starts_at, \
                        campaign_ends_at = EXCLUDED.campaign_ends_at, \
                        updated_at = NOW()",
@@ -4135,7 +4076,6 @@ impl Database {
                 .bind(plan_key.as_str())
                 .bind(placement.as_deref())
                 .bind(input.monthly_usd_cents)
-                .bind(creem_product_id.as_deref())
                 .bind(title_en.as_str())
                 .bind(title_zh.as_str())
                 .bind(badge_en.as_deref())
@@ -4159,7 +4099,6 @@ impl Database {
                         .as_deref()
                         .map(|v| strip_nul_str(v.trim()).into_owned()),
                 )
-                .bind(campaign_creem_product_id.as_deref())
                 .bind(campaign.starts_at)
                 .bind(campaign.ends_at)
                 .execute(&mut *tx)
@@ -4209,10 +4148,10 @@ impl Database {
 
                 let plan_row = sqlx::query_as::<_, PricingPlanRow>(
                     "SELECT \
-                        id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                        id, plan_key, placement, monthly_usd_cents, \
                         title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
                         is_active, is_default, sort_order, \
-                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_starts_at, campaign_ends_at, \
                         created_at, updated_at \
                      FROM pricing_plans WHERE id = $1",
                 )
@@ -4311,10 +4250,10 @@ impl Database {
             let attempt: Result<Option<PricingPlan>, anyhow::Error> = async {
                 let plan_row = sqlx::query_as::<_, PricingPlanRow>(
                     "SELECT \
-                        id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                        id, plan_key, placement, monthly_usd_cents, \
                         title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
                         is_active, is_default, sort_order, \
-                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_starts_at, campaign_ends_at, \
                         created_at, updated_at \
                      FROM pricing_plans WHERE id = $1",
                 )
@@ -4375,10 +4314,10 @@ impl Database {
             let attempt: Result<Option<PricingPlan>, anyhow::Error> = async {
                 let plan_row = sqlx::query_as::<_, PricingPlanRow>(
                     "SELECT \
-                        id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                        id, plan_key, placement, monthly_usd_cents, \
                         title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
                         is_active, is_default, sort_order, \
-                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_starts_at, campaign_ends_at, \
                         created_at, updated_at \
                      FROM pricing_plans WHERE plan_key = $1 LIMIT 1",
                 )
@@ -4441,10 +4380,10 @@ impl Database {
             let attempt: Result<Option<PricingPlan>, anyhow::Error> = async {
                 let plan_row = sqlx::query_as::<_, PricingPlanRow>(
                     "SELECT \
-                        id, plan_key, placement, monthly_usd_cents, creem_product_id, \
+                        id, plan_key, placement, monthly_usd_cents, \
                         title_en, title_zh, badge_en, badge_zh, description_en, description_zh, \
                         is_active, is_default, sort_order, \
-                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_creem_product_id, campaign_starts_at, campaign_ends_at, \
+                        campaign_active, campaign_percent_off, campaign_title_en, campaign_title_zh, campaign_starts_at, campaign_ends_at, \
                         created_at, updated_at \
                      FROM pricing_plans \
                      WHERE is_default = TRUE AND is_active = TRUE AND (placement IS NOT DISTINCT FROM $1) \
@@ -5836,6 +5775,7 @@ impl Database {
                  FROM developers d \
                  LEFT JOIN likes l ON l.email = d.email \
                  LEFT JOIN favorites f ON f.email = d.email \
+                 WHERE (COALESCE(l.likes, 0) + COALESCE(f.favorites, 0)) > 0 \
                  ORDER BY score DESC, favorites DESC, likes DESC, d.name ASC \
                  LIMIT $2",
             )
@@ -5885,6 +5825,7 @@ impl Database {
                              FROM developers d \
                              LEFT JOIN likes l ON l.email = d.email \
                              LEFT JOIN favorites f ON f.email = d.email \
+                             WHERE (COALESCE(l.likes, 0) + COALESCE(f.favorites, 0)) > 0 \
                              ORDER BY score DESC, favorites DESC, likes DESC, d.name ASC \
                              LIMIT $2",
                         )

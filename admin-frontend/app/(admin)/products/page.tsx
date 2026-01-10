@@ -376,7 +376,7 @@ export default function AdminProductsPage() {
                             </div>
 
                             {showingReject ? (
-                              <div className="w-full max-w-[360px] rounded-lg border border-border bg-background/40 p-3 space-y-2">
+                              <div className="w-full max-w-[360px] rounded-lg border border-border bg-background p-3 space-y-2">
                                 <div className="text-xs text-muted-foreground text-left">拒绝原因（必填，开发者中心可见）</div>
                                 <Input
                                   value={draftReasons[p.id] ?? ''}

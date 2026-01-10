@@ -370,7 +370,7 @@ export default function FeedbackPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          <div className="rounded-2xl border border-border bg-background/40 p-5">
+          <div className="rounded-2xl border border-border bg-background p-5">
             <Tabs value={formMode} onValueChange={(v) => setFormMode(v as 'edit' | 'preview')}>
               <div className="flex items-center justify-between">
                 <div className="text-base font-semibold text-foreground">{t('form.title')}</div>
@@ -507,7 +507,7 @@ export default function FeedbackPage() {
                   ) : null}
 
                   {submitSuccess?.url ? (
-                    <div className="rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
+                    <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
                       <div className="text-foreground">{t('form.submitted')}</div>
                       <a className="text-primary underline underline-offset-4" href={submitSuccess.url} target="_blank" rel="noreferrer">
                         {t('form.viewOnGitHub', { number: submitSuccess.number ?? 0 })}
@@ -516,7 +516,7 @@ export default function FeedbackPage() {
                   ) : null}
 
                   {submitSuccess?.createUrl ? (
-                    <div className="rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
+                    <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
                       <div className="text-foreground">{t('form.tokenMissing')}</div>
                       <div className="mt-2 flex items-center gap-2">
                         <Button type="button" onClick={() => window.open(submitSuccess.createUrl, '_blank', 'noopener,noreferrer')}>
@@ -533,7 +533,7 @@ export default function FeedbackPage() {
 
               <TabsContent value="preview">
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-border bg-background/50 p-4">
+                  <div className="rounded-xl border border-border bg-background p-4">
                     <MarkdownView value={previewBody} />
                   </div>
                   <div className="flex items-center justify-end gap-3">
@@ -557,7 +557,7 @@ export default function FeedbackPage() {
                   ) : null}
 
                   {submitSuccess?.url ? (
-                    <div className="rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
+                    <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
                       <div className="text-foreground">{t('form.submitted')}</div>
                       <a className="text-primary underline underline-offset-4" href={submitSuccess.url} target="_blank" rel="noreferrer">
                         {t('form.viewOnGitHub', { number: submitSuccess.number ?? 0 })}
@@ -566,7 +566,7 @@ export default function FeedbackPage() {
                   ) : null}
 
                   {submitSuccess?.createUrl ? (
-                    <div className="rounded-lg border border-border bg-background/60 px-3 py-2 text-sm">
+                    <div className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
                       <div className="text-foreground">{t('form.tokenMissing')}</div>
                       <div className="mt-2 flex items-center gap-2">
                         <Button type="button" onClick={() => window.open(submitSuccess.createUrl, '_blank', 'noopener,noreferrer')}>
@@ -583,7 +583,7 @@ export default function FeedbackPage() {
             </Tabs>
           </div>
 
-          <div className="rounded-2xl border border-border bg-background/40 p-5">
+          <div className="rounded-2xl border border-border bg-background p-5">
             <div className="flex items-center justify-between">
               <div className="text-base font-semibold text-foreground">{t('list.title')}</div>
               <div className="text-xs text-muted-foreground">{t('list.sortedByUpdated')}</div>
@@ -689,7 +689,7 @@ export default function FeedbackPage() {
                         key={issue.id}
                         type="button"
                         onClick={() => setSelected((prev) => (prev === issue.number ? null : issue.number))}
-                        className="text-left rounded-xl border border-border bg-background/50 hover:bg-accent/20 transition-colors p-4"
+                        className="text-left rounded-xl border border-border bg-background hover:bg-accent/20 transition-colors p-4"
                       >
                         <div className="flex items-start gap-3">
                           <div className="min-w-0 flex-1">
@@ -712,7 +712,7 @@ export default function FeedbackPage() {
                         </div>
 
                         {isSelected && selectedIssue ? (
-                          <div className="mt-4 rounded-lg border border-border bg-background/40 p-3">
+                          <div className="mt-4 rounded-lg border border-border bg-background p-3">
                             <div className="flex flex-wrap items-center gap-2">
                               {selectedIssue.author ? (
                                 <span className="text-xs text-muted-foreground">{t('list.author', { author: selectedIssue.author })}</span>

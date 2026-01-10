@@ -1,43 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 export default function InteractionEffects() {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
-  useEffect(() => {
-    const spotlightGroups = document.querySelectorAll('.spotlight-group');
-
-    spotlightGroups.forEach(group => {
-      const spotlightBorder = group.querySelector('.spotlight-border');
-
-      if (spotlightBorder) {
-        const rect = group.getBoundingClientRect();
-        const relativeX = mousePosition.x - rect.left;
-        const relativeY = mousePosition.y - rect.top;
-
-        (spotlightBorder as HTMLElement).style.setProperty('--mouse-x-rel', `${relativeX}px`);
-        (spotlightBorder as HTMLElement).style.setProperty('--mouse-y-rel', `${relativeY}px`);
-      }
-    });
-
-    // Update global spotlight background
-    const spotlightBg = document.querySelector('.bg-spotlight');
-    if (spotlightBg) {
-      (spotlightBg as HTMLElement).style.setProperty('--mouse-x', `${mousePosition.x}px`);
-      (spotlightBg as HTMLElement).style.setProperty('--mouse-y', `${mousePosition.y}px`);
-    }
-  }, [mousePosition]);
-
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {

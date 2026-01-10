@@ -91,15 +91,12 @@ function getAuthenticatedUserEmail(): string | null {
   return null;
 }
 
-function requestAuth(redirectPath: string) {
+function notify(message: string) {
+  const text = (message || '').trim();
+  if (!text) return;
   try {
-    sessionStorage.setItem('sf_post_login_redirect', redirectPath);
+    window.dispatchEvent(new CustomEvent('sf_notify', { detail: { message: text } }));
   } catch {}
-  try {
-    window.dispatchEvent(new CustomEvent('sf_require_auth', { detail: { redirectPath } }));
-  } catch {
-    window.dispatchEvent(new Event('sf_require_auth'));
-  }
 }
 
 function isSameUserEmail(a?: string | null, b?: string | null): boolean {
@@ -150,6 +147,7 @@ export default function LeaderboardPage() {
   const t = useTranslations('leaderboard');
   const categoryT = useTranslations('categories');
   const navT = useTranslations('nav');
+  const commonT = useTranslations('common');
   const locale = useLocale();
 
   const [windowKey, setWindowKey] = useState<WindowKey>('week');
@@ -259,7 +257,7 @@ export default function LeaderboardPage() {
 
     const userEmail = getAuthenticatedUserEmail();
     if (!userEmail) {
-      requestAuth('/');
+      notify(commonT('loginRequiredAction'));
       return;
     }
 
@@ -309,7 +307,7 @@ export default function LeaderboardPage() {
 
     const userEmail = getAuthenticatedUserEmail();
     if (!userEmail) {
-      requestAuth('/');
+      notify(commonT('loginRequiredAction'));
       return;
     }
 
@@ -396,7 +394,7 @@ export default function LeaderboardPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in-0 slide-in-from-bottom-1 duration-300">
-                  <div className="sf-wash lg:col-span-2 rounded-xl border border-border bg-card/50">
+                  <div className="lg:col-span-2 rounded-xl border border-border bg-card">
                     <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                       <h2 className="text-sm font-semibold text-foreground">{t('topProducts')}</h2>
                       <span className="text-xs text-muted-foreground">{t('windowLabel', { window: opt.label })}</span>
@@ -466,7 +464,7 @@ export default function LeaderboardPage() {
                                       disabled={selfActionDisabled}
                                       onClick={() => void toggleFavorite(p.id)}
                                       className={[
-                                        'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                                        'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background transition-all duration-200 active:scale-95',
                                         selfActionDisabled
                                           ? 'opacity-50 cursor-not-allowed'
                                           : 'hover:bg-accent hover:text-accent-foreground',
@@ -492,7 +490,7 @@ export default function LeaderboardPage() {
                                       disabled={selfActionDisabled}
                                       onClick={() => void toggleLike(p.id)}
                                       className={[
-                                        'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 transition-all duration-200 active:scale-95',
+                                        'rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background transition-all duration-200 active:scale-95',
                                         selfActionDisabled
                                           ? 'opacity-50 cursor-not-allowed'
                                           : 'hover:bg-accent hover:text-accent-foreground',
@@ -516,13 +514,13 @@ export default function LeaderboardPage() {
                                       href={website}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
+                                      className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-all duration-200 active:scale-95"
                                       aria-label="访问官网"
                                     >
                                       <i className="ri-global-line text-base" aria-hidden="true" />
                                     </a>
                                   ) : (
-                                    <span className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background/70 text-muted-foreground">
+                                    <span className="rounded-md w-9 h-9 flex items-center justify-center border border-border bg-background text-muted-foreground">
                                       <i className="ri-global-line text-base" aria-hidden="true" />
                                     </span>
                                   )}
@@ -535,7 +533,7 @@ export default function LeaderboardPage() {
                     </div>
                   </div>
 
-                  <div className="sf-wash rounded-xl border border-border bg-card/50">
+                  <div className="rounded-xl border border-border bg-card">
                     <div className="px-5 py-4 border-b border-border">
                       <h2 className="text-sm font-semibold text-foreground">{t('topMakers')}</h2>
                     </div>

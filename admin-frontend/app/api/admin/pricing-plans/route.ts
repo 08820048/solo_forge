@@ -19,7 +19,6 @@ type PricingPlanCampaign = {
   percent_off?: number | null;
   title_en?: string | null;
   title_zh?: string | null;
-  creem_product_id?: string | null;
   starts_at?: string | null;
   ends_at?: string | null;
 };
@@ -29,7 +28,6 @@ type PricingPlan = {
   plan_key: string;
   placement?: string | null;
   monthly_usd_cents?: number | null;
-  creem_product_id?: string | null;
   title_en: string;
   title_zh: string;
   badge_en?: string | null;
@@ -58,7 +56,6 @@ type UpsertPricingPlanRequest = {
   plan_key: string;
   placement?: string | null;
   monthly_usd_cents?: number | null;
-  creem_product_id?: string | null;
   title_en: string;
   title_zh: string;
   badge_en?: string | null;
@@ -150,4 +147,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json<ApiResponse<null>>({ success: false, message }, { status });
   }
 }
-
