@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,13 +17,20 @@ type Product = {
   id: string;
   name: string;
   slogan: string;
+  description: string;
   website: string;
+  logo_url?: string | null;
   category: string;
+  tags: string[];
   language: string;
   maker_name: string;
   maker_email: string;
+  maker_website?: string | null;
+  maker_sponsor_role?: string | null;
+  maker_sponsor_verified?: boolean;
   status: ProductStatus;
   created_at: string;
+  updated_at?: string;
   likes?: number;
   favorites?: number;
   rejection_reason?: string | null;
@@ -53,6 +60,30 @@ function statusBadge(status: ProductStatus) {
   return <Badge variant="warning">待审核</Badge>;
 }
 
+function formatDateTime(value: string | undefined | null): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '—';
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  try {
+    return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(d);
+  } catch {
+    return d.toLocaleString();
+  }
+}
+
+function safeExternalHref(value: string | undefined | null): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * AdminProductsPage
  * 管理后台：产品审核与删除。
@@ -69,6 +100,7 @@ export default function AdminProductsPage() {
   const [reloading, setReloading] = useState(false);
   const [draftReasons, setDraftReasons] = useState<Record<string, string>>({});
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -332,77 +364,201 @@ export default function AdminProductsPage() {
                     const disabled = !!current;
                     const showingReject = rejectingId === p.id && p.status !== 'rejected';
                     const reason = (draftReasons[p.id] ?? '').trim();
+                    const expanded = expandedId === p.id;
+                    const websiteHref = safeExternalHref(p.website);
+                    const makerWebsiteHref = safeExternalHref(p.maker_website ?? null);
+                    const logoHref = safeExternalHref(p.logo_url ?? null);
                     return (
-                      <tr key={p.id} className="border-b border-border/60 align-top">
-                        <td className="py-3 pr-6">
-                          <div className="font-medium">{p.name}</div>
-                          <div className="text-xs text-muted-foreground break-all">{p.id}</div>
-                          <div className="text-xs text-muted-foreground break-all">{p.maker_email}</div>
-                        </td>
-                        <td className="py-3 pr-6">{p.category || '—'}</td>
-                        <td className="py-3 pr-6">{p.language || '—'}</td>
-                        <td className="py-3 pr-6">{statusBadge(p.status)}</td>
-                        <td className="py-3 text-right">
-                          <div className="flex flex-col items-end gap-2">
-                            <div className="flex flex-wrap justify-end gap-2">
-                              {p.status !== 'approved' ? (
+                      <Fragment key={p.id}>
+                        <tr key={p.id} className="border-b border-border/60 align-top">
+                          <td className="py-3 pr-6">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-medium wrap-break-word">{p.name}</div>
+                                {p.slogan ? <div className="mt-1 text-xs text-muted-foreground wrap-break-word">{p.slogan}</div> : null}
+                                <div className="mt-1 text-xs text-muted-foreground break-all">{p.id}</div>
+                                <div className="mt-1 text-xs text-muted-foreground break-all">
+                                  {p.maker_name ? `${p.maker_name} · ` : null}
+                                  {p.maker_email}
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  提交时间：{formatDateTime(p.created_at)}（更新：{formatDateTime(p.updated_at)}）
+                                </div>
+                                {websiteHref ? (
+                                  <div className="mt-1 text-xs">
+                                    <a
+                                      className="underline underline-offset-4 text-muted-foreground hover:text-foreground break-all"
+                                      href={websiteHref}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      {websiteHref}
+                                    </a>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 pr-6">{p.category || '—'}</td>
+                          <td className="py-3 pr-6">{p.language || '—'}</td>
+                          <td className="py-3 pr-6">
+                            <div className="space-y-2">
+                              <div>{statusBadge(p.status)}</div>
+                              <div className="text-xs text-muted-foreground">
+                                Likes {Number(p.likes ?? 0).toLocaleString()} / Favorites {Number(p.favorites ?? 0).toLocaleString()}
+                              </div>
+                              {p.status === 'rejected' && p.rejection_reason ? (
+                                <div className="text-xs text-destructive wrap-break-word">原因：{p.rejection_reason}</div>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex flex-col items-end gap-2">
+                              <div className="flex flex-wrap justify-end gap-2">
                                 <Button
                                   size="sm"
+                                  variant="ghost"
+                                  disabled={disabled}
+                                  onClick={() => setExpandedId((cur) => (cur === p.id ? null : p.id))}
+                                >
+                                  {expanded ? '收起' : '详情'}
+                                </Button>
+                                {p.status !== 'approved' ? (
+                                  <Button
+                                    size="sm"
+                                    disabled={disabled}
+                                    onClick={() => {
+                                      cancelReject();
+                                      void updateStatus(p.id, 'approved');
+                                    }}
+                                  >
+                                    {current === 'approve' ? '通过中...' : '通过'}
+                                  </Button>
+                                ) : null}
+                                {p.status !== 'rejected' ? (
+                                  <Button size="sm" variant="outline" disabled={disabled} onClick={() => startReject(p.id)}>
+                                    {current === 'reject' ? '拒绝中...' : '拒绝'}
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
                                   disabled={disabled}
                                   onClick={() => {
                                     cancelReject();
-                                    void updateStatus(p.id, 'approved');
+                                    void deleteProduct(p.id);
                                   }}
                                 >
-                                  {current === 'approve' ? '通过中...' : '通过'}
+                                  {current === 'delete' ? '删除中...' : '删除'}
                                 </Button>
-                              ) : null}
-                              {p.status !== 'rejected' ? (
-                                <Button size="sm" variant="outline" disabled={disabled} onClick={() => startReject(p.id)}>
-                                  {current === 'reject' ? '拒绝中...' : '拒绝'}
-                                </Button>
-                              ) : null}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={disabled}
-                                onClick={() => {
-                                  cancelReject();
-                                  void deleteProduct(p.id);
-                                }}
-                              >
-                                {current === 'delete' ? '删除中...' : '删除'}
-                              </Button>
-                            </div>
+                              </div>
 
-                            {showingReject ? (
-                              <div className="w-full max-w-[360px] rounded-lg border border-border bg-background p-3 space-y-2">
-                                <div className="text-xs text-muted-foreground text-left">拒绝原因（必填，开发者中心可见）</div>
-                                <Input
-                                  value={draftReasons[p.id] ?? ''}
-                                  onChange={(e) => setDraftReasons((m) => ({ ...m, [p.id]: e.target.value }))}
-                                  placeholder="例如：描述不完整 / 网站无法访问 / 分类不匹配"
-                                  disabled={disabled}
-                                />
-                                <div className="flex items-center justify-end gap-2">
-                                  <Button size="sm" variant="outline" disabled={disabled} onClick={cancelReject}>
-                                    取消
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    disabled={disabled || !reason}
-                                    onClick={() => {
-                                      void confirmReject(p.id);
-                                    }}
-                                  >
-                                    {current === 'reject' ? '拒绝中...' : '确认拒绝'}
-                                  </Button>
+                              {showingReject ? (
+                                <div className="w-full max-w-[360px] rounded-lg border border-border bg-background p-3 space-y-2">
+                                  <div className="text-xs text-muted-foreground text-left">拒绝原因（必填，开发者中心可见）</div>
+                                  <Input
+                                    value={draftReasons[p.id] ?? ''}
+                                    onChange={(e) => setDraftReasons((m) => ({ ...m, [p.id]: e.target.value }))}
+                                    placeholder="例如：描述不完整 / 网站无法访问 / 分类不匹配"
+                                    disabled={disabled}
+                                  />
+                                  <div className="flex items-center justify-end gap-2">
+                                    <Button size="sm" variant="outline" disabled={disabled} onClick={cancelReject}>
+                                      取消
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      disabled={disabled || !reason}
+                                      onClick={() => {
+                                        void confirmReject(p.id);
+                                      }}
+                                    >
+                                      {current === 'reject' ? '拒绝中...' : '确认拒绝'}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                        {expanded ? (
+                          <tr className="border-b border-border/60">
+                            <td colSpan={5} className="pb-4">
+                              <div className="mt-2 rounded-lg border border-border bg-muted/30 p-4 space-y-4">
+                                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                  <div className="space-y-2">
+                                    <div className="text-xs text-muted-foreground">提交信息</div>
+                                    <div className="text-sm wrap-break-word">
+                                      <span className="text-muted-foreground">开发者：</span>
+                                      {p.maker_name || '—'}（{p.maker_email || '—'}）
+                                    </div>
+                                    <div className="text-sm break-all">
+                                      <span className="text-muted-foreground">开发者主页：</span>
+                                      {makerWebsiteHref ? (
+                                        <a className="underline underline-offset-4 hover:text-foreground" href={makerWebsiteHref} target="_blank" rel="noreferrer">
+                                          {makerWebsiteHref}
+                                        </a>
+                                      ) : (
+                                        '—'
+                                      )}
+                                    </div>
+                                    <div className="text-sm">
+                                      <span className="text-muted-foreground">赞助身份：</span>
+                                      {p.maker_sponsor_verified ? (
+                                        <span>已验证{p.maker_sponsor_role ? ` · ${p.maker_sponsor_role}` : ''}</span>
+                                      ) : (
+                                        '未验证'
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <div className="text-xs text-muted-foreground">产品信息</div>
+                                    <div className="text-sm break-all">
+                                      <span className="text-muted-foreground">官网：</span>
+                                      {websiteHref ? (
+                                        <a className="underline underline-offset-4 hover:text-foreground" href={websiteHref} target="_blank" rel="noreferrer">
+                                          {websiteHref}
+                                        </a>
+                                      ) : (
+                                        '—'
+                                      )}
+                                    </div>
+                                    <div className="text-sm break-all">
+                                      <span className="text-muted-foreground">Logo：</span>
+                                      {logoHref ? (
+                                        <a className="underline underline-offset-4 hover:text-foreground" href={logoHref} target="_blank" rel="noreferrer">
+                                          {logoHref}
+                                        </a>
+                                      ) : (
+                                        '—'
+                                      )}
+                                    </div>
+                                    <div className="text-sm">
+                                      <span className="text-muted-foreground">标签：</span>
+                                      {Array.isArray(p.tags) && p.tags.length > 0 ? (
+                                        <span className="inline-flex flex-wrap gap-2">
+                                          {p.tags.map((t) => (
+                                            <Badge key={t} variant="secondary">
+                                              {t}
+                                            </Badge>
+                                          ))}
+                                        </span>
+                                      ) : (
+                                        '—'
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <div className="text-xs text-muted-foreground">产品描述</div>
+                                  <div className="whitespace-pre-wrap wrap-break-word text-sm leading-relaxed">{p.description || '—'}</div>
                                 </div>
                               </div>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
                     );
                   })}
                   {products.length === 0 ? (
