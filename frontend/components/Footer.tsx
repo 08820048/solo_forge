@@ -9,7 +9,6 @@ import KofiSponsorDialog from '@/components/KofiSponsorDialog';
 export default function Footer() {
   const t = useTranslations('footer');
   const tNav = useTranslations('nav');
-  const currentYear = new Date().getFullYear();
   const contactEmail = 'ilikexff@gmail.com';
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -189,7 +188,16 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-border mt-8 pt-8 text-sm text-center text-muted-foreground font-sans">
-          {t('copyright', { year: currentYear })}
+          <span>© 2025 Welight. Made with love by </span>
+          <a
+            href="https://x.com/xuyixff"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-foreground transition-colors"
+          >
+            Ornata
+          </a>
+          <span>。</span>
         </div>
       </div>
     </footer>
