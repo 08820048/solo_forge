@@ -9,6 +9,60 @@ import { isKnownRemoteImageUrl, plainTextFromMarkdown } from '@/lib/utils';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
+function normalizeTags(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v ?? '').trim()).filter((v) => v);
+  }
+  if (typeof value !== 'string') return [];
+  const raw = value.trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.map((v) => String(v ?? '').trim()).filter((v) => v);
+    }
+  } catch {}
+  if (raw.startsWith('{') && raw.endsWith('}')) {
+    return raw
+      .slice(1, -1)
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => v);
+  }
+  if (raw.includes(',')) {
+    return raw
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => v);
+  }
+  return [raw];
+}
+
+function formatCreatedAt(value: unknown, locale: string): string {
+  const raw = typeof value === 'string' ? value : '';
+  const dt = new Date(raw);
+  if (Number.isNaN(dt.getTime())) return raw;
+  try {
+    return dt.toLocaleDateString(locale === 'zh' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  } catch {
+    return raw;
+  }
+}
+
+function translateCategory(categoryT: (key: string) => string, value: unknown): string {
+  const key = typeof value === 'string' ? value.trim() : '';
+  if (!key) return 'other';
+  try {
+    return categoryT(key);
+  } catch {
+    return key;
+  }
+}
+
 export async function generateMetadata({
   params
 }: {
@@ -27,10 +81,14 @@ export async function generateMetadata({
 
     if (response.ok) {
       const data = await response.json();
-      const product = data.data;
-      const title = `${product.name} - SoloForge`;
-      const description = String(product.slogan || '').trim();
-      const imageUrl = typeof product.logo_url === 'string' && product.logo_url.trim() ? product.logo_url.trim() : '/docs/imgs/image.jpg';
+      const product = (data as { data?: unknown })?.data as Record<string, unknown> | null | undefined;
+      const name = String(product?.name ?? '').trim() || slug;
+      const slogan = String(product?.slogan ?? '').trim();
+      const logoUrl = typeof product?.logo_url === 'string' ? product.logo_url.trim() : '';
+
+      const title = `${name} - SoloForge`;
+      const description = slogan;
+      const imageUrl = logoUrl ? logoUrl : '/docs/imgs/image.jpg';
 
       return {
         title,
@@ -102,7 +160,7 @@ export default async function ProductDetailPage({
   const t = await getTranslations({ locale, namespace: 'productDetail' });
   const categoryT = await getTranslations({ locale, namespace: 'categories' });
 
-  let product;
+  let product: Record<string, unknown> | null = null;
   let maker = null as null | {
     email: string;
     name: string;
@@ -129,16 +187,27 @@ export default async function ProductDetailPage({
     }
 
     const data = await response.json();
-    product = data.data;
+    product = ((data as { data?: unknown })?.data as Record<string, unknown> | null) ?? null;
   } catch {
     notFound();
   }
 
-  if (product?.maker_email) {
+  const productName = String(product?.name ?? '').trim() || slug;
+  const productWebsite = String(product?.website || '').trim();
+  const productLogoUrl = typeof product?.logo_url === 'string' ? product.logo_url.trim() : '';
+  const productSlogan = String(product?.slogan || '').trim();
+  const productDescription = String(product?.description || '');
+  const productMakerName = String(product?.maker_name || '').trim();
+  const productTags = normalizeTags(product?.tags);
+  const categoryLabel = translateCategory(categoryT as unknown as (key: string) => string, product?.category);
+  const createdAtText = formatCreatedAt(product?.created_at, locale);
+  const makerEmailRaw = String(product?.maker_email ?? '').trim().toLowerCase();
+
+  if (makerEmailRaw) {
     try {
       const devRes = await fetch(
         `${process.env.BACKEND_API_URL || 'http://localhost:8080/api'}/developers/${encodeURIComponent(
-          product.maker_email
+          makerEmailRaw
         )}`,
         {
           headers: {
@@ -158,7 +227,8 @@ export default async function ProductDetailPage({
   const sponsorVerified = Boolean(maker?.sponsor_verified ?? product?.maker_sponsor_verified);
   const sponsorRole = String(maker?.sponsor_role ?? product?.maker_sponsor_role ?? '').trim();
   const sponsorBadgeText = sponsorRole ? `${t('sponsorBadge')} · ${sponsorRole}` : t('sponsorBadge');
-  const makerEmail = String(maker?.email || product?.maker_email || '').trim().toLowerCase();
+  const makerEmail = String(maker?.email || makerEmailRaw || '').trim().toLowerCase();
+  const makerWebsite = String(maker?.website ?? product?.maker_website ?? '').trim();
 
   return (
     <div className="mx-auto w-full max-w-[1800px] px-4 sm:px-6 lg:px-8 2xl:px-12 pt-20 sm:pt-24 pb-12">
@@ -169,11 +239,11 @@ export default async function ProductDetailPage({
           <div className="mb-8">
             <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 mb-6">
               <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-muted">
-                {product.logo_url ? (
-                  isKnownRemoteImageUrl(product.logo_url) ? (
+                {productLogoUrl ? (
+                  isKnownRemoteImageUrl(productLogoUrl) ? (
                     <Image
-                      src={product.logo_url}
-                      alt={product.name}
+                      src={productLogoUrl}
+                      alt={productName}
                       width={96}
                       height={96}
                       className="w-full h-full object-cover"
@@ -182,42 +252,41 @@ export default async function ProductDetailPage({
                       referrerPolicy="no-referrer"
                     />
                   ) : (
-                    <Image
-                      src={product.logo_url}
-                      alt={product.name}
+                    <img
+                      src={productLogoUrl}
+                      alt={productName}
                       width={96}
                       height={96}
                       className="w-full h-full object-cover"
-                      priority
-                      sizes="96px"
                       referrerPolicy="no-referrer"
-                      unoptimized
-                      loader={({ src }) => src}
+                      loading="eager"
                     />
                   )
                 ) : (
                   <div className="w-full h-full bg-black flex items-center justify-center">
-                    <span className="text-white text-2xl sm:text-3xl lg:text-4xl font-bold">{product.name.charAt(0)}</span>
+                    <span className="text-white text-2xl sm:text-3xl lg:text-4xl font-bold">{productName.charAt(0)}</span>
                   </div>
                 )}
               </div>
               <div className="flex-1">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                   <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-foreground">
-                    {product.name}
+                    {productName}
                   </h1>
-                  <a
-                    href={product.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors sm:mt-2"
-                  >
-                    <span>{t('website')}</span>
-                    <span aria-hidden="true">→</span>
-                  </a>
+                  {productWebsite ? (
+                    <a
+                      href={productWebsite}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors sm:mt-2"
+                    >
+                      <span>{t('website')}</span>
+                      <span aria-hidden="true">→</span>
+                    </a>
+                  ) : null}
                 </div>
                 <div className="text-base sm:text-lg lg:text-xl text-muted-foreground mb-4 mt-2">
-                  {plainTextFromMarkdown(String(product.slogan || ''))}
+                  {plainTextFromMarkdown(productSlogan)}
                 </div>
               </div>
             </div>
@@ -267,7 +336,7 @@ export default async function ProductDetailPage({
                   },
                 }}
               >
-                {String(product.description || '')}
+                {productDescription}
               </ReactMarkdown>
             </div>
           </div>
@@ -288,15 +357,18 @@ export default async function ProductDetailPage({
                     className="w-12 h-12 bg-muted rounded-full flex items-center justify-center overflow-hidden hover:opacity-90 transition-opacity"
                     aria-label={maker?.name || makerEmail}
                   >
-                    {maker?.avatar_url ? (
+                {maker?.avatar_url ? (
                       <div
                         className="w-full h-full bg-center bg-cover"
-                        style={{ backgroundImage: `url("${maker.avatar_url}")` }}
+                        style={{ backgroundImage: `url("${String(maker.avatar_url)}")` }}
                         aria-label={maker.name || maker.email}
                       />
                     ) : (
                       <span className="text-muted-foreground font-semibold">
-                        {(product.maker_name || product.maker_email || 'U').trim().charAt(0).toUpperCase()}
+                        {String(product?.maker_name || product?.maker_email || 'U')
+                          .trim()
+                          .charAt(0)
+                          .toUpperCase()}
                       </span>
                     )}
                   </Link>
@@ -305,12 +377,15 @@ export default async function ProductDetailPage({
                     {maker?.avatar_url ? (
                       <div
                         className="w-full h-full bg-center bg-cover"
-                        style={{ backgroundImage: `url("${maker.avatar_url}")` }}
+                        style={{ backgroundImage: `url("${String(maker.avatar_url)}")` }}
                         aria-label={maker.name || maker.email}
                       />
                     ) : (
                       <span className="text-muted-foreground font-semibold">
-                        {(product.maker_name || product.maker_email || 'U').trim().charAt(0).toUpperCase()}
+                        {String(product?.maker_name || product?.maker_email || 'U')
+                          .trim()
+                          .charAt(0)
+                          .toUpperCase()}
                       </span>
                     )}
                   </div>
@@ -322,10 +397,10 @@ export default async function ProductDetailPage({
                         href={{ pathname: '/makers/[email]', params: { email: makerEmail } }}
                         className="font-medium text-foreground truncate hover:underline"
                       >
-                        {product.maker_name}
+                        {productMakerName || makerEmail}
                       </Link>
                     ) : (
-                      <p className="font-medium text-foreground truncate">{product.maker_name}</p>
+                      <p className="font-medium text-foreground truncate">{productMakerName || makerEmail}</p>
                     )}
                     {sponsorVerified ? (
                       <span className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-[10px] font-medium text-secondary-foreground">
@@ -333,9 +408,9 @@ export default async function ProductDetailPage({
                       </span>
                     ) : null}
                   </div>
-                  {(maker?.website || product.maker_website) && (
+                  {makerWebsite && (
                     <a
-                      href={maker?.website || product.maker_website}
+                      href={makerWebsite}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm text-foreground underline underline-offset-4 hover:opacity-80"
@@ -353,7 +428,7 @@ export default async function ProductDetailPage({
                 {t('category')}
               </h3>
               <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-secondary text-secondary-foreground">
-                {categoryT(product.category)}
+                {categoryLabel}
               </span>
             </div>
 
@@ -363,7 +438,7 @@ export default async function ProductDetailPage({
                 {t('tags')}
               </h3>
               <div className="flex flex-wrap gap-2">
-                {product.tags.map((tag: string, index: number) => (
+                {productTags.map((tag: string, index: number) => (
                   <span
                     key={index}
                     className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-secondary text-secondary-foreground"
@@ -380,14 +455,7 @@ export default async function ProductDetailPage({
                 {t('createdAt')}
               </h3>
               <p className="text-muted-foreground">
-                {new Date(product.created_at).toLocaleDateString(
-                  locale === 'zh' ? 'zh-CN' : 'en-US',
-                  {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  }
-                )}
+                {createdAtText}
               </p>
             </div>
           </div>
