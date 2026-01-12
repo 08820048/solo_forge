@@ -462,7 +462,7 @@ export default function ProductGrid({ section }: ProductGridProps) {
       setUmamiLoading(true);
       setUmamiMessage(null);
       try {
-        const response = await fetch(`/api/umami/core-stats?range=24h`, { headers: { 'Accept-Language': locale }, cache: 'no-store' });
+        const response = await fetch(`/api/umami/core-stats?range=90d`, { headers: { 'Accept-Language': locale }, cache: 'no-store' });
         const json: ApiResponse<UmamiCoreStats> = await response.json();
         if (cancelled) return;
         if (!json.success) {

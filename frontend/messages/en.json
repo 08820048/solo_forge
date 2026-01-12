@@ -567,7 +567,7 @@
     },
     "umamiStats": {
       "title": "Site Stats",
-      "subtitle": "Last 24 hours",
+      "subtitle": "Last 90 days",
       "loading": "Loading...",
       "empty": "No stats available.",
       "pageviews": "Pageviews",

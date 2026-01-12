@@ -567,7 +567,7 @@
     },
     "umamiStats": {
       "title": "网站数据",
-      "subtitle": "最近 24 小时",
+      "subtitle": "最近 90 天",
       "loading": "加载中...",
       "empty": "暂无统计数据。",
       "pageviews": "浏览量",
