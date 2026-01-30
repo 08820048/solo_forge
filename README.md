@@ -1,43 +1,45 @@
 # SoloForge
 
-SoloForge 是一个面向全球独立开发者的产品收录与展示平台，支持中英双语、多端（前台与管理后台）以及后端 API 服务。
+English | [中文](README.zh-CN.md)
 
-## 主要特性
+SoloForge is a bilingual platform that showcases products built by solo makers worldwide. It includes a public site, an admin dashboard, and a Rust backend API.
 
-- 独立开发者产品展示与搜索
-- 双语支持（中文 / 英文）
-- 前台站点与管理后台分离
-- 统一后端 API 与数据库（Supabase）
+## Highlights
 
-## 技术栈
+- Curated product discovery and search for indie makers
+- Bilingual UI (English / 中文)
+- Separate public site and admin console
+- Unified backend API backed by Supabase (PostgreSQL)
 
-- 前端：Next.js 16 + TypeScript + Tailwind CSS + next-intl
-- 管理后台：Next.js 16 + TypeScript + Tailwind CSS
-- 后端：Rust + Actix Web + Supabase (PostgreSQL)
+## Tech Stack
 
-## 快速开始
+- Frontend: Next.js 16 + TypeScript + Tailwind CSS + next-intl
+- Admin: Next.js 16 + TypeScript + Tailwind CSS
+- Backend: Rust + Actix Web + Supabase (PostgreSQL)
 
-请先阅读并按顺序完成：
+## Quick Start
 
-- [SETUP.md](file:///Users/xuyi/Desktop/SoloForges/SETUP.md)
+Please follow the setup guide first:
 
-完成后即可启动：
+- [SETUP.md](SETUP.md)
 
-- 前台：`npm --prefix frontend run dev`
-- 管理后台：`npm --prefix admin-frontend run dev -- -p 3002`
-- 后端：`cargo run`（在 backend 目录中）
+Then start the services:
 
-## 配置说明
+- Frontend: `npm --prefix frontend run dev`
+- Admin: `npm --prefix admin-frontend run dev -- -p 3002`
+- Backend: `cargo run` (from the backend directory)
 
-前端与管理后台的关键环境变量详见各自的 `.env` 或部署文档。
+## Configuration
 
-## 目录结构
+Key environment variables are described in each app’s `.env` template and deployment docs.
 
-- `frontend/` 前台站点
-- `admin-frontend/` 管理后台
-- `backend/` 后端服务
-- `docs/` 项目文档与素材
+## Project Structure
 
-## 许可证
+- `frontend/` public site
+- `admin-frontend/` admin console
+- `backend/` Rust API service
+- `docs/` project docs and assets
 
-本项目采用 MIT 许可证，详见 [LICENSE](file:///Users/xuyi/Desktop/SoloForges/LICENSE)。
+## License
+
+MIT License. See [LICENSE](LICENSE).
