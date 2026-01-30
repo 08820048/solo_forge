@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminEmailAllowlist, requireUser } from '../admin/_auth';
+import { getDirectBackendApiUrl } from '@/lib/backend-api';
 
 function getBackendApiUrl(): string {
   const raw = (process.env.BACKEND_API_URL || 'http://localhost:8080/api').trim();
@@ -13,17 +14,6 @@ const BACKEND_API_URL = getBackendApiUrl();
 
 function getForwardUserAgent(request: NextRequest): string {
   return request.headers.get('User-Agent') || request.headers.get('user-agent') || 'Mozilla/5.0';
-}
-
-/**
- * getDirectBackendApiUrl
- * 生产环境下为浏览器提供直连后端的兜底地址（用于绕过上游代理被拦截的情况）。
- */
-function getDirectBackendApiUrl(request: NextRequest): string | null {
-  const host = (request.headers.get('host') || '').toLowerCase();
-  if (!host) return null;
-  if (host.includes('localhost') || host.includes('127.0.0.1')) return null;
-  return 'https://api.soloforge.dev/api';
 }
 
 export const dynamic = 'force-dynamic';

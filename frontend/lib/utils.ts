@@ -52,3 +52,12 @@ export function isKnownRemoteImageUrl(url: string | null | undefined): boolean {
     return false;
   }
 }
+
+export function getPublicDirectBackendApiUrl(): string | null {
+  const raw = (process.env.NEXT_PUBLIC_DIRECT_BACKEND_API_URL || '').trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/\/+$/, '');
+  if (!normalized) return null;
+  if (normalized.endsWith('/api')) return normalized;
+  return `${normalized}/api`;
+}

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { Link as I18nLink } from '@/i18n/routing';
 import LanguageSwitcher from './LanguageSwitcher';
 import KofiSponsorDialog from '@/components/KofiSponsorDialog';
+import { getPublicDirectBackendApiUrl } from '@/lib/utils';
 
 export default function Footer() {
   const t = useTranslations('footer');
@@ -60,7 +61,12 @@ export default function Footer() {
         return;
       }
 
-      const directResponse = await fetch('https://api.soloforge.dev/api/newsletter/subscribe', {
+      const directBase = getPublicDirectBackendApiUrl();
+      if (!directBase) {
+        setMessage(proxyData?.message || t('newsletter.failed'));
+        return;
+      }
+      const directResponse = await fetch(`${directBase}/newsletter/subscribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: payload,

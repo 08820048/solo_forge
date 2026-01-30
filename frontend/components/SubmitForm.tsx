@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from '@/i18n/routing';
-import { cn } from '@/lib/utils';
+import { cn, getPublicDirectBackendApiUrl } from '@/lib/utils';
 import { getSupabaseAuthStoragePreference, getSupabaseBrowserClient } from '@/lib/supabase';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -363,7 +363,12 @@ export default function SubmitForm({
         return;
       }
 
-      const backendBase = 'https://api.soloforge.dev/api';
+      const backendBase = getPublicDirectBackendApiUrl();
+      if (!backendBase) {
+        setIsSubmitting(false);
+        setError(proxyResult?.message || 'Submission failed');
+        return;
+      }
       const directEndpoint =
         method === 'PUT'
           ? `${backendBase}/products/${encodeURIComponent(String(productId || '').trim())}`
